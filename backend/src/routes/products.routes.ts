@@ -28,7 +28,7 @@ import {
   uploadMultiple,
   handleMulterError,
 } from "../middleware/upload.middleware";
-import { syncProduct } from "../middleware/auto-sync.middleware";
+// import { syncProduct } from "../middleware/auto-sync.middleware"; // DISABLED - Meilisearch removed
 
 const router = Router();
 
@@ -509,7 +509,7 @@ router.post(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  syncProduct.create(),
+  // syncProduct.create(), // DISABLED - Meilisearch removed
   createProduct
 );
 
@@ -546,7 +546,7 @@ router.put(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  syncProduct.update(),
+  // syncProduct.update(), // DISABLED - Meilisearch removed
   updateProduct
 );
 
@@ -612,7 +612,7 @@ router.put(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  syncProduct.update(),
+  // syncProduct.update(), // DISABLED - Meilisearch removed
   updateProductWithFiles
 );
 
@@ -725,7 +725,7 @@ router.delete(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  syncProduct.delete(),
+  // syncProduct.delete(), // DISABLED - Meilisearch removed
   deleteProduct
 );
 
@@ -791,14 +791,14 @@ adminProductsRouter.post(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  syncProduct.create(),
+  // syncProduct.create(), // DISABLED - Meilisearch removed
   createProduct
 );
 adminProductsRouter.put(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  syncProduct.update(),
+  // syncProduct.update(), // DISABLED - Meilisearch removed
   updateProduct
 );
 adminProductsRouter.put(
@@ -807,7 +807,7 @@ adminProductsRouter.put(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  syncProduct.update(),
+  // syncProduct.update(), // DISABLED - Meilisearch removed
   updateProductWithFiles
 );
 adminProductsRouter.patch(
@@ -832,7 +832,7 @@ adminProductsRouter.delete(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  syncProduct.delete(),
+  // syncProduct.delete(), // DISABLED - Meilisearch removed
   deleteProduct
 );
 adminProductsRouter.patch(

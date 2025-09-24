@@ -8,10 +8,10 @@ import { ResponseHelper } from "../types/api";
 import { z } from "zod";
 import { s3Service } from "../services/s3.service";
 import { productImageService } from "../services/product-image.service";
-import {
-  meilisearchService,
-  SearchableProduct,
-} from "../services/meilisearch.service";
+// import {
+//   meilisearchService,
+//   SearchableProduct,
+// } from "../services/meilisearch.service"; // TEMPORARILY DISABLED
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 
 const prisma = new PrismaClient();
@@ -26,193 +26,193 @@ const generateProductSlug = (
   return generateVietnameseSlug(combined);
 };
 
-// Helper function to transform product for Meilisearch
-const transformProductForSearch = async (
-  product: any
-): Promise<SearchableProduct> => {
-  // Get product images
-  const images =
-    product.productImages && product.productImages.length > 0
-      ? product.productImages.map((img: any) => img.url)
-      : [];
+// Helper function to transform product for Meilisearch - TEMPORARILY DISABLED
+// const transformProductForSearch = async (
+//   product: any
+// ): Promise<SearchableProduct> => {
+//   // Get product images
+//   const images =
+//     product.productImages && product.productImages.length > 0
+//       ? product.productImages.map((img: any) => img.url)
+//       : [];
 
-  return {
-    id: product.id,
-    name: product.name,
-    slug: product.slug,
-    description: product.description || "",
-    stockQuantity: product.stockQuantity,
-    isActive: product.isActive,
-    categories: product.productCategories.map((pc: any) => ({
-      id: pc.category.id,
-      name: pc.category.name,
-      slug: pc.category.slug,
-    })),
-    colors: product.productColors.map((pc: any) => ({
-      id: pc.color.id,
-      name: pc.color.name,
-      slug: pc.color.slug,
-      hexCode: pc.color.hexCode,
-    })),
-    capacity: {
-      id: product.capacity.id,
-      name: product.capacity.name,
-      slug: product.capacity.slug,
-      volumeMl: product.capacity.volumeMl,
-    },
-    images,
-    productUrl: product.productUrl || "",
-    createdAt: product.createdAt.toISOString(),
-    updatedAt: product.updatedAt.toISOString(),
-  };
-};
+//   return {
+//     id: product.id,
+//     name: product.name,
+//     slug: product.slug,
+//     description: product.description || "",
+//     stockQuantity: product.stockQuantity,
+//     isActive: product.isActive,
+//     categories: product.productCategories.map((pc: any) => ({
+//       id: pc.category.id,
+//       name: pc.category.name,
+//       slug: pc.category.slug,
+//     })),
+//     colors: product.productColors.map((pc: any) => ({
+//       id: pc.color.id,
+//       name: pc.color.name,
+//       slug: pc.color.slug,
+//       hexCode: pc.color.hexCode,
+//     })),
+//     capacity: {
+//       id: product.capacity.id,
+//       name: product.capacity.name,
+//       slug: product.capacity.slug,
+//       volumeMl: product.capacity.volumeMl,
+//     },
+//     images,
+//     productUrl: product.productUrl || "",
+//     createdAt: product.createdAt.toISOString(),
+//     updatedAt: product.updatedAt.toISOString(),
+//   };
+// };
 
-// Helper function to build Meilisearch filters from query parameters
-const buildMeilisearchFilters = (params: {
-  isActive?: boolean;
-  isDeleted?: boolean;
-  categorySlug?: string;
-  colorSlug?: string;
-  capacityMin?: number;
-  capacityMax?: number;
-  excludeProductId?: string;
-  lowStock?: boolean;
-  lowStockThreshold?: number;
-}): string[] => {
-  const filters: string[] = [];
+// Helper function to build Meilisearch filters from query parameters - TEMPORARILY DISABLED
+// const buildMeilisearchFilters = (params: {
+//   isActive?: boolean;
+//   isDeleted?: boolean;
+//   categorySlug?: string;
+//   colorSlug?: string;
+//   capacityMin?: number;
+//   capacityMax?: number;
+//   excludeProductId?: string;
+//   lowStock?: boolean;
+//   lowStockThreshold?: number;
+// }): string[] => {
+//   const filters: string[] = [];
 
-  // Always filter active products for Meilisearch (deleted products are already removed from index)
-  if (params.isActive !== undefined) {
-    filters.push(`isActive = ${params.isActive}`);
-  }
+//   // Always filter active products for Meilisearch (deleted products are already removed from index)
+//   if (params.isActive !== undefined) {
+//     filters.push(`isActive = ${params.isActive}`);
+//   }
 
-  if (params.categorySlug) {
-    filters.push(`categories.slug = "${params.categorySlug}"`);
-  }
+//   if (params.categorySlug) {
+//     filters.push(`categories.slug = "${params.categorySlug}"`);
+//   }
 
-  if (params.colorSlug) {
-    filters.push(`colors.slug = "${params.colorSlug}"`);
-  }
+//   if (params.colorSlug) {
+//     filters.push(`colors.slug = "${params.colorSlug}"`);
+//   }
 
-  // NOTE: Capacity range filtering is not supported in Meilisearch (capacity.volumeMl not filterable)
-  // This filtering will be applied in PostgreSQL fallback
+//   // NOTE: Capacity range filtering is not supported in Meilisearch (capacity.volumeMl not filterable)
+//   // This filtering will be applied in PostgreSQL fallback
 
-  if (params.excludeProductId) {
-    filters.push(`id != "${params.excludeProductId}"`);
-  }
+//   if (params.excludeProductId) {
+//     filters.push(`id != "${params.excludeProductId}"`);
+//   }
 
-  if (params.lowStock && params.lowStockThreshold) {
-    filters.push(`stockQuantity <= ${params.lowStockThreshold}`);
-  }
+//   if (params.lowStock && params.lowStockThreshold) {
+//     filters.push(`stockQuantity <= ${params.lowStockThreshold}`);
+//   }
 
-  return filters;
-};
+//   return filters;
+// };
 
-// Helper function to build Meilisearch sort from query parameters
-const buildMeilisearchSort = (sortBy: string, sortOrder: string): string[] => {
-  const sortField =
-    sortBy === "createdAt"
-      ? "createdAt"
-      : sortBy === "updatedAt"
-        ? "updatedAt"
-        : sortBy === "name"
-          ? "name"
-          : sortBy === "stockQuantity"
-            ? "stockQuantity"
-            : "createdAt";
+// Helper function to build Meilisearch sort from query parameters - TEMPORARILY DISABLED
+// const buildMeilisearchSort = (sortBy: string, sortOrder: string): string[] => {
+//   const sortField =
+//     sortBy === "createdAt"
+//       ? "createdAt"
+//       : sortBy === "updatedAt"
+//         ? "updatedAt"
+//         : sortBy === "name"
+//           ? "name"
+//           : sortBy === "stockQuantity"
+//             ? "stockQuantity"
+//             : "createdAt";
 
-  return [`${sortField}:${sortOrder === "desc" ? "desc" : "asc"}`];
-};
+//   return [`${sortField}:${sortOrder === "desc" ? "desc" : "asc"}`];
+// };
 
-// Helper function to search products using Meilisearch
-const searchProductsWithMeilisearch = async (params: {
-  search?: string;
-  page: number;
-  limit: number;
-  isActive?: boolean;
-  categorySlug?: string;
-  colorSlug?: string;
-  capacityMin?: number;
-  capacityMax?: number;
-  lowStock?: boolean;
-  lowStockThreshold?: number;
-  sortBy: string;
-  sortOrder: string;
-}) => {
-  const { search = "", page, limit, sortBy, sortOrder } = params;
+// Helper function to search products using Meilisearch - TEMPORARILY DISABLED
+// const searchProductsWithMeilisearch = async (params: {
+//   search?: string;
+//   page: number;
+//   limit: number;
+//   isActive?: boolean;
+//   categorySlug?: string;
+//   colorSlug?: string;
+//   capacityMin?: number;
+//   capacityMax?: number;
+//   lowStock?: boolean;
+//   lowStockThreshold?: number;
+//   sortBy: string;
+//   sortOrder: string;
+// }) => {
+//   const { search = "", page, limit, sortBy, sortOrder } = params;
 
-  const offset = (page - 1) * limit;
-  const filters = buildMeilisearchFilters(params);
-  const sort = buildMeilisearchSort(sortBy, sortOrder);
+//   const offset = (page - 1) * limit;
+//   const filters = buildMeilisearchFilters(params);
+//   const sort = buildMeilisearchSort(sortBy, sortOrder);
 
-  const facets = [
-    "categories.name",
-    "colors.name",
-    "capacity.name",
-    "isActive",
-  ];
+//   const facets = [
+//     "categories.name",
+//     "colors.name",
+//     "capacity.name",
+//     "isActive",
+//   ];
 
-  const searchResult = await meilisearchService.searchProducts(search, {
-    limit,
-    offset,
-    filters,
-    sort,
-    facets,
-    highlightPreTag: "<mark>",
-    highlightPostTag: "</mark>",
-  });
+//   const searchResult = await meilisearchService.searchProducts(search, {
+//     limit,
+//     offset,
+//     filters,
+//     sort,
+//     facets,
+//     highlightPreTag: "<mark>",
+//     highlightPostTag: "</mark>",
+//   });
 
-  // Transform Meilisearch results to match expected format
-  const transformedResults = searchResult.hits.map((hit: any) => ({
-    id: hit.id,
-    name: hit.name,
-    slug: hit.slug,
-    description: hit.description,
-    stockQuantity: hit.stockQuantity,
-    productUrl: hit.productUrl,
-    isActive: hit.isActive,
-    createdAt: hit.createdAt,
-    updatedAt: hit.updatedAt,
-    productImages: hit.images
-      ? hit.images.map((url: string, index: number) => ({
-          url,
-          order: index + 1,
-        }))
-      : [],
-    productCategories: hit.categories
-      ? hit.categories.map((cat: any) => ({
-          category: {
-            id: cat.id,
-            name: cat.name,
-            slug: cat.slug,
-          },
-        }))
-      : [],
-    productColors: hit.colors
-      ? hit.colors.map((color: any) => ({
-          color: {
-            id: color.id,
-            name: color.name,
-            slug: color.slug,
-            hexCode: color.hexCode,
-          },
-        }))
-      : [],
-    capacity: {
-      id: hit.capacity.id,
-      name: hit.capacity.name,
-      slug: hit.capacity.slug,
-      volumeMl: hit.capacity.volumeMl,
-    },
-  }));
+//   // Transform Meilisearch results to match expected format
+//   const transformedResults = searchResult.hits.map((hit: any) => ({
+//     id: hit.id,
+//     name: hit.name,
+//     slug: hit.slug,
+//     description: hit.description,
+//     stockQuantity: hit.stockQuantity,
+//     productUrl: hit.productUrl,
+//     isActive: hit.isActive,
+//     createdAt: hit.createdAt,
+//     updatedAt: hit.updatedAt,
+//     productImages: hit.images
+//       ? hit.images.map((url: string, index: number) => ({
+//           url,
+//           order: index + 1,
+//         }))
+//       : [],
+//     productCategories: hit.categories
+//       ? hit.categories.map((cat: any) => ({
+//           category: {
+//             id: cat.id,
+//             name: cat.name,
+//             slug: cat.slug,
+//           },
+//         }))
+//       : [],
+//     productColors: hit.colors
+//       ? hit.colors.map((color: any) => ({
+//           color: {
+//             id: color.id,
+//             name: color.name,
+//             slug: color.slug,
+//             hexCode: color.hexCode,
+//           },
+//         }))
+//       : [],
+//     capacity: {
+//       id: hit.capacity.id,
+//       name: hit.capacity.name,
+//       slug: hit.capacity.slug,
+//       volumeMl: hit.capacity.volumeMl,
+//     },
+//   }));
 
-  return {
-    products: transformedResults,
-    total: searchResult.estimatedTotalHits,
-    facets: searchResult.facetDistribution,
-    processingTimeMs: searchResult.processingTimeMs,
-  };
-};
+//   return {
+//     products: transformedResults,
+//     total: searchResult.estimatedTotalHits,
+//     facets: searchResult.facetDistribution,
+//     processingTimeMs: searchResult.processingTimeMs,
+//   };
+// };
 
 // Fallback function to search products using PostgreSQL
 const searchProductsWithPostgreSQL = async (params: {
@@ -356,72 +356,72 @@ const searchProductsWithPostgreSQL = async (params: {
   };
 };
 
-// Helper function to sync product to Meilisearch
-const syncProductToMeilisearch = async (productId: string): Promise<void> => {
-  try {
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      include: {
-        productCategories: {
-          include: {
-            category: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
-            },
-          },
-        },
-        productColors: {
-          include: {
-            color: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                hexCode: true,
-              },
-            },
-          },
-        },
-        capacity: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            volumeMl: true,
-          },
-        },
-        productImages: {
-          select: {
-            url: true,
-            order: true,
-          },
-          orderBy: {
-            order: "asc",
-          },
-        },
-      },
-    });
+// Helper function to sync product to Meilisearch - TEMPORARILY DISABLED
+// const syncProductToMeilisearch = async (productId: string): Promise<void> => {
+//   try {
+//     const product = await prisma.product.findUnique({
+//       where: { id: productId },
+//       include: {
+//         productCategories: {
+//           include: {
+//             category: {
+//               select: {
+//                 id: true,
+//                 name: true,
+//                 slug: true,
+//               },
+//             },
+//           },
+//         },
+//         productColors: {
+//           include: {
+//             color: {
+//               select: {
+//                 id: true,
+//                 name: true,
+//                 slug: true,
+//                 hexCode: true,
+//               },
+//             },
+//           },
+//         },
+//         capacity: {
+//           select: {
+//             id: true,
+//             name: true,
+//             slug: true,
+//             volumeMl: true,
+//           },
+//         },
+//         productImages: {
+//           select: {
+//             url: true,
+//             order: true,
+//           },
+//           orderBy: {
+//             order: "asc",
+//           },
+//         },
+//       },
+//     });
 
-    if (product && !product.isDeleted) {
-      const searchableProduct = await transformProductForSearch(product);
-      await meilisearchService.indexProducts([searchableProduct]);
-      console.log(`✅ Product ${productId} synced to Meilisearch`);
-    } else {
-      // Product deleted or not found, remove from Meilisearch
-      await meilisearchService.deleteProduct(productId);
-      console.log(`🗑️ Product ${productId} removed from Meilisearch`);
-    }
-  } catch (error) {
-    console.error(
-      `❌ Failed to sync product ${productId} to Meilisearch:`,
-      error
-    );
-    // Don't throw error to avoid breaking the main operation
-  }
-};
+//     if (product && !product.isDeleted) {
+//       const searchableProduct = await transformProductForSearch(product);
+//       await meilisearchService.indexProducts([searchableProduct]);
+//       console.log(`✅ Product ${productId} synced to Meilisearch`);
+//     } else {
+//       // Product deleted or not found, remove from Meilisearch
+//       await meilisearchService.deleteProduct(productId);
+//       console.log(`🗑️ Product ${productId} removed from Meilisearch`);
+//     }
+//   } catch (error) {
+//     console.error(
+//       `❌ Failed to sync product ${productId} to Meilisearch:`,
+//       error
+//     );
+//     // Don't throw error to avoid breaking the main operation
+//   }
+// };
 
 // Validation schemas
 const imageWithOrderSchema = z.object({
@@ -663,69 +663,91 @@ export const getProducts = async (req: Request, res: Response) => {
       }
     }
 
-    // Try Meilisearch first, fallback to PostgreSQL
+    // Use PostgreSQL only - Meilisearch temporarily disabled
     let searchResult;
     let usedMeilisearch = false;
 
-    try {
-      // If capacity range filtering is requested, use PostgreSQL fallback
-      // because Meilisearch doesn't support capacity.volumeMl filtering
-      if (
-        resolvedCapacityMin !== undefined ||
-        resolvedCapacityMax !== undefined
-      ) {
-        console.log("🔄 Using PostgreSQL for capacity range filtering");
-        throw new Error(
-          "Using PostgreSQL fallback for capacity range filtering"
-        );
-      }
+    // Force PostgreSQL fallback since Meilisearch is disabled
+    console.log("💾 Using PostgreSQL for product search (Meilisearch disabled)");
+    searchResult = await searchProductsWithPostgreSQL({
+      search,
+      page,
+      limit,
+      isActive,
+      isDeleted,
+      categorySlug: resolvedCategorySlug,
+      colorSlug: resolvedColorSlug,
+      capacityMin: resolvedCapacityMin,
+      capacityMax: resolvedCapacityMax,
+      lowStock,
+      lowStockThreshold,
+      sortBy,
+      sortOrder,
+    });
+    console.log(
+      `✅ PostgreSQL returned ${searchResult.products.length} products`
+    );
 
-      // Use Meilisearch for faster search
-      console.log("🔍 Using Meilisearch for product search");
-      searchResult = await searchProductsWithMeilisearch({
-        search,
-        page,
-        limit,
-        isActive,
-        categorySlug: resolvedCategorySlug,
-        colorSlug: resolvedColorSlug,
-        capacityMin: resolvedCapacityMin,
-        capacityMax: resolvedCapacityMax,
-        lowStock,
-        lowStockThreshold,
-        sortBy,
-        sortOrder,
-      });
-      usedMeilisearch = true;
-      console.log(
-        `✅ Meilisearch returned ${searchResult.products.length} products in ${searchResult.processingTimeMs}ms`
-      );
-    } catch (meilisearchError) {
-      console.warn(
-        "⚠️ Meilisearch failed, falling back to PostgreSQL:",
-        meilisearchError
-      );
+    // // TEMPORARILY DISABLED - Meilisearch integration
+    // try {
+    //   // If capacity range filtering is requested, use PostgreSQL fallback
+    //   // because Meilisearch doesn't support capacity.volumeMl filtering
+    //   if (
+    //     resolvedCapacityMin !== undefined ||
+    //     resolvedCapacityMax !== undefined
+    //   ) {
+    //     console.log("🔄 Using PostgreSQL for capacity range filtering");
+    //     throw new Error(
+    //       "Using PostgreSQL fallback for capacity range filtering"
+    //     );
+    //   }
 
-      // Fallback to PostgreSQL
-      searchResult = await searchProductsWithPostgreSQL({
-        search,
-        page,
-        limit,
-        isActive,
-        isDeleted,
-        categorySlug: resolvedCategorySlug,
-        colorSlug: resolvedColorSlug,
-        capacityMin: resolvedCapacityMin,
-        capacityMax: resolvedCapacityMax,
-        lowStock,
-        lowStockThreshold,
-        sortBy,
-        sortOrder,
-      });
-      console.log(
-        `✅ PostgreSQL fallback returned ${searchResult.products.length} products`
-      );
-    }
+    //   // Use Meilisearch for faster search
+    //   console.log("🔍 Using Meilisearch for product search");
+    //   searchResult = await searchProductsWithMeilisearch({
+    //     search,
+    //     page,
+    //     limit,
+    //     isActive,
+    //     categorySlug: resolvedCategorySlug,
+    //     colorSlug: resolvedColorSlug,
+    //     capacityMin: resolvedCapacityMin,
+    //     capacityMax: resolvedCapacityMax,
+    //     lowStock,
+    //     lowStockThreshold,
+    //     sortBy,
+    //     sortOrder,
+    //   });
+    //   usedMeilisearch = true;
+    //   console.log(
+    //     `✅ Meilisearch returned ${searchResult.products.length} products in ${searchResult.processingTimeMs}ms`
+    //   );
+    // } catch (meilisearchError) {
+    //   console.warn(
+    //     "⚠️ Meilisearch failed, falling back to PostgreSQL:",
+    //     meilisearchError
+    //   );
+
+    //   // Fallback to PostgreSQL
+    //   searchResult = await searchProductsWithPostgreSQL({
+    //     search,
+    //     page,
+    //     limit,
+    //     isActive,
+    //     isDeleted,
+    //     categorySlug: resolvedCategorySlug,
+    //     colorSlug: resolvedColorSlug,
+    //     capacityMin: resolvedCapacityMin,
+    //     capacityMax: resolvedCapacityMax,
+    //     lowStock,
+    //     lowStockThreshold,
+    //     sortBy,
+    //     sortOrder,
+    //   });
+    //   console.log(
+    //     `✅ PostgreSQL fallback returned ${searchResult.products.length} products`
+    //   );
+    // }
 
     const { products, total, facets, processingTimeMs } = searchResult;
 
@@ -1159,8 +1181,8 @@ export const createProduct = async (req: Request, res: Response) => {
             : "in_stock",
     };
 
-    // Sync to Meilisearch in background
-    syncProductToMeilisearch(result.id).catch(console.error);
+    // Sync to Meilisearch in background - TEMPORARILY DISABLED
+    // syncProductToMeilisearch(result.id).catch(console.error);
 
     return res.status(201).json(ResponseHelper.success(productWithStatus));
   } catch (error) {
@@ -1470,8 +1492,8 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
             : "in_stock",
     };
 
-    // Sync to Meilisearch in background
-    syncProductToMeilisearch(result.id).catch(console.error);
+    // Sync to Meilisearch in background - TEMPORARILY DISABLED
+    // syncProductToMeilisearch(result.id).catch(console.error);
 
     return res.status(200).json(ResponseHelper.success(productWithStatus));
   } catch (error) {
@@ -1893,8 +1915,8 @@ export const deleteProduct = async (req: Request, res: Response) => {
       },
     });
 
-    // Sync to Meilisearch in background (will remove from index since product is deleted)
-    syncProductToMeilisearch(id).catch(console.error);
+    // Sync to Meilisearch in background (will remove from index since product is deleted) - TEMPORARILY DISABLED
+    // syncProductToMeilisearch(id).catch(console.error);
 
     return res.status(200).json(
       ResponseHelper.success(updatedProduct, {
@@ -2145,8 +2167,8 @@ export const updateProductStock = async (req: Request, res: Response) => {
       },
     };
 
-    // Sync to Meilisearch in background to update stock quantity
-    syncProductToMeilisearch(id).catch(console.error);
+    // Sync to Meilisearch in background to update stock quantity - TEMPORARILY DISABLED
+    // syncProductToMeilisearch(id).catch(console.error);
 
     return res.status(200).json(ResponseHelper.success(productWithStatus));
   } catch (error) {
@@ -2210,17 +2232,17 @@ export const toggleProductStatus = async (req: Request, res: Response) => {
             : "in_stock",
     };
 
-    // Sync updated product to Meilisearch
-    try {
-      await syncProductToMeilisearch(id);
-      console.log(`✅ Product ${id} status toggled and synced to Meilisearch`);
-    } catch (meilisearchError) {
-      console.error(
-        `⚠️ Failed to sync product ${id} to Meilisearch:`,
-        meilisearchError
-      );
-      // Don't fail the request if Meilisearch sync fails
-    }
+    // Sync updated product to Meilisearch - TEMPORARILY DISABLED
+    // try {
+    //   await syncProductToMeilisearch(id);
+    //   console.log(`✅ Product ${id} status toggled and synced to Meilisearch`);
+    // } catch (meilisearchError) {
+    //   console.error(
+    //     `⚠️ Failed to sync product ${id} to Meilisearch:`,
+    //     meilisearchError
+    //   );
+    //   // Don't fail the request if Meilisearch sync fails
+    // }
 
     return res.status(200).json(ResponseHelper.success(productWithStatus));
   } catch (error) {
@@ -2396,7 +2418,7 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
 // PUBLIC CONTROLLERS (No authentication required)
 // ============================================================================
 
-// Helper function to search public products with Meilisearch (with PostgreSQL fallback)
+// Helper function to search public products - Using PostgreSQL only (Meilisearch temporarily disabled)
 const searchPublicProductsWithMeilisearch = async (params: {
   search?: string;
   page: number;
@@ -2426,120 +2448,21 @@ const searchPublicProductsWithMeilisearch = async (params: {
     inStock,
   } = params;
 
-  try {
-    // If capacity range filtering is requested, use PostgreSQL fallback
-    // because Meilisearch doesn't support capacity.volumeMl filtering
-    if (capacityMin !== undefined || capacityMax !== undefined) {
-      console.log("🔄 Using PostgreSQL for capacity range filtering");
-      throw new Error("Using PostgreSQL fallback for capacity range filtering");
-    }
+  // Force PostgreSQL since Meilisearch is removed
+  console.log("🔄 Using PostgreSQL for product search (Meilisearch removed)");
 
-    // Build Meilisearch filter
-    const filters = buildMeilisearchFilters({
-      isActive: true,
-      isDeleted: false,
-      categorySlug:
-        category &&
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          category
-        )
-          ? category
-          : undefined,
-      excludeProductId,
-      colorSlug: color,
-      capacityMin,
-      capacityMax,
-    });
+  // PostgreSQL search
+  const where: any = {
+    isActive: true,
+    isDeleted: false,
+  };
 
-    // Build Meilisearch sort
-    const sort = buildMeilisearchSort(sortBy, sortOrder);
-
-    console.log(
-      `🔍 Searching public products with Meilisearch - Query: "${search}", Filters: ${filters}, Sort: ${sort}, Page: ${page}, Limit: ${limit}`
-    );
-
-    const searchResult = await meilisearchService.searchProducts(search || "", {
-      limit,
-      offset: (page - 1) * limit,
-      filters,
-      sort,
-    });
-
-    console.log(
-      `✅ Meilisearch public search completed: ${searchResult.hits.length} results, ${searchResult.estimatedTotalHits} total`
-    );
-
-    // Transform Meilisearch results to match expected format
-    const transformedResults = searchResult.hits.map((hit: any) => ({
-      id: hit.id,
-      name: hit.name,
-      slug: hit.slug,
-      description: hit.description,
-      stockQuantity: hit.stockQuantity,
-      productUrl: hit.productUrl,
-      isActive: hit.isActive,
-      createdAt: hit.createdAt,
-      updatedAt: hit.updatedAt,
-      productImages: hit.images
-        ? hit.images.map((url: string, index: number) => ({
-            url,
-            order: index + 1,
-          }))
-        : [],
-      productCategories: hit.categories
-        ? hit.categories.map((cat: any) => ({
-            category: {
-              id: cat.id,
-              name: cat.name,
-              slug: cat.slug,
-            },
-          }))
-        : [],
-      productColors: hit.colors
-        ? hit.colors.map((color: any) => ({
-            color: {
-              id: color.id,
-              name: color.name,
-              slug: color.slug,
-              hexCode: color.hexCode,
-            },
-          }))
-        : [],
-      capacity: {
-        id: hit.capacity.id,
-        name: hit.capacity.name,
-        slug: hit.capacity.slug,
-        volumeMl: hit.capacity.volumeMl,
-      },
-    }));
-
-    return {
-      items: transformedResults,
-      totalItems: searchResult.estimatedTotalHits || 0,
-      searchMeta: {
-        query: search,
-        processingTimeMs: searchResult.processingTimeMs,
-        source: "meilisearch",
-      },
-    };
-  } catch (error) {
-    console.error(
-      "❌ Meilisearch public search error, falling back to PostgreSQL:",
-      error
-    );
-
-    // Fallback to PostgreSQL search
-    const where: any = {
-      isActive: true,
-      isDeleted: false,
-    };
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
-    }
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { description: { contains: search, mode: "insensitive" } },
+    ];
+  }
 
     // Handle filtering by slug or ID
     if (category) {
@@ -2659,15 +2582,14 @@ const searchPublicProductsWithMeilisearch = async (params: {
       `📦 PostgreSQL fallback search completed: ${items.length} results, ${totalItems} total`
     );
 
-    return {
-      items,
-      totalItems,
-      searchMeta: {
-        query: search,
-        source: "postgresql",
-      },
-    };
-  }
+  return {
+    items,
+    totalItems,
+    searchMeta: {
+      query: search,
+      source: "postgresql",
+    },
+  };
 };
 
 /**

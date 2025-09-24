@@ -28,16 +28,16 @@ import uploadRoutes from "./routes/upload.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import notificationRoutes from "./routes/notification.routes";
 import heroImagesRoutes from "./routes/hero-images.routes";
-import { searchRoutes } from "./routes/search.routes";
+// import { searchRoutes } from "./routes/search.routes";
 
 // Import Socket.IO service
 import { socketService } from "./services/socket.service";
 
-// Import MeiliSearch initialization
-import {
-  initializeMeiliSearch,
-  syncInitialData,
-} from "./config/meilisearch-init";
+// Import MeiliSearch initialization - TEMPORARILY DISABLED
+// import {
+//   initializeMeiliSearch,
+//   syncInitialData,
+// } from "./config/meilisearch-init";
 
 // Load environment variables
 dotenv.config();
@@ -70,7 +70,7 @@ app.use("/api/capacities", capacitiesRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/products", productsRoutes);
 app.use("/api/hero-images", heroImagesRoutes);
-app.use("/api/search", searchRoutes);
+// app.use("/api/search", searchRoutes); // TEMPORARILY DISABLED - Meilisearch not available
 
 // Public routes (for customer-facing website)
 app.use("/api/consultations", consultationRoutes);
@@ -124,10 +124,10 @@ app.use(errorHandler);
 // Initialize Socket.IO
 socketService.initialize(server);
 
-// Initialize MeiliSearch
-initializeMeiliSearch().then(() => {
-  syncInitialData();
-});
+// Initialize MeiliSearch - TEMPORARILY DISABLED
+// initializeMeiliSearch().then(() => {
+//   syncInitialData();
+// });
 
 // Start server
 server.listen(PORT, () => {

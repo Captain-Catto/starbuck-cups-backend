@@ -16,8 +16,6 @@
     "db:generate": "prisma generate",
     "seed:sample": "ts-node scripts/seed-sample-data.ts",
     "seed:products": "ts-node scripts/seed-200-products.ts",
-    "search:init": "ts-node scripts/init-meilisearch.ts",
-    "search:sync": "ts-node scripts/sync-data-to-meilisearch.ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix"
   },
@@ -49,7 +47,6 @@
     "helmet": "^8.1.0",
     "joi": "^18.0.1",
     "jsonwebtoken": "^9.0.2",
-    "meilisearch": "^0.53.0",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.16.3",
     "prisma": "^6.16.0",

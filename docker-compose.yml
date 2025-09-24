@@ -39,31 +39,31 @@ services:
     depends_on:
       - postgres
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.5
-    container_name: starbucks-meilisearch
-    ports:
-      - "7700:7700"
-    environment:
-      MEILI_MASTER_KEY: starbucks_meilisearch_key_2024
-      MEILI_ENV: development
-      MEILI_LOG_LEVEL: INFO
-      MEILI_DB_PATH: /meili_data
-    volumes:
-      - meilisearch_data:/meili_data
-    networks:
-      - starbucks-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # meilisearch: # TEMPORARILY DISABLED - Meilisearch not supported
+  #   image: getmeili/meilisearch:v1.5
+  #   container_name: starbucks-meilisearch
+  #   ports:
+  #     - "7700:7700"
+  #   environment:
+  #     MEILI_MASTER_KEY: starbucks_meilisearch_key_2024
+  #     MEILI_ENV: development
+  #     MEILI_LOG_LEVEL: INFO
+  #     MEILI_DB_PATH: /meili_data
+  #   volumes:
+  #     - meilisearch_data:/meili_data
+  #   networks:
+  #     - starbucks-network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
 volumes:
   postgres_data:
   redis_data:
-  meilisearch_data:
+  # meilisearch_data: # TEMPORARILY DISABLED
 
 networks:
   starbucks-network:
