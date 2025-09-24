@@ -1,12 +1,12 @@
 import express from "express";
 import { getDashboardStats, getRevenueData, getStatistics } from "../controllers/dashboard.controller";
-import { authenticate, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
 
 const router = express.Router();
 
-// Dashboard routes - all require admin authentication
-router.get("/stats", authenticate, requireAdmin, getDashboardStats);
-router.get("/revenue", authenticate, requireAdmin, getRevenueData);
-router.get("/statistics", authenticate, requireAdmin, getStatistics);
+// Dashboard routes - simple authentication
+router.get("/stats", authenticateWithAutoRefresh, requireAdmin, getDashboardStats);
+router.get("/revenue", authenticateWithAutoRefresh, requireAdmin, getRevenueData);
+router.get("/statistics", authenticateWithAutoRefresh, requireAdmin, getStatistics);
 
 export default router;

@@ -13,7 +13,7 @@ import {
   getPublicColors,
   getPublicColorById,
 } from "../controllers/colors.controller";
-import { authenticate, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -177,7 +177,7 @@ router.get("/public/:id", getPublicColorById);
  *                         pagination:
  *                           $ref: '#/components/schemas/PaginationMeta'
  */
-router.get("/", authenticate, getColors);
+router.get("/", authenticateWithAutoRefresh, getColors);
 
 /**
  * @swagger
@@ -202,7 +202,7 @@ router.get("/", authenticate, getColors);
  *       200:
  *         description: Colors found
  */
-router.get("/search", authenticate, searchColors);
+router.get("/search", authenticateWithAutoRefresh, searchColors);
 
 /**
  * @swagger
@@ -234,7 +234,7 @@ router.get("/search", authenticate, searchColors);
  *       404:
  *         description: Color not found
  */
-router.get("/:id", authenticate, getColorById);
+router.get("/:id", authenticateWithAutoRefresh, getColorById);
 
 /**
  * @swagger
@@ -265,7 +265,7 @@ router.get("/:id", authenticate, getColorById);
  *       409:
  *         description: Color with same name or hex code already exists
  */
-router.post("/", authenticate, requireAdmin, createColor);
+router.post("/", authenticateWithAutoRefresh, requireAdmin, createColor);
 
 /**
  * @swagger
@@ -296,7 +296,7 @@ router.post("/", authenticate, requireAdmin, createColor);
  *       409:
  *         description: Color with same name or hex code already exists
  */
-router.put("/:id", authenticate, requireAdmin, updateColor);
+router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateColor);
 
 /**
  * @swagger
@@ -323,7 +323,7 @@ router.put("/:id", authenticate, requireAdmin, updateColor);
  */
 router.patch(
   "/:id/toggle-status",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   toggleColorStatus
 );
@@ -351,6 +351,6 @@ router.patch(
  *       409:
  *         description: Cannot delete color that is in use
  */
-router.delete("/:id", authenticate, requireAdmin, deleteColor);
+router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteColor);
 
 export default router;

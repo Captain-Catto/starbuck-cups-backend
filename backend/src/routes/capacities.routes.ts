@@ -13,7 +13,7 @@ import {
   getPublicCapacities,
   getPublicCapacityById,
 } from "../controllers/capacities.controller";
-import { authenticate, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -161,7 +161,7 @@ router.get("/public/:id", getPublicCapacityById);
  *       200:
  *         description: Capacities retrieved successfully
  */
-router.get("/", authenticate, getCapacities);
+router.get("/", authenticateWithAutoRefresh, getCapacities);
 
 /**
  * @swagger
@@ -186,7 +186,7 @@ router.get("/", authenticate, getCapacities);
  *       200:
  *         description: Capacities found
  */
-router.get("/search", authenticate, searchCapacities);
+router.get("/search", authenticateWithAutoRefresh, searchCapacities);
 
 /**
  * @swagger
@@ -209,7 +209,7 @@ router.get("/search", authenticate, searchCapacities);
  *       404:
  *         description: Capacity not found
  */
-router.get("/:id", authenticate, getCapacityById);
+router.get("/:id", authenticateWithAutoRefresh, getCapacityById);
 
 /**
  * @swagger
@@ -231,7 +231,7 @@ router.get("/:id", authenticate, getCapacityById);
  *       409:
  *         description: Capacity with same name or volume already exists
  */
-router.post("/", authenticate, requireAdmin, createCapacity);
+router.post("/", authenticateWithAutoRefresh, requireAdmin, createCapacity);
 
 /**
  * @swagger
@@ -262,7 +262,7 @@ router.post("/", authenticate, requireAdmin, createCapacity);
  *       409:
  *         description: Capacity with same name or volume already exists
  */
-router.put("/:id", authenticate, requireAdmin, updateCapacity);
+router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateCapacity);
 
 /**
  * @swagger
@@ -289,7 +289,7 @@ router.put("/:id", authenticate, requireAdmin, updateCapacity);
  */
 router.patch(
   "/:id/toggle-status",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   toggleCapacityStatus
 );
@@ -317,6 +317,6 @@ router.patch(
  *       409:
  *         description: Cannot delete capacity that is in use
  */
-router.delete("/:id", authenticate, requireAdmin, deleteCapacity);
+router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteCapacity);
 
 export default router;

@@ -5,14 +5,14 @@ import {
   uploadMultiple,
   handleMulterError,
 } from "../middleware/upload.middleware";
-import { authenticate } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
 
 const router = express.Router();
 
 // Single file upload
 router.post(
   "/single",
-  authenticate,
+  authenticateWithAutoRefresh,
   uploadSingle("image"),
   handleMulterError,
   async (req: Request, res: Response): Promise<void> => {
@@ -74,7 +74,7 @@ router.post(
 // Multiple files upload
 router.post(
   "/multiple",
-  authenticate,
+  authenticateWithAutoRefresh,
   uploadMultiple("images", 10),
   handleMulterError,
   async (req: Request, res: Response): Promise<void> => {
@@ -138,7 +138,7 @@ router.post(
 // Delete file
 router.delete(
   "/delete",
-  authenticate,
+  authenticateWithAutoRefresh,
   async (req: Request, res: Response): Promise<void> => {
     try {
       const key = req.query.key as string; // Use query parameter
@@ -181,7 +181,7 @@ router.delete(
 // Get signed URL for temporary access
 router.get(
   "/signed-url",
-  authenticate,
+  authenticateWithAutoRefresh,
   async (req: Request, res: Response): Promise<void> => {
     try {
       const key = req.query.key as string; // Use query parameter

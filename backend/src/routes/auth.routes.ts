@@ -15,7 +15,7 @@ import {
   adminLogout,
   adminSessionCheck,
 } from "../controllers/auth.controller";
-import { authenticate, rateLimitAuth } from "../middleware/auth.middleware";
+import { authenticate, rateLimitAuth, authenticateWithAutoRefresh } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -392,14 +392,14 @@ router.post("/admin/logout", authenticate, adminLogout);
  * @swagger
  * /api/auth/admin/session:
  *   get:
- *     summary: Check admin session using refresh token from cookie
+ *     summary: Check admin session using refresh token from cookie (Reactive)
  *     tags: [Admin Authentication]
  *     responses:
  *       200:
- *         description: Session valid, returns new access token
+ *         description: Session valid, returns new access token if refreshed
  *       401:
  *         description: No valid session found
  */
-router.get("/admin/session", adminSessionCheck);
+router.get("/admin/session", authenticateWithAutoRefresh, adminSessionCheck);
 
 export default router;

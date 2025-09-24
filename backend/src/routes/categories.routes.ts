@@ -15,7 +15,7 @@ import {
   getPublicCategoryTree,
   getPublicCategoryById,
 } from "../controllers/categories.controller";
-import { authenticate, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -226,7 +226,7 @@ router.get("/public/:id", getPublicCategoryById);
  *       200:
  *         description: Categories retrieved successfully
  */
-router.get("/", authenticate, getCategories);
+router.get("/", authenticateWithAutoRefresh, getCategories);
 
 /**
  * @swagger
@@ -246,7 +246,7 @@ router.get("/", authenticate, getCategories);
  *       200:
  *         description: Category tree retrieved successfully
  */
-router.get("/tree", authenticate, getCategoryTree);
+router.get("/tree", authenticateWithAutoRefresh, getCategoryTree);
 
 /**
  * @swagger
@@ -277,7 +277,7 @@ router.get("/tree", authenticate, getCategoryTree);
  *       200:
  *         description: Categories found
  */
-router.get("/search", authenticate, searchCategories);
+router.get("/search", authenticateWithAutoRefresh, searchCategories);
 
 /**
  * @swagger
@@ -300,7 +300,7 @@ router.get("/search", authenticate, searchCategories);
  *       404:
  *         description: Category not found
  */
-router.get("/:id", authenticate, getCategoryById);
+router.get("/:id", authenticateWithAutoRefresh, getCategoryById);
 
 /**
  * @swagger
@@ -322,7 +322,7 @@ router.get("/:id", authenticate, getCategoryById);
  *       400:
  *         description: Validation failed or max depth exceeded
  */
-router.post("/", authenticate, requireAdmin, createCategory);
+router.post("/", authenticateWithAutoRefresh, requireAdmin, createCategory);
 
 /**
  * @swagger
@@ -353,7 +353,7 @@ router.post("/", authenticate, requireAdmin, createCategory);
  *       400:
  *         description: Validation failed or circular reference detected
  */
-router.put("/:id", authenticate, requireAdmin, updateCategory);
+router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateCategory);
 
 /**
  * @swagger
@@ -380,7 +380,7 @@ router.put("/:id", authenticate, requireAdmin, updateCategory);
  */
 router.patch(
   "/:id/toggle-status",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   toggleCategoryStatus
 );
@@ -408,6 +408,6 @@ router.patch(
  *       409:
  *         description: Cannot delete category that is in use
  */
-router.delete("/:id", authenticate, requireAdmin, deleteCategory);
+router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteCategory);
 
 export default router;

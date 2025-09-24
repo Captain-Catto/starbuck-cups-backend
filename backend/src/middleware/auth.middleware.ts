@@ -357,8 +357,9 @@ export const authenticateWithAutoRefresh = async (
         username: user.username,
       };
 
-      // Add header to indicate client should refresh access token
+      // Add header to indicate client should refresh access token silently
       res.setHeader("X-Token-Refresh-Needed", "true");
+      res.setHeader("X-Refresh-Type", "silent");
 
       next();
     } catch (refreshError) {

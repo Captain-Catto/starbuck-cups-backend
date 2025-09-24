@@ -12,23 +12,23 @@ import {
   searchCustomers,
   getCustomerOrders,
 } from '../controllers/customers.controller';
-import { authenticate, requireAdmin } from '../middleware/auth.middleware';
+import { authenticateWithAutoRefresh, requireAdmin } from '../middleware/auth.middleware';
 
 const router = express.Router();
 
 // Customer routes
-router.get('/', authenticate, getCustomers);
-router.get('/search', authenticate, searchCustomers);
-router.get('/:id', authenticate, getCustomerById);
-router.get('/:id/orders', authenticate, getCustomerOrders);
-router.post('/', authenticate, requireAdmin, createCustomer);
-router.put('/:id', authenticate, requireAdmin, updateCustomer);
-router.delete('/:id', authenticate, requireAdmin, deleteCustomer);
+router.get('/', authenticateWithAutoRefresh, getCustomers);
+router.get('/search', authenticateWithAutoRefresh, searchCustomers);
+router.get('/:id', authenticateWithAutoRefresh, getCustomerById);
+router.get('/:id/orders', authenticateWithAutoRefresh, getCustomerOrders);
+router.post('/', authenticateWithAutoRefresh, requireAdmin, createCustomer);
+router.put('/:id', authenticateWithAutoRefresh, requireAdmin, updateCustomer);
+router.delete('/:id', authenticateWithAutoRefresh, requireAdmin, deleteCustomer);
 
 // Customer address routes
-router.post('/:customerId/addresses', authenticate, requireAdmin, addCustomerAddress);
-router.put('/:customerId/addresses/:addressId', authenticate, requireAdmin, updateCustomerAddress);
-router.put('/:customerId/addresses/:addressId/set-default', authenticate, requireAdmin, setDefaultCustomerAddress);
-router.delete('/:customerId/addresses/:addressId', authenticate, requireAdmin, deleteCustomerAddress);
+router.post('/:customerId/addresses', authenticateWithAutoRefresh, requireAdmin, addCustomerAddress);
+router.put('/:customerId/addresses/:addressId', authenticateWithAutoRefresh, requireAdmin, updateCustomerAddress);
+router.put('/:customerId/addresses/:addressId/set-default', authenticateWithAutoRefresh, requireAdmin, setDefaultCustomerAddress);
+router.delete('/:customerId/addresses/:addressId', authenticateWithAutoRefresh, requireAdmin, deleteCustomerAddress);
 
 export default router;

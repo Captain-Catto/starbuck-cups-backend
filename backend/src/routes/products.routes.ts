@@ -19,11 +19,11 @@ import {
   reorderProductImages,
 } from "../controllers/products.controller";
 import {
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   requireStaff,
-  authenticateWithAutoRefresh,
 } from "../middleware/auth.middleware";
+// Removed authenticateWithAutoRefresh - using authenticateWithAutoRefresh instead
 import {
   uploadMultiple,
   handleMulterError,
@@ -384,7 +384,7 @@ router.get("/:id", getPublicProductById);
  *       200:
  *         description: Low stock products retrieved successfully
  */
-router.get("/low-stock", authenticate, getLowStockProducts);
+router.get("/low-stock", authenticateWithAutoRefresh, getLowStockProducts);
 
 /**
  * @swagger
@@ -414,7 +414,7 @@ router.get("/low-stock", authenticate, getLowStockProducts);
  *       200:
  *         description: Products found
  */
-router.get("/search", authenticate, searchProducts);
+router.get("/search", authenticateWithAutoRefresh, searchProducts);
 
 /**
  * @swagger
@@ -442,7 +442,7 @@ router.get("/search", authenticate, searchProducts);
  *       404:
  *         description: Product not found
  */
-router.get("/:id", authenticate, getProductById);
+router.get("/:id", authenticateWithAutoRefresh, getProductById);
 
 /**
  * @swagger
@@ -505,7 +505,7 @@ router.get("/:id", authenticate, getProductById);
  */
 router.post(
   "/",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
@@ -544,7 +544,7 @@ router.post(
  */
 router.put(
   "/:id",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   syncProduct.update(),
   updateProduct
@@ -608,7 +608,7 @@ router.put(
  */
 router.put(
   "/:id/upload",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
@@ -645,7 +645,7 @@ router.put(
  *       404:
  *         description: Product not found
  */
-router.patch("/:id/stock", authenticate, requireAdmin, updateProductStock);
+router.patch("/:id/stock", authenticateWithAutoRefresh, requireAdmin, updateProductStock);
 
 /**
  * @swagger
@@ -670,7 +670,7 @@ router.patch("/:id/stock", authenticate, requireAdmin, updateProductStock);
  */
 router.patch(
   "/:id/toggle-status",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   toggleProductStatus
 );
@@ -698,7 +698,7 @@ router.patch(
  *       404:
  *         description: Deleted product not found
  */
-router.patch("/:id/reactivate", authenticate, requireAdmin, reactivateProduct);
+router.patch("/:id/reactivate", authenticateWithAutoRefresh, requireAdmin, reactivateProduct);
 
 /**
  * @swagger
@@ -723,7 +723,7 @@ router.patch("/:id/reactivate", authenticate, requireAdmin, reactivateProduct);
  */
 router.delete(
   "/:id",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   syncProduct.delete(),
   deleteProduct
@@ -768,7 +768,7 @@ router.delete(
  */
 router.patch(
   "/:id/reorder-images",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   reorderProductImages
 );
@@ -787,7 +787,7 @@ adminProductsRouter.get("/search", authenticateWithAutoRefresh, searchProducts);
 adminProductsRouter.get("/:id", authenticateWithAutoRefresh, getProductById);
 adminProductsRouter.post(
   "/",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
@@ -796,14 +796,14 @@ adminProductsRouter.post(
 );
 adminProductsRouter.put(
   "/:id",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   syncProduct.update(),
   updateProduct
 );
 adminProductsRouter.put(
   "/:id/upload",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
@@ -812,32 +812,32 @@ adminProductsRouter.put(
 );
 adminProductsRouter.patch(
   "/:id/stock",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireStaff,
   updateProductStock
 );
 adminProductsRouter.patch(
   "/:id/toggle-status",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   toggleProductStatus
 );
 adminProductsRouter.patch(
   "/:id/reactivate",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   reactivateProduct
 );
 adminProductsRouter.delete(
   "/:id",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   syncProduct.delete(),
   deleteProduct
 );
 adminProductsRouter.patch(
   "/:id/reorder-images",
-  authenticate,
+  authenticateWithAutoRefresh,
   requireAdmin,
   reorderProductImages
 );

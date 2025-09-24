@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ConsultationController } from "../controllers/consultation.controller";
-import { authenticate } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
 
 const router = Router();
 const consultationController = new ConsultationController();
@@ -9,18 +9,18 @@ const consultationController = new ConsultationController();
 router.post("/", consultationController.createConsultation);
 
 // GET /api/consultations - Get all consultations with optional filters
-router.get("/", authenticate, consultationController.getConsultations);
+router.get("/", authenticateWithAutoRefresh, consultationController.getConsultations);
 
 // GET /api/consultations/pending/count - Get pending consultations count
-router.get("/pending/count", authenticate, consultationController.getPendingConsultationsCount);
+router.get("/pending/count", authenticateWithAutoRefresh, consultationController.getPendingConsultationsCount);
 
 // GET /api/consultations/:id - Get consultation by ID
-router.get("/:id", authenticate, consultationController.getConsultationById);
+router.get("/:id", authenticateWithAutoRefresh, consultationController.getConsultationById);
 
 // PUT /api/consultations/:id/status - Update consultation status
-router.put("/:id/status", authenticate, consultationController.updateConsultationStatus);
+router.put("/:id/status", authenticateWithAutoRefresh, consultationController.updateConsultationStatus);
 
 // DELETE /api/consultations/:id - Delete consultation
-router.delete("/:id", authenticate, consultationController.deleteConsultation);
+router.delete("/:id", authenticateWithAutoRefresh, consultationController.deleteConsultation);
 
 export default router;
