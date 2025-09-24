@@ -12,6 +12,7 @@ const corsOptions: cors.CorsOptions = {
     const allowedOrigins = [
       process.env.FRONTEND_URL || "http://localhost:3000",
       process.env.ADMIN_URL || "http://localhost:8081",
+      "https://starbuck-cups-frontend.vercel.app",
       "http://localhost:3000",
       "http://localhost:8081",
       "http://127.0.0.1:3000",
