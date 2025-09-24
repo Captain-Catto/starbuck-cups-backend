@@ -1,0 +1,70 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: starbucks-postgres
+    environment:
+      POSTGRES_DB: starbucks_shop
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - starbucks-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: starbucks-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - starbucks-network
+
+  adminer:
+    image: adminer:4-standalone
+    container_name: starbucks-adminer
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - starbucks-network
+    depends_on:
+      - postgres
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.5
+    container_name: starbucks-meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: starbucks_meilisearch_key_2024
+      MEILI_ENV: development
+      MEILI_LOG_LEVEL: INFO
+      MEILI_DB_PATH: /meili_data
+    volumes:
+      - meilisearch_data:/meili_data
+    networks:
+      - starbucks-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  meilisearch_data:
+
+networks:
+  starbucks-network:
+    driver: bridge

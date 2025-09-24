@@ -1,0 +1,385 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "setup:init-project",
+      "type": "shell",
+      "command": "echo",
+      "args": ["Starting Task 0.1: Initialize Project Structure"],
+      "group": "build",
+      "detail": "Initialize backend, frontend, shared packages",
+      "problemMatcher": []
+    },
+    {
+      "label": "setup:backend-init",
+      "type": "shell",
+      "command": "npm",
+      "args": ["init", "-y"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Initialize backend Node.js project",
+      "dependsOn": "setup:init-project"
+    },
+    {
+      "label": "setup:frontend-init",
+      "type": "shell",
+      "command": "npm",
+      "args": ["create", "vite@latest", ".", "--", "--template", "react-ts"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "detail": "Initialize frontend React + TypeScript project",
+      "dependsOn": "setup:init-project"
+    },
+    {
+      "label": "setup:install-backend-deps",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "install",
+        "express",
+        "@types/express",
+        "typescript",
+        "ts-node",
+        "@types/node",
+        "prisma",
+        "@prisma/client",
+        "bcryptjs",
+        "@types/bcryptjs",
+        "jsonwebtoken",
+        "@types/jsonwebtoken",
+        "cors",
+        "@types/cors",
+        "helmet",
+        "express-rate-limit",
+        "joi",
+        "redis",
+        "@types/redis",
+        "dotenv"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Install backend dependencies",
+      "dependsOn": "setup:backend-init"
+    },
+    {
+      "label": "setup:install-frontend-deps",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "install",
+        "@reduxjs/toolkit",
+        "react-redux",
+        "swiper",
+        "@types/swiper",
+        "axios",
+        "react-router-dom",
+        "@types/react-router-dom"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "detail": "Install frontend dependencies",
+      "dependsOn": "setup:frontend-init"
+    },
+    {
+      "label": "setup:docker-compose",
+      "type": "shell",
+      "command": "docker-compose",
+      "args": ["up", "-d"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "detail": "Start PostgreSQL and Redis containers"
+    },
+    {
+      "label": "db:migrate",
+      "type": "shell",
+      "command": "npx",
+      "args": ["prisma", "migrate", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Run database migrations"
+    },
+    {
+      "label": "db:seed",
+      "type": "shell",
+      "command": "npx",
+      "args": ["prisma", "db", "seed"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Seed database with initial data"
+    },
+    {
+      "label": "dev:backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Start backend development server (port 8080)",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Starting",
+          "endsPattern": "Server running on port"
+        }
+      }
+    },
+    {
+      "label": "dev:frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "detail": "Start frontend development server (port 3000)",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "Local:"
+        }
+      }
+    },
+    {
+      "label": "dev:full-stack",
+      "dependsOrder": "parallel",
+      "dependsOn": ["dev:backend", "dev:frontend"],
+      "group": "build",
+      "detail": "Start both backend and frontend development servers"
+    },
+    {
+      "label": "test:backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "test",
+      "detail": "Run backend unit and integration tests"
+    },
+    {
+      "label": "test:frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "test",
+      "detail": "Run frontend unit tests"
+    },
+    {
+      "label": "test:e2e",
+      "type": "shell",
+      "command": "npx",
+      "args": ["playwright", "test"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "detail": "Run end-to-end tests"
+    },
+    {
+      "label": "build:backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Build backend for production"
+    },
+    {
+      "label": "build:frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "detail": "Build frontend for production"
+    },
+    {
+      "label": "build:all",
+      "dependsOrder": "parallel",
+      "dependsOn": ["build:backend", "build:frontend"],
+      "group": "build",
+      "detail": "Build both backend and frontend for production"
+    },
+    {
+      "label": "dev:backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^\\[(.*)\\]\\s+(\\w+):\\s+(.*)$",
+          "file": 1,
+          "severity": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Starting compilation",
+          "endsPattern": "Server started on port"
+        }
+      },
+      "detail": "Start backend development server"
+    },
+    {
+      "label": "dev:frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "detail": "Start frontend development server"
+    },
+    {
+      "label": "dev:fullstack",
+      "dependsOrder": "parallel",
+      "dependsOn": ["dev:backend", "dev:frontend"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Start both backend and frontend development servers"
+    },
+    {
+      "label": "test:backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "test",
+      "detail": "Run backend tests"
+    },
+    {
+      "label": "test:backend:watch",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:watch"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "test",
+      "isBackground": true,
+      "detail": "Run backend tests in watch mode"
+    },
+    {
+      "label": "lint:backend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "lint"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "problemMatcher": ["$eslint-stylish"],
+      "detail": "Lint backend code"
+    },
+    {
+      "label": "lint:backend:fix",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "lint:fix"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "problemMatcher": ["$eslint-stylish"],
+      "detail": "Lint and fix backend code"
+    },
+    {
+      "label": "prisma:generate",
+      "type": "shell",
+      "command": "npx",
+      "args": ["prisma", "generate"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Generate Prisma client"
+    },
+    {
+      "label": "prisma:migrate",
+      "type": "shell",
+      "command": "npx",
+      "args": ["prisma", "migrate", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "detail": "Run Prisma migrations"
+    },
+    {
+      "label": "prisma:studio",
+      "type": "shell",
+      "command": "npx",
+      "args": ["prisma", "studio"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "isBackground": true,
+      "detail": "Open Prisma Studio"
+    }
+  ]
+}

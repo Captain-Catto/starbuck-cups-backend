@@ -1,0 +1,2470 @@
+openapi: 3.0.3
+info:
+  title: Starbucks Cup Admin API
+  description: Administrative API for customer, order, and analytics management
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1/admin
+    description: Development server
+  - url: https://api.starbucks-cups.com/v1/admin
+    description: Production server
+
+paths:
+  # Authentication
+  /auth/login:
+    post:
+      summary: Admin login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+              required: [username, password]
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                      refresh_token:
+                        type: string
+                      user:
+                        $ref: '#/components/schemas/AdminUser'
+                  meta:
+                    type: object
+                    properties:
+                      expires_in:
+                        type: integer
+                      timestamp:
+                        type: string
+                        format: date-time
+                  error:
+                    type: null
+                required: [success, data, meta, error]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+              required: [refresh_token]
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  expires_in:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Color Management
+  /admin/colors:
+    get:
+      summary: Get all colors with usage statistics
+      tags: [Color Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search colors by name
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Show only active colors
+      responses:
+        '200':
+          description: Colors retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Color'
+                  meta:
+                    type: object
+                    properties:
+                      total_colors:
+                        type: integer
+                      active_colors:
+                        type: integer
+                  error:
+                    type: null
+    post:
+      summary: Create new color
+      tags: [Color Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Be Nhạt"
+                hex_code:
+                  type: string
+                  example: "#F5F5DC"
+              required: [name]
+      responses:
+        '201':
+          description: Color created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Color'
+                  meta:
+                    type: object
+                    properties:
+                      created_by:
+                        type: string
+                  error:
+                    type: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Color name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/colors/{id}:
+    put:
+      summary: Update color information
+      tags: [Color Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                hex_code:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Color updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Color'
+                  meta:
+                    type: object
+                    properties:
+                      updated_by:
+                        type: string
+                  error:
+                    type: null
+    delete:
+      summary: Delete color (only if not used by any product)
+      tags: [Color Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Color deleted successfully
+        '400':
+          description: Cannot delete color that is in use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Cannot delete color that is used by 5 products"
+                        products_using:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+
+  # Capacity Management
+  /admin/capacities:
+    get:
+      summary: Get all capacities with usage statistics
+      tags: [Capacity Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search capacities by name
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Show only active capacities
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [name, value_ml, usage_count]
+            default: value_ml
+          description: Sort capacities by field
+      responses:
+        '200':
+          description: Capacities retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Capacity'
+                  meta:
+                    type: object
+                    properties:
+                      total_capacities:
+                        type: integer
+                      active_capacities:
+                        type: integer
+                  error:
+                    type: null
+    post:
+      summary: Create new capacity
+      tags: [Capacity Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Siêu lớn 650ml"
+                value_ml:
+                  type: integer
+                  example: 650
+              required: [name, value_ml]
+      responses:
+        '201':
+          description: Capacity created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Capacity'
+                  meta:
+                    type: object
+                    properties:
+                      created_by:
+                        type: string
+                  error:
+                    type: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Capacity name or value already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/capacities/{id}:
+    put:
+      summary: Update capacity information
+      tags: [Capacity Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                value_ml:
+                  type: integer
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Capacity updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Capacity'
+                  meta:
+                    type: object
+                    properties:
+                      updated_by:
+                        type: string
+                  error:
+                    type: null
+    delete:
+      summary: Delete capacity (only if not used by any product)
+      tags: [Capacity Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Capacity deleted successfully
+        '400':
+          description: Cannot delete capacity that is in use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Cannot delete capacity that is used by 3 products"
+                      products_using:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+
+  # Category Management
+  /admin/categories:
+    get:
+      summary: Get all categories with hierarchical structure
+      tags: [Category Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search categories by name
+        - name: parent_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by parent category (null for root categories)
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Show only active categories
+        - name: include_hierarchy
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include child categories in response
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+                    properties:
+                      total_categories:
+                        type: integer
+                      root_categories:
+                        type: integer
+                      hierarchy_depth:
+                        type: integer
+                  error:
+                    type: null
+    post:
+      summary: Create new category
+      tags: [Category Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Ly giai - Cold Cup"
+                description:
+                  type: string
+                  example: "Các mẫu ly đá và cold cup Starbucks"
+                parent_category_id:
+                  type: string
+                  format: uuid
+                  description: Parent category (optional for root categories)
+                sort_order:
+                  type: integer
+                  example: 1
+                custom_slug:
+                  type: string
+                  example: "ly-giai-cold-cup"
+              required: [name]
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+                    properties:
+                      created_by:
+                        type: string
+                      generated_slug:
+                        type: string
+                  error:
+                    type: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Category name or slug already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Category 'Ly giai - Cold Cup' already exists"
+                      suggested_slug:
+                        type: string
+
+  /admin/categories/{id}:
+    put:
+      summary: Update category information
+      tags: [Category Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                parent_category_id:
+                  type: string
+                  format: uuid
+                sort_order:
+                  type: integer
+                custom_slug:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+                    properties:
+                      updated_by:
+                        type: string
+                      slug_changed:
+                        type: boolean
+                  error:
+                    type: null
+    delete:
+      summary: Delete category (only if not used by any product)
+      tags: [Category Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Category deleted successfully
+        '400':
+          description: Cannot delete category that is in use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Cannot delete category that is used by 15 products"
+                      products_using:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                      child_categories:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+
+  /admin/categories/search:
+    get:
+      summary: Search categories for autocomplete (used in product creation)
+      tags: [Category Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Search query for category name
+          example: "cold cup"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+          description: Number of results to return
+      responses:
+        '200':
+          description: Category search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        parent_name:
+                          type: string
+                          description: Parent category name if exists
+                        usage_count:
+                          type: integer
+                    example:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        name: "Ly giai - Cold Cup"
+                        slug: "ly-giai-cold-cup"
+                        parent_name: null
+                        usage_count: 15
+                      - id: "123e4567-e89b-12d3-a456-426614174001"
+                        name: "Cold Cup size to"
+                        slug: "cold-cup-size-to"
+                        parent_name: "Ly giai - Cold Cup"
+                        usage_count: 8
+                  meta:
+                    type: object
+                    properties:
+                      query:
+                        type: string
+                      total_found:
+                        type: integer
+                      create_suggestion:
+                        type: object
+                        properties:
+                          can_create:
+                            type: boolean
+                          suggested_name:
+                            type: string
+                          suggested_slug:
+                            type: string
+                        description: Suggestion to create new category if no exact match
+                  error:
+                    type: null
+
+  # Product Management
+  /admin/products:
+    get:
+      summary: Get all products with management information
+      tags: [Product Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search products by name or slug
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by category ID
+        - name: color_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by color ID
+        - name: capacity_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by capacity ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Products retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductManagement'
+                  meta:
+                    type: object
+                    properties:
+                      pagination:
+                        $ref: '#/components/schemas/PaginationInfo'
+                      total_products:
+                        type: integer
+                  error:
+                    type: null
+    post:
+      summary: Create new product
+      tags: [Product Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductManagement'
+                  meta:
+                    type: object
+                    properties:
+                      created_by:
+                        type: string
+                      generated_slug:
+                        type: string
+                  error:
+                    type: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Product slug already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Product slug 'ly-starbucks-classic-trang-450ml' already exists"
+                      suggested_slug:
+                        type: string
+                        example: "ly-starbucks-classic-trang-450ml-2"
+
+  /admin/products/{id}:
+    get:
+      summary: Get product details for management
+      tags: [Product Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product ID (UUID) or slug
+      responses:
+        '200':
+          description: Product details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductManagement'
+                  meta:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                  error:
+                    type: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update product
+      tags: [Product Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product ID (UUID) or slug
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductManagement'
+                  meta:
+                    type: object
+                    properties:
+                      updated_by:
+                        type: string
+                      slug_changed:
+                        type: boolean
+                  error:
+                    type: null
+    delete:
+      summary: Delete product (soft delete if has orders, hard delete if no orders)
+      tags: [Product Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product ID (UUID) or slug
+        - name: force_soft_delete
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Force soft delete even if no orders exist
+      responses:
+        '200':
+          description: Product deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      deletion_type:
+                        type: string
+                        enum: [soft_delete, hard_delete]
+                      message:
+                        type: string
+                        example: "Product soft deleted due to existing orders"
+                      affected_orders:
+                        type: integer
+                        description: Number of orders referencing this product
+                  meta:
+                    type: object
+                    properties:
+                      deleted_by:
+                        type: string
+                      deleted_at:
+                        type: string
+                        format: date-time
+                  error:
+                    type: null
+        '400':
+          description: Cannot delete product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Product has 3 orders. Use soft delete to preserve order history."
+                      suggested_action:
+                        type: string
+                        example: "Set is_active=false to hide from catalog or use force_soft_delete=true"
+                      orders_using:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            order_id:
+                              type: string
+                            order_number:
+                              type: string
+                            order_date:
+                              type: string
+                              format: date-time
+                      order_count:
+                        type: integer
+
+  /admin/products/{id}/reactivate:
+    post:
+      summary: Reactivate soft-deleted product
+      tags: [Product Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product ID (UUID) or slug
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reactivate_as_active:
+                  type: boolean
+                  default: true
+                  description: Whether to set is_active=true when reactivating
+                notes:
+                  type: string
+                  description: Admin notes for reactivation reason
+      responses:
+        '200':
+          description: Product reactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductManagement'
+                  meta:
+                    type: object
+                    properties:
+                      reactivated_by:
+                        type: string
+                      reactivated_at:
+                        type: string
+                        format: date-time
+                      previous_state:
+                        type: object
+                        properties:
+                          is_deleted:
+                            type: boolean
+                          deleted_at:
+                            type: string
+                            format: date-time
+                  error:
+                    type: null
+        '400':
+          description: Cannot reactivate product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Product is not soft-deleted or conflicts with existing active product"
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Customer Management
+  /customers:
+    get:
+      summary: Get customers with pagination and search
+      tags: [Customer Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by phone, email, or name
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Customers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Customer'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create new customer
+      tags: [Customer Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreate'
+      responses:
+        '201':
+          description: Customer created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Customer with phone number already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+
+  /customers/{id}:
+    get:
+      summary: Get customer details
+      tags: [Customer Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Customer details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CustomerDetailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      summary: Update customer
+      tags: [Customer Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdate'
+      responses:
+        '200':
+          description: Customer updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Order Management
+  /orders:
+    get:
+      summary: Get orders with filtering
+      tags: [Order Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+        - name: customer_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: order_type
+          in: query
+          schema:
+            type: string
+            enum: [custom, product]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create new order
+      tags: [Order Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OrderDetailed'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Insufficient stock or validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+                  stock_errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product_id:
+                          type: string
+                        requested:
+                          type: integer
+                        available:
+                          type: integer
+
+  /orders/{id}:
+    get:
+      summary: Get order details
+      tags: [Order Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OrderDetailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      summary: Update order status
+      tags: [Order Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+                notes:
+                  type: string
+              required: [status]
+      responses:
+        '200':
+          description: Order status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/colors/search:
+    get:
+      summary: Search colors for autocomplete (used in product creation)
+      tags: [Color Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Search query for color name
+          example: "be"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+          description: Number of results to return
+      responses:
+        '200':
+          description: Color search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        hex_code:
+                          type: string
+                        usage_count:
+                          type: integer
+                    example:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        name: "Be"
+                        hex_code: "#F5F5DC"
+                        usage_count: 3
+                      - id: "123e4567-e89b-12d3-a456-426614174001"
+                        name: "Be Nhạt"
+                        hex_code: "#F8F6F0"
+                        usage_count: 1
+                  meta:
+                    type: object
+                    properties:
+                      query:
+                        type: string
+                      total_found:
+                        type: integer
+                      create_suggestion:
+                        type: object
+                        properties:
+                          can_create:
+                            type: boolean
+                          suggested_name:
+                            type: string
+                        description: Suggestion to create new color if no exact match
+                  error:
+                    type: null
+
+  /admin/capacities/search:
+    get:
+      summary: Search capacities for autocomplete (used in product creation)
+      tags: [Capacity Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Search query for capacity name or value
+          example: "650"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+          description: Number of results to return
+      responses:
+        '200':
+          description: Capacity search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        value_ml:
+                          type: integer
+                        usage_count:
+                          type: integer
+                    example:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        name: "650ml"
+                        value_ml: 650
+                        usage_count: 2
+                      - id: "123e4567-e89b-12d3-a456-426614174001"
+                        name: "Siêu lớn 680ml"
+                        value_ml: 680
+                        usage_count: 0
+                  meta:
+                    type: object
+                    properties:
+                      query:
+                        type: string
+                      total_found:
+                        type: integer
+                      create_suggestion:
+                        type: object
+                        properties:
+                          can_create:
+                            type: boolean
+                          suggested_name:
+                            type: string
+                          suggested_value:
+                            type: integer
+                        description: Suggestion to create new capacity if no exact match
+                  error:
+                    type: null
+
+  # Analytics
+  /analytics:
+    get:
+      summary: Get analytics data
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [day, week, month, year]
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Analytics data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AnalyticsData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/low-stock:
+    get:
+      summary: Get low stock alerts
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: threshold
+          in: query
+          schema:
+            type: integer
+            default: 5
+          description: Stock threshold for low stock alert
+      responses:
+        '200':
+          description: Low stock products retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LowStockProduct'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Dynamic Entity Management Schemas
+    Color:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Đỏ"
+        hex_code:
+          type: string
+          example: "#FF0000"
+        is_active:
+          type: boolean
+          example: true
+        usage_count:
+          type: integer
+          example: 15
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+      required: [id, name, hex_code, is_active, usage_count, created_at, created_by]
+
+    Capacity:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Grande (16 oz)"
+        ml_value:
+          type: integer
+          example: 473
+        sort_order:
+          type: integer
+          example: 2
+        is_active:
+          type: boolean
+          example: true
+        usage_count:
+          type: integer
+          example: 20
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+      required: [id, name, ml_value, sort_order, is_active, usage_count, created_at, created_by]
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Ly giai - Cold Cup"
+        description:
+          type: string
+          example: "Các mẫu ly đá và cold cup Starbucks"
+        slug:
+          type: string
+          example: "ly-giai-cold-cup"
+        parent_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        parent_category:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            slug:
+              type: string
+        child_categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              slug:
+                type: string
+              usage_count:
+                type: integer
+        sort_order:
+          type: integer
+          example: 1
+        is_active:
+          type: boolean
+          example: true
+        usage_count:
+          type: integer
+          example: 25
+        hierarchy_level:
+          type: integer
+          example: 0
+          description: 0 for root, 1 for first level children, etc.
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+      required: [id, name, slug, is_active, usage_count, hierarchy_level, created_at, created_by]
+
+    # Admin & Customer Management Schemas
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [super_admin, admin, staff]
+        last_login_at:
+          type: string
+          format: date-time
+      required: [id, username, email, role]
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+      required: [id, phone, created_at, updated_at, is_active]
+
+    CustomerDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Customer'
+        - type: object
+          properties:
+            addresses:
+              type: array
+              items:
+                $ref: '#/components/schemas/CustomerAddress'
+            social_accounts:
+              type: array
+              items:
+                $ref: '#/components/schemas/CustomerSocialAccount'
+            order_count:
+              type: integer
+            total_spent:
+              type: number
+              format: decimal
+
+    CustomerCreate:
+      type: object
+      properties:
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerAddressCreate'
+        social_accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSocialAccountCreate'
+      required: [phone]
+
+    CustomerUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        is_active:
+          type: boolean
+
+    CustomerAddress:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        street_address:
+          type: string
+        ward:
+          type: string
+        district:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+        is_default:
+          type: boolean
+      required: [id, label, street_address, ward, district, city, is_default]
+
+    CustomerAddressCreate:
+      type: object
+      properties:
+        label:
+          type: string
+        street_address:
+          type: string
+        ward:
+          type: string
+        district:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+        is_default:
+          type: boolean
+      required: [label, street_address, ward, district, city]
+
+    CustomerSocialAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [facebook, zalo]
+        account_identifier:
+          type: string
+        display_name:
+          type: string
+      required: [id, platform, account_identifier]
+
+    CustomerSocialAccountCreate:
+      type: object
+      properties:
+        platform:
+          type: string
+          enum: [facebook, zalo]
+        account_identifier:
+          type: string
+        display_name:
+          type: string
+      required: [platform, account_identifier]
+
+    Color:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Be Nhạt"
+        hex_code:
+          type: string
+          example: "#F5F5DC"
+        created_by_admin_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        usage_count:
+          type: integer
+          description: Number of products using this color
+          example: 3
+        is_active:
+          type: boolean
+        created_by_admin:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+      required: [id, name, created_by_admin_id, created_at, usage_count, is_active]
+
+    Capacity:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Siêu lớn 650ml"
+        value_ml:
+          type: integer
+          example: 650
+        created_by_admin_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        usage_count:
+          type: integer
+          description: Number of products using this capacity
+          example: 2
+        is_active:
+          type: boolean
+        created_by_admin:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+      required: [id, name, value_ml, created_by_admin_id, created_at, usage_count, is_active]
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+        customer_id:
+          type: string
+          format: uuid
+        order_type:
+          type: string
+          enum: [custom, product]
+        status:
+          type: string
+          enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+        total_amount:
+          type: number
+          format: decimal
+        shipping_cost:
+          type: number
+          format: decimal
+        is_free_shipping:
+          type: boolean
+        custom_description:
+          type: string
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        customer:
+          $ref: '#/components/schemas/Customer'
+      required: [id, order_number, customer_id, order_type, status, total_amount, is_free_shipping, created_at, updated_at]
+
+    OrderDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Order'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+            delivery_address:
+              $ref: '#/components/schemas/CustomerAddress'
+
+    OrderCreate:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        order_type:
+          type: string
+          enum: [custom, product]
+        total_amount:
+          type: number
+          format: decimal
+        shipping_cost:
+          type: number
+          format: decimal
+          default: 0
+        is_free_shipping:
+          type: boolean
+          default: false
+        custom_description:
+          type: string
+        delivery_address_id:
+          type: string
+          format: uuid
+        notes:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemCreate'
+      required: [customer_id, order_type, total_amount]
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        requested_color:
+          type: string
+          nullable: true
+          description: Customer's requested color if different from product's display color (optional)
+        quantity:
+          type: integer
+        unit_price:
+          type: number
+          format: decimal
+        total_price:
+          type: number
+          format: decimal
+        product_snapshot:
+          type: object
+        product:
+          $ref: '#/components/schemas/ProductPublic'
+      required: [id, product_id, quantity, unit_price, total_price]
+
+    OrderItemCreate:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        requested_color:
+          type: string
+          nullable: true
+          description: Customer's requested color if different from product's display color (optional)
+        quantity:
+          type: integer
+          minimum: 1
+        unit_price:
+          type: number
+          format: decimal
+          minimum: 0
+      required: [product_id, quantity, unit_price]
+
+    AnalyticsData:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [day, week, month, year]
+        date_range:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        summary:
+          type: object
+          properties:
+            total_revenue:
+              type: number
+              format: decimal
+            total_orders:
+              type: integer
+            total_products_sold:
+              type: integer
+            unique_customers:
+              type: integer
+            average_order_value:
+              type: number
+              format: decimal
+        time_series:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              revenue:
+                type: number
+                format: decimal
+              orders:
+                type: integer
+              products_sold:
+                type: integer
+        top_products:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id:
+                type: string
+                format: uuid
+              product_name:
+                type: string
+              quantity_sold:
+                type: integer
+              revenue:
+                type: number
+                format: decimal
+      required: [period, date_range, summary, time_series]
+
+    LowStockProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+        current_stock:
+          type: integer
+        threshold:
+          type: integer
+        status:
+          type: string
+          enum: [low_stock, out_of_stock]
+      required: [id, name, category, current_stock, threshold, status]
+
+    ProductPublic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          description: SEO-friendly URL identifier
+          example: "ly-starbucks-classic-trang-450ml"
+        name:
+          type: string
+        description:
+          type: string
+        capacity:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            value_ml:
+              type: integer
+          description: Capacity information for the product
+        display_color:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            hex_code:
+              type: string
+          description: Color information for the product
+        category:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: Array of image URLs for the product color
+        product_url:
+          type: string
+          format: uri
+        in_stock:
+          type: boolean
+        consultation_note:
+          type: string
+          description: Note encouraging customers to consult for other colors
+      required: [id, slug, name, capacity, display_color, category, images, in_stock]
+
+    ProductManagement:
+      allOf:
+        - $ref: '#/components/schemas/ProductPublic'
+        - type: object
+          properties:
+            stock_quantity:
+              type: integer
+              description: Current inventory count
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+            is_active:
+              type: boolean
+            order_count:
+              type: integer
+              description: Number of orders containing this product
+            created_by_admin:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                username:
+                  type: string
+
+    ProductCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Ly Starbucks Classic"
+        description:
+          type: string
+          example: "Ly giữ nhiệt cao cấp với logo Starbucks"
+        capacity_id:
+          type: string
+          format: uuid
+          description: Reference to Capacity entity
+        color_id:
+          type: string
+          format: uuid
+          description: Reference to Color entity
+        category_id:
+          type: string
+          format: uuid
+          description: Reference to Category entity
+        stock_quantity:
+          type: integer
+          minimum: 0
+          example: 50
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+          example: ["https://example.com/product1.jpg", "https://example.com/product2.jpg"]
+        product_url:
+          type: string
+          format: uri
+          example: "https://starbucks.vn/products/classic-tumbler"
+        custom_slug:
+          type: string
+          description: Custom slug (optional, auto-generated if not provided)
+          example: "ly-starbucks-classic-trang-450ml"
+      required: [name, capacity_id, color_id, category_id, stock_quantity, images]
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        capacity_id:
+          type: string
+          format: uuid
+        color_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+          description: Reference to Category entity
+        stock_quantity:
+          type: integer
+          minimum: 0
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+        product_url:
+          type: string
+          format: uri
+        custom_slug:
+          type: string
+          description: Custom slug (will regenerate if name/color/capacity changed)
+        is_active:
+          type: boolean
+
+    PaginationInfo:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        per_page:
+          type: integer
+        total_pages:
+          type: integer
+        total_items:
+          type: integer
+        has_next:
+          type: boolean
+        has_prev:
+          type: boolean
+      required: [current_page, per_page, total_pages, total_items, has_next, has_prev]
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: string
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
