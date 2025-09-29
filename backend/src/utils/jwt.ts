@@ -2,7 +2,8 @@
  * JWT utilities for token generation and verification
  */
 import jwt from "jsonwebtoken";
-import { AdminRole } from "../generated/prisma";
+import { createHash } from "crypto";
+import { AdminRole } from "../models/AdminUser";
 
 // JWT Configuration
 const ACCESS_TOKEN_SECRET =
@@ -160,4 +161,19 @@ export function isTokenExpired(token: string): boolean {
     return true;
   }
   return expirationDate < new Date();
+}
+
+/**
+ * Hash refresh token for database storage
+ */
+export function hashRefreshToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Get refresh token expiration date (7 days from now)
+ */
+export function getRefreshTokenExpiration(): Date {
+  const expirationMs = 7 * 24 * 60 * 60 * 1000; // 7 days
+  return new Date(Date.now() + expirationMs);
 }

@@ -3,12 +3,11 @@
  * Handles CRUD operations for category entities with hierarchical support
  */
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
+import { Category, AdminUser, ProductCategory } from "../models";
 import { ResponseHelper } from "../types/api";
 import { z } from "zod";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
-
-const prisma = new PrismaClient();
+import { Op } from "sequelize";
 
 // Validation schemas
 const createCategorySchema = z.object({
@@ -80,10 +79,10 @@ export const getCategories = async (req: Request, res: Response) => {
     // Build where clause
     const where: any = {};
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { slug: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { slug: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
       ];
     }
     if (isActive !== undefined) {
@@ -95,51 +94,57 @@ export const getCategories = async (req: Request, res: Response) => {
 
     // Get total count and categories
     const [total, categories] = await Promise.all([
-      prisma.category.count({ where }),
-      prisma.category.findMany({
+      Category.count({ where }),
+      Category.findAll({
         where,
-        skip: offset,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          createdByAdmin: {
-            select: {
-              username: true,
-              email: true,
-            },
+        offset,
+        limit,
+        order: [[sortBy, sortOrder.toUpperCase()]],
+        include: [
+          {
+            model: AdminUser,
+            as: "createdByAdmin",
+            attributes: ["username", "email"],
           },
-          parent: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
+          {
+            model: Category,
+            as: "parent",
+            attributes: ["id", "name", "slug"],
           },
-          ...(includeChildren && {
-            children: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                isActive: true,
-              },
-              where: { isActive: true },
-            },
-          }),
-          _count: {
-            select: {
-              productCategories: true,
-              children: true,
-            },
-          },
-        },
+          ...(includeChildren
+            ? [
+                {
+                  model: Category,
+                  as: "children",
+                  attributes: ["id", "name", "slug", "isActive"],
+                  where: { isActive: true },
+                },
+              ]
+            : []),
+        ],
       }),
     ]);
+
+    // Add product count for each category
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const productCount = await ProductCategory.count({
+          where: { categoryId: category.id },
+        });
+
+        return {
+          ...category.toJSON(),
+          _count: {
+            products: productCount,
+          },
+        };
+      })
+    );
 
     const totalPages = Math.ceil(total / limit);
 
     return res.status(200).json(
-      ResponseHelper.paginated(categories, {
+      ResponseHelper.paginated(categoriesWithCount, {
         current_page: page,
         per_page: limit,
         total_pages: totalPages,
@@ -174,17 +179,15 @@ export const getCategoryTree = async (req: Request, res: Response) => {
     }
 
     // Get all categories and build tree
-    const categories = await prisma.category.findMany({
+    const categories = await Category.findAll({
       where,
-      orderBy: { name: "asc" },
-      include: {
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
+      order: [["name", "ASC"]],
+      include: [
+        {
+          model: Category,
+          as: "children",
         },
-      },
+      ],
     });
 
     // Build hierarchy
@@ -220,37 +223,25 @@ export const getCategoryById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
+    const category = await Category.findOne({
       where: { id },
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
         },
-        parent: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["id", "name", "slug"],
         },
-        children: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
-          },
+        {
+          model: Category,
+          as: "children",
+          attributes: ["id", "name", "slug", "isActive"],
         },
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
-        },
-      },
+      ],
     });
 
     if (!category) {
@@ -307,14 +298,14 @@ export const createCategory = async (req: Request, res: Response) => {
     let slugCounter = 0;
     let originalSlug = finalSlug;
 
-    while (await prisma.category.findUnique({ where: { slug: finalSlug } })) {
+    while (await Category.findOne({ where: { slug: finalSlug } })) {
       slugCounter++;
       finalSlug = `${originalSlug}-${slugCounter}`;
     }
 
     // Validate parent category if provided
     if (parentId) {
-      const parentCategory = await prisma.category.findUnique({
+      const parentCategory = await Category.findOne({
         where: { id: parentId },
       });
 
@@ -331,9 +322,9 @@ export const createCategory = async (req: Request, res: Response) => {
 
       // Check hierarchy depth (max 3 levels: root -> level1 -> level2)
       const getDepth = async (categoryId: string): Promise<number> => {
-        const category = await prisma.category.findUnique({
+        const category = await Category.findOne({
           where: { id: categoryId },
-          select: { parentId: true },
+          attributes: ["parentId"],
         });
 
         if (!category || !category.parentId) {
@@ -358,38 +349,33 @@ export const createCategory = async (req: Request, res: Response) => {
     }
 
     // Create category
-    const category = await prisma.category.create({
-      data: {
-        name: name.trim(),
-        slug: finalSlug,
-        description: description?.trim(),
-        parentId,
-        createdByAdminId: req.user.userId,
-      },
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
-        },
-        parent: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
-        },
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
-        },
-      },
+    const category = await Category.create({
+      name: name.trim(),
+      slug: finalSlug,
+      description: description?.trim(),
+      parentId,
+      isActive: true,
+      createdByAdminId: req.user.userId,
     });
 
-    return res.status(201).json(ResponseHelper.success(category));
+    // Fetch with associations
+    const createdCategory = await Category.findOne({
+      where: { id: category.id },
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
+        },
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["id", "name", "slug"],
+        },
+      ],
+    });
+
+    return res.status(201).json(ResponseHelper.success(createdCategory));
   } catch (error) {
     console.error("Create category error:", error);
     return res
@@ -417,12 +403,18 @@ export const updateCategory = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     // Check if category exists
-    const existingCategory = await prisma.category.findUnique({
+    const existingCategory = await Category.findOne({
       where: { id },
-      include: {
-        parent: true,
-        children: true,
-      },
+      include: [
+        {
+          model: Category,
+          as: "parent",
+        },
+        {
+          model: Category,
+          as: "children",
+        },
+      ],
     });
 
     if (!existingCategory) {
@@ -463,7 +455,7 @@ export const updateCategory = async (req: Request, res: Response) => {
 
       // If setting parent, validate it exists and check depth
       if (updateData.parentId) {
-        const newParent = await prisma.category.findUnique({
+        const newParent = await Category.findOne({
           where: { id: updateData.parentId },
         });
 
@@ -483,9 +475,9 @@ export const updateCategory = async (req: Request, res: Response) => {
           categoryId: string,
           potentialAncestorId: string
         ): Promise<boolean> => {
-          const cat = await prisma.category.findUnique({
+          const cat = await Category.findOne({
             where: { id: categoryId },
-            select: { parentId: true },
+            attributes: ["parentId"],
           });
 
           if (!cat || !cat.parentId) return false;
@@ -506,9 +498,9 @@ export const updateCategory = async (req: Request, res: Response) => {
 
         // Check depth using helper function
         const getDepth = async (categoryId: string): Promise<number> => {
-          const category = await prisma.category.findUnique({
+          const category = await Category.findOne({
             where: { id: categoryId },
-            select: { parentId: true },
+            attributes: ["parentId"],
           });
 
           if (!category || !category.parentId) {
@@ -545,10 +537,10 @@ export const updateCategory = async (req: Request, res: Response) => {
       let originalSlug = finalSlug;
 
       while (
-        await prisma.category.findFirst({
+        await Category.findOne({
           where: {
             slug: finalSlug,
-            id: { not: id },
+            id: { [Op.ne]: id },
           },
         })
       ) {
@@ -575,38 +567,30 @@ export const updateCategory = async (req: Request, res: Response) => {
     }
 
     // Update category
-    const updatedCategory = await prisma.category.update({
+    await Category.update(processedUpdateData, {
       where: { id },
-      data: processedUpdateData,
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
+    });
+
+    // Fetch updated category with associations
+    const updatedCategory = await Category.findOne({
+      where: { id },
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
         },
-        parent: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["id", "name", "slug"],
         },
-        children: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
-          },
+        {
+          model: Category,
+          as: "children",
+          attributes: ["id", "name", "slug", "isActive"],
         },
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
-        },
-      },
+      ],
     });
 
     return res.status(200).json(ResponseHelper.success(updatedCategory));
@@ -630,16 +614,14 @@ export const toggleCategoryStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
+    const category = await Category.findOne({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
+      include: [
+        {
+          model: Category,
+          as: "children",
         },
-      },
+      ],
     });
 
     if (!category) {
@@ -651,45 +633,39 @@ export const toggleCategoryStatus = async (req: Request, res: Response) => {
     // If deactivating, check if category is in use
     // Note: Temporarily disabled to allow deactivating category even when in use
     /*
+    const childrenCount = category.children ? category.children.length : 0;
     if (
       category.isActive &&
-      (category._count.productCategories > 0 || category._count.children > 0)
+      (childrenCount > 0)
     ) {
       return res
         .status(409)
         .json(
           ResponseHelper.error(
-            `Cannot deactivate category that is used by ${category._count.productCategories} product(s) and has ${category._count.children} subcategory(ies)`,
+            `Cannot deactivate category that is used by products and has ${childrenCount} subcategory(ies)`,
             "CATEGORY_IN_USE"
           )
         );
     }
     */
 
-    const updatedCategory = await prisma.category.update({
+    await Category.update({ isActive: !category.isActive }, { where: { id } });
+
+    // Fetch updated category with associations
+    const updatedCategory = await Category.findOne({
       where: { id },
-      data: { isActive: !category.isActive },
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
         },
-        parent: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["id", "name", "slug"],
         },
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
-        },
-      },
+      ],
     });
 
     return res.status(200).json(ResponseHelper.success(updatedCategory));
@@ -713,16 +689,14 @@ export const deleteCategory = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
+    const category = await Category.findOne({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            productCategories: true,
-            children: true,
-          },
+      include: [
+        {
+          model: Category,
+          as: "children",
         },
-      },
+      ],
     });
 
     if (!category) {
@@ -732,19 +706,24 @@ export const deleteCategory = async (req: Request, res: Response) => {
     }
 
     // Check if category is in use
-    if (category._count.productCategories > 0 || category._count.children > 0) {
+    const childrenCount = category.children ? category.children.length : 0;
+    const productCount = await ProductCategory.count({
+      where: { categoryId: id },
+    });
+
+    if (childrenCount > 0 || productCount > 0) {
       return res
         .status(409)
         .json(
           ResponseHelper.error(
-            `Không thể xoá danh mục có ${category._count.productCategories} sản phẩm và ${category._count.children} danh mục con. Hãy xem xét việc tắt danh mục thay vì xoá.`,
+            `Không thể xoá danh mục đang được sử dụng bởi ${productCount} sản phẩm và ${childrenCount} danh mục con. Hãy xem xét việc tắt danh mục thay vì xoá.`,
             "CATEGORY_IN_USE"
           )
         );
     }
 
     // Delete category
-    await prisma.category.delete({
+    await Category.destroy({
       where: { id },
     });
 
@@ -778,9 +757,9 @@ export const searchCategories = async (req: Request, res: Response) => {
     };
 
     if (query) {
-      where.OR = [
-        { name: { contains: query as string, mode: "insensitive" } },
-        { slug: { contains: query as string, mode: "insensitive" } },
+      where[Op.or] = [
+        { name: { [Op.like]: `%${query}%` } },
+        { slug: { [Op.like]: `%${query}%` } },
       ];
     }
 
@@ -788,21 +767,18 @@ export const searchCategories = async (req: Request, res: Response) => {
       where.parentId = parentId as string;
     }
 
-    const categories = await prisma.category.findMany({
+    const categories = await Category.findAll({
       where,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        parentId: true,
-        parent: {
-          select: {
-            name: true,
-          },
+      attributes: ["id", "name", "slug", "parentId"],
+      include: [
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["name"],
         },
-      },
-      orderBy: { name: "asc" },
-      take: 50,
+      ],
+      order: [["name", "ASC"]],
+      limit: 50,
     });
 
     return res.status(200).json(ResponseHelper.success(categories));
@@ -851,9 +827,9 @@ export const getPublicCategories = async (req: Request, res: Response) => {
     };
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
       ];
     }
 
@@ -862,58 +838,37 @@ export const getPublicCategories = async (req: Request, res: Response) => {
     }
 
     const [items, totalItems] = await Promise.all([
-      prisma.category.findMany({
+      Category.findAll({
         where,
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          description: true,
-          parentId: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          parent: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              isActive: true,
-            },
+        attributes: [
+          "id",
+          "name",
+          "slug",
+          "description",
+          "parentId",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+        ],
+        include: [
+          {
+            model: Category,
+            as: "parent",
+            attributes: ["id", "name", "slug", "isActive"],
           },
-          children: {
-            where: {
-              isActive: true,
-            },
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              isActive: true,
-            },
+          {
+            model: Category,
+            as: "children",
+            where: { isActive: true },
+            required: false,
+            attributes: ["id", "name", "slug", "isActive"],
           },
-          _count: {
-            select: {
-              productCategories: {
-                where: {
-                  product: {
-                    isActive: true,
-                  },
-                },
-              },
-              children: {
-                where: {
-                  isActive: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        skip: offset,
-        take: limit,
+        ],
+        order: [["createdAt", "DESC"]],
+        offset,
+        limit,
       }),
-      prisma.category.count({ where }),
+      Category.count({ where }),
     ]);
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -947,51 +902,57 @@ export const getPublicCategories = async (req: Request, res: Response) => {
  */
 export const getPublicCategoryTree = async (req: Request, res: Response) => {
   try {
-    const categories = await prisma.category.findMany({
+    const categories = await Category.findAll({
       where: {
         isActive: true,
       },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        description: true,
-        parentId: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        children: {
-          where: {
-            isActive: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            description: true,
-            parentId: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-            children: {
-              where: {
-                isActive: true,
-              },
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                description: true,
-                parentId: true,
-                isActive: true,
-                createdAt: true,
-                updatedAt: true,
-              },
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "description",
+        "parentId",
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        {
+          model: Category,
+          as: "children",
+          where: { isActive: true },
+          required: false,
+          attributes: [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "parentId",
+            "isActive",
+            "createdAt",
+            "updatedAt",
+          ],
+          include: [
+            {
+              model: Category,
+              as: "children",
+              where: { isActive: true },
+              required: false,
+              attributes: [
+                "id",
+                "name",
+                "slug",
+                "description",
+                "parentId",
+                "isActive",
+                "createdAt",
+                "updatedAt",
+              ],
             },
-          },
+          ],
         },
-      },
-      orderBy: { name: "asc" },
+      ],
+      order: [["name", "ASC"]],
     });
 
     return res.status(200).json(ResponseHelper.success(categories));
@@ -1024,7 +985,7 @@ export const getPublicCategoryById = async (req: Request, res: Response) => {
     // Build the where clause based on whether it's a UUID or slug
     const whereClause = isUUID
       ? {
-          OR: [{ id: id }, { slug: id }],
+          [Op.or]: [{ id: id }, { slug: id }],
           isActive: true,
         }
       : {
@@ -1033,53 +994,32 @@ export const getPublicCategoryById = async (req: Request, res: Response) => {
         };
 
     // Try to find by ID first, then by slug
-    const category = await prisma.category.findFirst({
+    const category = await Category.findOne({
       where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        description: true,
-        parentId: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        parent: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
-          },
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "description",
+        "parentId",
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["id", "name", "slug", "isActive"],
         },
-        children: {
-          where: {
-            isActive: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
-          },
+        {
+          model: Category,
+          as: "children",
+          where: { isActive: true },
+          required: false,
+          attributes: ["id", "name", "slug", "isActive"],
         },
-        _count: {
-          select: {
-            productCategories: {
-              where: {
-                product: {
-                  isActive: true,
-                },
-              },
-            },
-            children: {
-              where: {
-                isActive: true,
-              },
-            },
-          },
-        },
-      },
+      ],
     });
 
     if (!category) {

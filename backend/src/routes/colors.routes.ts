@@ -4,6 +4,7 @@
 import { Router } from "express";
 import {
   getColors,
+  getColorsForAdmin,
   getColorById,
   createColor,
   updateColor,
@@ -13,7 +14,10 @@ import {
   getPublicColors,
   getPublicColorById,
 } from "../controllers/colors.controller";
-import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import {
+  authenticateWithAutoRefresh,
+  requireAdmin,
+} from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -177,7 +181,7 @@ router.get("/public/:id", getPublicColorById);
  *                         pagination:
  *                           $ref: '#/components/schemas/PaginationMeta'
  */
-router.get("/", authenticateWithAutoRefresh, getColors);
+router.get("/", authenticateWithAutoRefresh, getColorsForAdmin);
 
 /**
  * @swagger

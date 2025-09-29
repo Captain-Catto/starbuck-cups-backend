@@ -4,6 +4,7 @@
 import { Router } from "express";
 import {
   getCapacities,
+  getCapacitiesForAdmin,
   getCapacityById,
   createCapacity,
   updateCapacity,
@@ -13,7 +14,10 @@ import {
   getPublicCapacities,
   getPublicCapacityById,
 } from "../controllers/capacities.controller";
-import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import {
+  authenticateWithAutoRefresh,
+  requireAdmin,
+} from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -161,7 +165,7 @@ router.get("/public/:id", getPublicCapacityById);
  *       200:
  *         description: Capacities retrieved successfully
  */
-router.get("/", authenticateWithAutoRefresh, getCapacities);
+router.get("/", authenticateWithAutoRefresh, getCapacitiesForAdmin);
 
 /**
  * @swagger
@@ -317,6 +321,11 @@ router.patch(
  *       409:
  *         description: Cannot delete capacity that is in use
  */
-router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteCapacity);
+router.delete(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  deleteCapacity
+);
 
 export default router;

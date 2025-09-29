@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
+import { HeroImage, AdminUser } from "../models";
 import { s3Service } from "../services/s3.service";
 import { z } from "zod";
 import multer from "multer";
-
-const prisma = new PrismaClient();
+import { sequelize } from "../config/database";
 
 // Configure multer for memory storage
 const upload = multer({
@@ -39,19 +38,19 @@ const updateHeroImageSchema = z.object({
  */
 export const getHeroImages = async (req: Request, res: Response) => {
   try {
-    const heroImages = await prisma.heroImage.findMany({
+    const heroImages = await HeroImage.findAll({
       where: { isActive: true },
-      orderBy: { order: "asc" },
-      select: {
-        id: true,
-        title: true,
-        imageUrl: true,
-        altText: true,
-        order: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      order: [["order", "ASC"]],
+      attributes: [
+        "id",
+        "title",
+        "imageUrl",
+        "altText",
+        "order",
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
     });
 
     res.json({
@@ -73,16 +72,15 @@ export const getHeroImages = async (req: Request, res: Response) => {
  */
 export const getAdminHeroImages = async (req: Request, res: Response) => {
   try {
-    const heroImages = await prisma.heroImage.findMany({
-      orderBy: { order: "asc" },
-      include: {
-        createdByAdmin: {
-          select: {
-            id: true,
-            username: true,
-          },
+    const heroImages = await HeroImage.findAll({
+      order: [["order", "ASC"]],
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["id", "username"],
         },
-      },
+      ],
     });
 
     res.json({
@@ -106,16 +104,14 @@ export const getHeroImageById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const heroImage = await prisma.heroImage.findUnique({
-      where: { id },
-      include: {
-        createdByAdmin: {
-          select: {
-            id: true,
-            username: true,
-          },
+    const heroImage = await HeroImage.findByPk(id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["id", "username"],
         },
-      },
+      ],
     });
 
     if (!heroImage) {
@@ -177,36 +173,34 @@ export const createHeroImage = async (req: Request, res: Response) => {
     }
 
     // Get the next order number (max order + 1)
-    const maxOrderResult = await prisma.heroImage.aggregate({
-      _max: {
-        order: true,
-      },
-    });
-    const nextOrder = (maxOrderResult._max.order || 0) + 1;
+    const maxOrderResult = await HeroImage.max("order");
+    const nextOrder = ((maxOrderResult as number) || 0) + 1;
 
     // Create hero image record
-    const heroImage = await prisma.heroImage.create({
-      data: {
-        title: validatedData.title,
-        imageUrl: uploadResult.url,
-        altText: validatedData.altText,
-        order: nextOrder,
-        createdByAdminId: adminId,
-      },
-      include: {
-        createdByAdmin: {
-          select: {
-            id: true,
-            username: true,
-          },
+    const heroImage = await HeroImage.create({
+      title: validatedData.title,
+      imageUrl: uploadResult.url,
+      altText: validatedData.altText,
+      order: validatedData.order || nextOrder,
+      isActive: true,
+      createdByAdminId: adminId,
+    });
+
+    // Fetch the created record with associations
+    const createdHeroImage = await HeroImage.findByPk(heroImage.id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["id", "username"],
         },
-      },
+      ],
     });
 
     return res.status(201).json({
       success: true,
       message: "Hero image created successfully",
-      data: heroImage,
+      data: createdHeroImage,
     });
   } catch (error: any) {
     console.error("Error creating hero image:", error);
@@ -246,9 +240,7 @@ export const updateHeroImage = async (req: Request, res: Response) => {
     });
 
     // Check if hero image exists
-    const existingHeroImage = await prisma.heroImage.findUnique({
-      where: { id },
-    });
+    const existingHeroImage = await HeroImage.findByPk(id);
 
     if (!existingHeroImage) {
       return res.status(404).json({
@@ -279,20 +271,20 @@ export const updateHeroImage = async (req: Request, res: Response) => {
     }
 
     // Update hero image record
-    const updatedHeroImage = await prisma.heroImage.update({
-      where: { id },
-      data: {
-        ...validatedData,
-        imageUrl,
-      },
-      include: {
-        createdByAdmin: {
-          select: {
-            id: true,
-            username: true,
-          },
+    await existingHeroImage.update({
+      ...validatedData,
+      imageUrl,
+    });
+
+    // Fetch the updated record with associations
+    const updatedHeroImage = await HeroImage.findByPk(id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["id", "username"],
         },
-      },
+      ],
     });
 
     return res.json({
@@ -327,9 +319,7 @@ export const deleteHeroImage = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     // Check if hero image exists
-    const existingHeroImage = await prisma.heroImage.findUnique({
-      where: { id },
-    });
+    const existingHeroImage = await HeroImage.findByPk(id);
 
     if (!existingHeroImage) {
       return res.status(404).json({
@@ -345,9 +335,7 @@ export const deleteHeroImage = async (req: Request, res: Response) => {
     }
 
     // Delete hero image record
-    await prisma.heroImage.delete({
-      where: { id },
-    });
+    await existingHeroImage.destroy();
 
     return res.json({
       success: true,
@@ -386,14 +374,17 @@ export const reorderHeroImages = async (req: Request, res: Response) => {
     const validatedOrders = imageOrders.map((item) => orderSchema.parse(item));
 
     // Update all orders in a transaction
-    await prisma.$transaction(
-      validatedOrders.map((item) =>
-        prisma.heroImage.update({
-          where: { id: item.id },
-          data: { order: item.order },
-        })
-      )
-    );
+    await sequelize.transaction(async (t) => {
+      for (const item of validatedOrders) {
+        await HeroImage.update(
+          { order: item.order },
+          {
+            where: { id: item.id },
+            transaction: t,
+          }
+        );
+      }
+    });
 
     return res.json({
       success: true,

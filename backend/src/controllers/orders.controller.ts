@@ -1,9 +1,23 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
+import { models, OrderType, OrderStatus } from "../models";
+
+const {
+  Order,
+  OrderItem,
+  Customer,
+  Product,
+  ProductImage,
+  Capacity,
+  Category,
+  ProductCategory,
+  ProductColor,
+  Color,
+} = models;
+
 import { ResponseHelper } from "../types/api";
 import { z } from "zod";
-
-const prisma = new PrismaClient();
+import { sequelize } from "../config/database";
+import { Op } from "sequelize";
 
 // Validation schemas
 const createOrderItemSchema = z.object({
@@ -85,20 +99,39 @@ const updateOrderStatusSchema = z.object({
 });
 
 const updateOrderSchema = z.object({
-  deliveryAddress: z
+  paymentMethod: z
+    .enum([
+      "cash",
+      "credit_card",
+      "debit_card",
+      "bank_transfer",
+      "momo",
+      "zalopay",
+    ])
+    .optional(),
+  shippingAddress: z
     .object({
-      addressLine: z.string().min(1, "Address line is required"),
+      fullName: z.string().min(1, "Full name is required"),
+      phoneNumber: z.string().min(1, "Phone number is required"),
+      addressLine1: z.string().min(1, "Address line 1 is required"),
+      addressLine2: z.string().optional(),
       district: z.string().optional(),
       city: z.string().min(1, "City is required"),
       postalCode: z.string().optional(),
     })
     .optional(),
-  originalShippingCost: z.coerce.number().nonnegative().optional(),
-  shippingDiscount: z.coerce.number().nonnegative().optional(),
-  shippingCost: z.coerce.number().nonnegative().optional(),
-  totalAmount: z.coerce.number().nonnegative().optional(),
   notes: z.string().optional(),
-  items: z.array(createOrderItemSchema).optional(),
+  orderItems: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.coerce.number().int().positive(),
+      })
+    )
+    .optional(),
+  originalShippingCost: z.number().nonnegative().optional(),
+  shippingDiscount: z.number().nonnegative().optional(),
+  shippingCost: z.number().nonnegative().optional(),
 });
 
 /**
@@ -118,11 +151,11 @@ async function generateOrderNumber(): Promise<string> {
   );
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-  const todayOrderCount = await prisma.order.count({
+  const todayOrderCount = await Order.count({
     where: {
       createdAt: {
-        gte: startOfDay,
-        lt: endOfDay,
+        [Op.gte]: startOfDay,
+        [Op.lt]: endOfDay,
       },
     },
   });
@@ -145,8 +178,6 @@ export const getOrders = async (req: Request, res: Response) => {
       search = "",
       dateFrom,
       dateTo,
-      priceRange,
-      freeShipping,
     } = req.query;
 
     const pageNum = parseInt(page as string);
@@ -156,7 +187,6 @@ export const getOrders = async (req: Request, res: Response) => {
     const where: any = {};
 
     if (status !== "all") {
-      // Convert lowercase status to uppercase for Prisma enum
       where.status = (status as string).toUpperCase();
     }
 
@@ -165,109 +195,70 @@ export const getOrders = async (req: Request, res: Response) => {
     }
 
     if (orderType !== "all") {
-      // Convert lowercase orderType to uppercase for Prisma enum
       where.orderType = (orderType as string).toUpperCase();
     }
 
     if (search) {
-      where.OR = [
-        { orderNumber: { contains: search as string, mode: "insensitive" } },
-        {
-          customer: {
-            fullName: { contains: search as string, mode: "insensitive" },
-          },
-        },
-        {
-          customer: {
-            phone: { contains: search as string, mode: "insensitive" },
-          },
-        },
-      ];
+      where[Op.or] = [{ orderNumber: { [Op.like]: `%${search}%` } }];
     }
 
     // Date range filtering
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) {
-        where.createdAt.gte = new Date(dateFrom as string);
+        where.createdAt[Op.gte] = new Date(dateFrom as string);
       }
       if (dateTo) {
         // Add 1 day to include the end date
         const endDate = new Date(dateTo as string);
         endDate.setDate(endDate.getDate() + 1);
-        where.createdAt.lt = endDate;
-      }
-    }
-
-    // Price range filtering
-    if (priceRange && priceRange !== "all") {
-      const ranges = {
-        "0-100": { min: 0, max: 100000 }, // 0-100k VND
-        "100-500": { min: 100000, max: 500000 }, // 100k-500k VND
-        "500-1000": { min: 500000, max: 1000000 }, // 500k-1M VND
-        "1000+": { min: 1000000, max: null }, // 1M+ VND
-      };
-
-      const range = ranges[priceRange as keyof typeof ranges];
-      if (range) {
-        where.totalAmount = {};
-        where.totalAmount.gte = range.min;
-        if (range.max) {
-          where.totalAmount.lte = range.max;
-        }
-      }
-    }
-
-    // Free shipping filtering
-    if (freeShipping && freeShipping !== "all") {
-      if (freeShipping === "free") {
-        // Free shipping means shippingCost is 0
-        where.shippingCost = 0;
-      } else if (freeShipping === "paid") {
-        // Paid shipping means shippingCost is greater than 0
-        where.shippingCost = { gt: 0 };
+        where.createdAt[Op.lt] = endDate;
       }
     }
 
     const [orders, totalCount] = await Promise.all([
-      prisma.order.findMany({
+      Order.findAll({
         where,
-        include: {
-          customer: {
-            select: {
-              id: true,
-              fullName: true,
-              phone: true,
-              messengerId: true,
-            },
+        include: [
+          {
+            model: Customer,
+            as: "customer",
+            attributes: ["id", "fullName", "phone"],
           },
-          items: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  slug: true,
-                  isActive: true,
-                },
+          {
+            model: OrderItem,
+            as: "items",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                attributes: ["id", "name", "slug"],
               },
-            },
+            ],
           },
-          _count: {
-            select: { items: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        skip: offset,
-        take: limitNum,
+        ],
+        order: [["createdAt", "DESC"]],
+        offset,
+        limit: limitNum,
       }),
-      prisma.order.count({ where }),
+      Order.count({ where }),
     ]);
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
+    // Add _count.items for frontend compatibility
+    const ordersWithCount = orders.map((order) => {
+      const orderJson = order.toJSON() as any;
+      return {
+        ...orderJson,
+        _count: {
+          items: orderJson.items?.length || 0,
+        },
+      };
+    });
+
     return res.status(200).json(
-      ResponseHelper.paginated(orders, {
+      ResponseHelper.paginated(ordersWithCount, {
         current_page: pageNum,
         per_page: limitNum,
         total_pages: totalPages,
@@ -276,7 +267,7 @@ export const getOrders = async (req: Request, res: Response) => {
         has_prev: pageNum > 1,
       })
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get orders error:", error);
     return res
       .status(500)
@@ -293,30 +284,37 @@ export const getOrderById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            messengerId: true,
-          },
+    const order = await Order.findByPk(id, {
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "fullName", "phone", "messengerId", "zaloId"],
         },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                isActive: true,
-              },
+        {
+          model: OrderItem,
+          as: "items",
+          attributes: [
+            "id",
+            "orderId",
+            "productId",
+            "quantity",
+            "productSnapshot",
+            "createdAt",
+            "updatedAt",
+          ],
+          // We don't need to include Product associations anymore since we use productSnapshot
+          // But we can still include basic product info for reference (optional)
+          include: [
+            {
+              model: Product,
+              as: "product",
+              attributes: ["id", "name", "slug"],
+              required: false, // Make it optional in case product was deleted
             },
-          },
+          ],
         },
-      },
+      ],
     });
 
     if (!order) {
@@ -326,7 +324,7 @@ export const getOrderById = async (req: Request, res: Response) => {
     }
 
     return res.status(200).json(ResponseHelper.success(order));
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get order error:", error);
     return res
       .status(500)
@@ -337,16 +335,10 @@ export const getOrderById = async (req: Request, res: Response) => {
 };
 
 /**
- * Create new order with product snapshots
+ * Create new order
  */
 export const createOrder = async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
     // Validate input
     const validationResult = createOrderSchema.safeParse(req.body);
     if (!validationResult.success) {
@@ -363,7 +355,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const {
       customerId,
-      orderType: frontendOrderType,
+      orderType,
       deliveryAddress,
       customDescription,
       totalAmount,
@@ -371,125 +363,142 @@ export const createOrder = async (req: Request, res: Response) => {
       items,
       originalShippingCost = 0,
       shippingDiscount = 0,
-      shippingCost = 0,
     } = validationResult.data;
 
-    // Convert frontend orderType to database enum
-    const orderType = frontendOrderType === "product" ? "PRODUCT" : "CUSTOM";
+    // Calculate shipping cost
+    const shippingCost = Math.max(0, originalShippingCost - shippingDiscount);
 
-    // Verify customer exists
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
-    });
-
-    if (!customer) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("Customer not found", "CUSTOMER_NOT_FOUND"));
-    }
-
-    // For product orders, get products with snapshots
+    let calculatedTotalAmount = totalAmount || 0;
     let orderItems: any[] = [];
-    let calculatedTotalAmount = totalAmount || 0; // Use provided totalAmount for custom orders, or calculate for product orders
 
-    if (orderType === "PRODUCT" && items && items.length > 0) {
-      const productIds = items.map((item) => item.productId);
-      const products = await prisma.product.findMany({
-        where: {
-          id: { in: productIds },
-          isActive: true,
-          isDeleted: false,
-        },
-        include: {
-          productColors: {
-            include: {
-              color: true,
-            },
-          },
-          capacity: true,
-          productCategories: {
-            include: {
-              category: true,
-            },
-          },
-          productImages: {
-            orderBy: { order: "asc" },
-          },
-        },
-      });
+    if (orderType === "product" && items && items.length > 0) {
+      // Validate products and calculate total for product orders
+      for (const item of items) {
+        // Get product with separate queries for reliable data loading
+        const product = await Product.findByPk(item.productId);
 
-      if (products.length !== productIds.length) {
-        return res
-          .status(400)
-          .json(
-            ResponseHelper.error(
-              "Some products are not available",
-              "PRODUCTS_NOT_AVAILABLE"
-            )
-          );
-      }
+        if (!product) {
+          return res
+            .status(400)
+            .json(
+              ResponseHelper.error(
+                `Product with ID ${item.productId} not found`,
+                "PRODUCT_NOT_FOUND"
+              )
+            );
+        }
 
-      // Create order items with product snapshots
-      orderItems = items.map((item) => {
-        const product = products.find((p) => p.id === item.productId)!;
+        if (product.stockQuantity < item.quantity) {
+          return res
+            .status(400)
+            .json(
+              ResponseHelper.error(
+                `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
+                "INSUFFICIENT_STOCK"
+              )
+            );
+        }
 
-        // Calculate item total
-        const itemTotal = item.quantity * (item.unitPrice || 0);
+        // Load associations separately for reliability
+        const [capacity, productCategories, productColors, productImages] =
+          await Promise.all([
+            // Load capacity
+            product.capacityId ? Capacity.findByPk(product.capacityId) : null,
+            // Load categories with category details
+            ProductCategory.findAll({
+              where: { productId: item.productId },
+              include: [{ model: Category, as: "category" }],
+            }),
+            // Load colors with color details
+            ProductColor.findAll({
+              where: { productId: item.productId },
+              include: [{ model: Color, as: "color" }],
+            }),
+            // Load images
+            ProductImage.findAll({
+              where: { productId: item.productId },
+              limit: 1,
+              order: [["createdAt", "ASC"]], // Get the first image
+            }),
+          ]);
+
+        const unitPrice = item.unitPrice || product.unitPrice;
+        const itemTotal = unitPrice * item.quantity;
         calculatedTotalAmount += itemTotal;
 
-        // Create product snapshot to preserve current state
+        // Create complete product snapshot for historical record
         const productSnapshot = {
           id: product.id,
           name: product.name,
-          description: product.description,
           slug: product.slug,
-          images: product.productImages.map((img) => ({
-            url: img.url,
-            order: img.order,
-          })),
-          productUrl: product.productUrl,
-          unitPrice: item.unitPrice || 0,
+          description: product.description,
+          basePrice: product.unitPrice,
+          unitPrice,
           requestedColor: item.requestedColor,
-          colors: product.productColors.map((pc) => ({
-            id: pc.color.id,
-            name: pc.color.name,
-            hexCode: pc.color.hexCode,
-          })),
-          capacity: {
-            id: product.capacity.id,
-            name: product.capacity.name,
-            volumeMl: product.capacity.volumeMl,
-          },
-          categories: product.productCategories.map((pc) => ({
-            id: pc.category.id,
-            name: pc.category.name,
-            slug: pc.category.slug,
-          })),
-          capturedAt: new Date().toISOString(),
+          // Capture capacity information
+          capacity: capacity
+            ? {
+                id: capacity.id,
+                name: capacity.name,
+                slug: capacity.slug,
+                volumeMl: capacity.volumeMl,
+              }
+            : null,
+          // Capture categories information
+          categories: productCategories
+            .filter((pc) => pc.category) // Filter out any undefined categories
+            .map((pc) => ({
+              id: pc.category.id,
+              name: pc.category.name,
+              slug: pc.category.slug,
+            })),
+          // Capture colors information
+          colors: productColors
+            .filter((pc) => pc.color) // Filter out any undefined colors
+            .map((pc) => ({
+              id: pc.color.id,
+              name: pc.color.name,
+              slug: pc.color.slug,
+              hexCode: pc.color.hexCode,
+            })),
+          // Capture first image
+          image:
+            productImages.length > 0
+              ? {
+                  id: productImages[0].id,
+                  url: productImages[0].url,
+                  altText: productImages[0].altText,
+                }
+              : null,
+          // Timestamp when this snapshot was created
+          snapshotCreatedAt: new Date().toISOString(),
         };
 
-        return {
+        orderItems.push({
           productId: item.productId,
           quantity: item.quantity,
           productSnapshot,
-        };
-      });
-    } else if (orderType === "CUSTOM") {
-      // For custom orders, don't create order items
-      // The custom description is stored in the order itself
-      orderItems = [];
+        });
+      }
     }
+
+    // Add shipping cost to total
+    calculatedTotalAmount += shippingCost;
 
     // Generate order number
     const orderNumber = await generateOrderNumber();
 
     // Create order with items in a transaction
-    const order = await prisma.$transaction(async (tx) => {
-      const newOrder = await tx.order.create({
-        data: {
+    const order = await sequelize.transaction(async (t) => {
+      // Convert orderType to proper enum
+      const orderTypeEnum =
+        orderType === "product" ? OrderType.PRODUCT : OrderType.CUSTOM;
+
+      const newOrder = await Order.create(
+        {
           orderNumber,
           customerId,
-          orderType,
+          orderType: orderTypeEnum,
           deliveryAddress,
           customDescription,
           notes,
@@ -497,67 +506,68 @@ export const createOrder = async (req: Request, res: Response) => {
           originalShippingCost,
           shippingDiscount,
           shippingCost,
-          status: "PENDING",
+          status: OrderStatus.PENDING,
         },
-      });
+        { transaction: t }
+      );
 
       // Create order items
       if (orderItems.length > 0) {
-        await tx.orderItem.createMany({
-          data: orderItems.map((item) => ({
+        await OrderItem.bulkCreate(
+          orderItems.map((item) => ({
             orderId: newOrder.id,
-            productId: item.productId, // This should always be valid for product orders
+            productId: item.productId,
             quantity: item.quantity,
             productSnapshot: item.productSnapshot,
           })),
-        });
+          { transaction: t }
+        );
       }
 
       // Update product stock for product orders
-      if (orderType === "PRODUCT" && items && items.length > 0) {
+      if (orderType === "product" && items && items.length > 0) {
         for (const item of items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQuantity: {
-                decrement: item.quantity,
-              },
-            },
+          const product = await Product.findByPk(item.productId, {
+            transaction: t,
           });
+          if (product) {
+            await product.update(
+              {
+                stockQuantity: product.stockQuantity - item.quantity,
+              },
+              { transaction: t }
+            );
+          }
         }
       }
 
       return newOrder;
     });
 
-    // Fetch complete order with relations
-    const completeOrder = await prisma.order.findUnique({
-      where: { id: order.id },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            messengerId: true,
-          },
+    // Fetch the created order with associations
+    const createdOrder = await Order.findByPk(order.id, {
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "fullName", "phone"],
         },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
+        {
+          model: OrderItem,
+          as: "items",
+          include: [
+            {
+              model: Product,
+              as: "product",
+              attributes: ["id", "name", "slug"],
             },
-          },
+          ],
         },
-      },
+      ],
     });
 
-    return res.status(201).json(ResponseHelper.success(completeOrder));
-  } catch (error) {
+    return res.status(201).json(ResponseHelper.success(createdOrder));
+  } catch (error: any) {
     console.error("Create order error:", error);
     return res
       .status(500)
@@ -572,12 +582,6 @@ export const createOrder = async (req: Request, res: Response) => {
  */
 export const updateOrderStatus = async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
     const { id } = req.params;
 
     // Validate input
@@ -596,124 +600,97 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
     const { status, notes } = validationResult.data;
 
-    // Check if order exists
-    const existingOrder = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-    });
-
+    // Find existing order with items (use separate query for reliability)
+    const existingOrder = await Order.findByPk(id);
     if (!existingOrder) {
       return res
         .status(404)
         .json(ResponseHelper.error("Order not found", "ORDER_NOT_FOUND"));
     }
 
-    // Validate status transitions
-    const validTransitions: Record<string, string[]> = {
-      PENDING: ["CONFIRMED", "CANCELLED"],
-      CONFIRMED: ["PROCESSING", "CANCELLED"],
-      PROCESSING: ["SHIPPED", "CANCELLED"],
-      SHIPPED: ["DELIVERED"],
-      DELIVERED: [], // Final state
-      CANCELLED: [], // Final state
-    };
+    // Load order items separately for better reliability
+    const orderItems = await OrderItem.findAll({
+      where: { orderId: id },
+      attributes: ["id", "productId", "quantity", "productSnapshot"],
+    });
 
-    if (!validTransitions[existingOrder.status].includes(status)) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            `Cannot change status from ${existingOrder.status} to ${status}`,
-            "INVALID_STATUS_TRANSITION"
-          )
-        );
-    }
+    // Handle stock restoration for cancelled orders
+    const newStatus = OrderStatus[status as keyof typeof OrderStatus];
 
-    const updateData: any = { status };
-
-    // Set timestamps for specific statuses
-    if (status === "CONFIRMED") {
-      updateData.confirmedAt = new Date();
-    } else if (status === "DELIVERED") {
-      updateData.completedAt = new Date();
-    }
-
-    // If cancelling, restore stock for product orders
-    if (status === "CANCELLED" && existingOrder.orderType === "PRODUCT") {
-      await prisma.$transaction(async (tx) => {
+    if (
+      newStatus === OrderStatus.CANCELLED &&
+      existingOrder.status !== OrderStatus.CANCELLED
+    ) {
+      await sequelize.transaction(async (t) => {
         // Restore product stock
-        for (const item of existingOrder.items) {
-          if (item.product && !item.product.isDeleted) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: {
-                stockQuantity: {
-                  increment: item.quantity,
-                },
-              },
+        if (orderItems && orderItems.length > 0) {
+          for (const item of orderItems) {
+            // Find the current product by productId (don't rely on item.product association)
+            const currentProduct = await Product.findByPk(item.productId, {
+              transaction: t,
             });
+
+            if (currentProduct) {
+              const currentStock = currentProduct.stockQuantity;
+              const newStock = currentStock + item.quantity;
+
+              // Get product name from snapshot or current product
+              const productName =
+                item.productSnapshot?.name ||
+                currentProduct.name ||
+                "Unknown Product";
+
+              await currentProduct.update(
+                {
+                  stockQuantity: newStock,
+                },
+                { transaction: t }
+              );
+            }
           }
         }
 
-        // Update order
-        await tx.order.update({
-          where: { id },
-          data: updateData,
-        });
+        // Update order status
+        await existingOrder.update(
+          {
+            status: newStatus,
+            notes,
+          },
+          { transaction: t }
+        );
       });
     } else {
-      await prisma.order.update({
-        where: { id },
-        data: updateData,
-      });
-    }
-
-    // Add notes if provided
-    if (notes) {
-      await prisma.order.update({
-        where: { id },
-        data: {
-          notes: existingOrder.notes
-            ? `${existingOrder.notes}\n\n${new Date().toISOString()}: ${notes}`
-            : notes,
-        },
+      // Just update status for other cases
+      await existingOrder.update({
+        status: newStatus,
+        notes,
       });
     }
 
     // Fetch updated order
-    const updatedOrder = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            messengerId: true,
-          },
+    const updatedOrder = await Order.findByPk(id, {
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "fullName", "phone"],
         },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
+        {
+          model: OrderItem,
+          as: "items",
+          include: [
+            {
+              model: Product,
+              as: "product",
+              attributes: ["id", "name", "slug"],
             },
-          },
+          ],
         },
-      },
+      ],
     });
 
     return res.status(200).json(ResponseHelper.success(updatedOrder));
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update order status error:", error);
     return res
       .status(500)
@@ -722,6 +699,75 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           "Failed to update order status",
           "UPDATE_ORDER_STATUS_ERROR"
         )
+      );
+  }
+};
+
+/**
+ * Delete order (admin only)
+ */
+export const deleteOrder = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const existingOrder = await Order.findByPk(id, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [
+            {
+              model: Product,
+              as: "product",
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!existingOrder) {
+      return res
+        .status(404)
+        .json(ResponseHelper.error("Order not found", "ORDER_NOT_FOUND"));
+    }
+
+    await sequelize.transaction(async (t) => {
+      // Restore product stock if order was not cancelled
+      if (
+        existingOrder.status !== OrderStatus.CANCELLED &&
+        existingOrder.items
+      ) {
+        for (const item of existingOrder.items) {
+          if (item.product) {
+            await item.product.update(
+              {
+                stockQuantity: item.product.stockQuantity + item.quantity,
+              },
+              { transaction: t }
+            );
+          }
+        }
+      }
+
+      // Delete order items first
+      await OrderItem.destroy({
+        where: { orderId: id },
+        transaction: t,
+      });
+
+      // Delete order
+      await existingOrder.destroy({ transaction: t });
+    });
+
+    return res
+      .status(200)
+      .json(ResponseHelper.success({ message: "Order deleted successfully" }));
+  } catch (error: any) {
+    console.error("Delete order error:", error);
+    return res
+      .status(500)
+      .json(
+        ResponseHelper.error("Failed to delete order", "DELETE_ORDER_ERROR")
       );
   }
 };
@@ -740,70 +786,100 @@ export const getOrderStats = async (req: Request, res: Response) => {
     const previousPeriodStartDate = new Date(startDate);
     previousPeriodStartDate.setDate(previousPeriodStartDate.getDate() - days);
 
-    const [currentPeriodCounts, previousPeriodCounts] = await Promise.all([
-      // Current period status counts
-      prisma.order.groupBy({
-        by: ["status"],
-        _count: { status: true },
-        where: {
-          createdAt: { gte: startDate },
+    // Get current period stats
+    const currentPeriodOrders = await Order.findAll({
+      where: {
+        createdAt: { [Op.gte]: startDate },
+      },
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
         },
-      }),
+      ],
+    });
 
-      // Previous period status counts for comparison
-      prisma.order.groupBy({
-        by: ["status"],
-        _count: { status: true },
-        where: {
-          createdAt: {
-            gte: previousPeriodStartDate,
-            lt: startDate,
-          },
+    // Get previous period stats for comparison
+    const previousPeriodOrders = await Order.findAll({
+      where: {
+        createdAt: {
+          [Op.gte]: previousPeriodStartDate,
+          [Op.lt]: startDate,
         },
-      }),
-    ]);
+      },
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+        },
+      ],
+    });
 
-    // Helper function to get count by status
-    const getCountByStatus = (statusCounts: any[], status: string): number => {
-      const found = statusCounts.find((item) => item.status === status);
-      return found ? found._count.status : 0;
-    };
-
-    // Current period stats
+    // Calculate current period stats
     const currentStats = {
-      total: currentPeriodCounts.reduce(
-        (sum, item) => sum + item._count.status,
+      totalOrders: currentPeriodOrders.length,
+      totalRevenue: currentPeriodOrders.reduce(
+        (sum, order) => sum + parseFloat(order.totalAmount.toString()),
         0
       ),
-      pending: getCountByStatus(currentPeriodCounts, "PENDING"),
-      processing:
-        getCountByStatus(currentPeriodCounts, "PROCESSING") +
-        getCountByStatus(currentPeriodCounts, "CONFIRMED"),
-      shipped: getCountByStatus(currentPeriodCounts, "SHIPPED"),
-      delivered: getCountByStatus(currentPeriodCounts, "DELIVERED"),
-      cancelled: getCountByStatus(currentPeriodCounts, "CANCELLED"),
+      statusCounts: currentPeriodOrders.reduce((counts: any, order) => {
+        counts[order.status] = (counts[order.status] || 0) + 1;
+        return counts;
+      }, {}),
+      averageOrderValue:
+        currentPeriodOrders.length > 0
+          ? currentPeriodOrders.reduce(
+              (sum, order) => sum + parseFloat(order.totalAmount.toString()),
+              0
+            ) / currentPeriodOrders.length
+          : 0,
     };
 
-    // Previous period stats for comparison
+    // Calculate previous period stats
     const previousStats = {
-      total: previousPeriodCounts.reduce(
-        (sum, item) => sum + item._count.status,
+      totalOrders: previousPeriodOrders.length,
+      totalRevenue: previousPeriodOrders.reduce(
+        (sum, order) => sum + parseFloat(order.totalAmount.toString()),
         0
       ),
-      pending: getCountByStatus(previousPeriodCounts, "PENDING"),
-      processing:
-        getCountByStatus(previousPeriodCounts, "PROCESSING") +
-        getCountByStatus(previousPeriodCounts, "CONFIRMED"),
-      shipped: getCountByStatus(previousPeriodCounts, "SHIPPED"),
-      delivered: getCountByStatus(previousPeriodCounts, "DELIVERED"),
-      cancelled: getCountByStatus(previousPeriodCounts, "CANCELLED"),
+      averageOrderValue:
+        previousPeriodOrders.length > 0
+          ? previousPeriodOrders.reduce(
+              (sum, order) => sum + parseFloat(order.totalAmount.toString()),
+              0
+            ) / previousPeriodOrders.length
+          : 0,
+    };
+
+    // Calculate growth percentages
+    const growth = {
+      orders:
+        previousStats.totalOrders > 0
+          ? ((currentStats.totalOrders - previousStats.totalOrders) /
+              previousStats.totalOrders) *
+            100
+          : 0,
+      revenue:
+        previousStats.totalRevenue > 0
+          ? ((currentStats.totalRevenue - previousStats.totalRevenue) /
+              previousStats.totalRevenue) *
+            100
+          : 0,
+      averageOrderValue:
+        previousStats.averageOrderValue > 0
+          ? ((currentStats.averageOrderValue -
+              previousStats.averageOrderValue) /
+              previousStats.averageOrderValue) *
+            100
+          : 0,
     };
 
     return res.status(200).json(
       ResponseHelper.success({
-        ...currentStats,
-        previousPeriod: previousStats,
         period: days,
+        currentPeriod: currentStats,
+        previousPeriod: previousStats,
+        growth,
       })
     );
   } catch (error) {
@@ -820,7 +896,7 @@ export const getOrderStats = async (req: Request, res: Response) => {
 };
 
 /**
- * Update order details (for editable fields only)
+ * Update order details
  */
 export const updateOrder = async (req: Request, res: Response) => {
   try {
@@ -831,9 +907,8 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
 
     const { id } = req.params;
-
-    // Validate input
     const validationResult = updateOrderSchema.safeParse(req.body);
+
     if (!validationResult.success) {
       return res
         .status(400)
@@ -846,296 +921,203 @@ export const updateOrder = async (req: Request, res: Response) => {
         );
     }
 
-    // Check if order exists and is editable
-    const existingOrder = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        items: {
-          include: {
-            product: true,
+    const updateData = validationResult.data;
+
+    // Update order in transaction
+    const updatedOrder = await sequelize.transaction(async (t) => {
+      const existingOrder = await Order.findByPk(id, {
+        include: [
+          {
+            model: OrderItem,
+            as: "items",
+            include: [
+              {
+                model: Product,
+                as: "product",
+              },
+            ],
           },
-        },
-      },
-    });
-
-    if (!existingOrder) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("Order not found", "ORDER_NOT_FOUND"));
-    }
-
-    // Only allow editing if order is in PENDING or CONFIRMED status
-    if (!["PENDING", "CONFIRMED"].includes(existingOrder.status)) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Order can only be edited in PENDING or CONFIRMED status",
-            "ORDER_NOT_EDITABLE"
-          )
-        );
-    }
-
-    const {
-      deliveryAddress,
-      originalShippingCost,
-      shippingDiscount,
-      shippingCost,
-      totalAmount,
-      notes,
-      items,
-    } = validationResult.data;
-
-    await prisma.$transaction(async (tx) => {
-      // Update order basic fields
-      const updateData: any = {};
-
-      if (deliveryAddress !== undefined) {
-        updateData.deliveryAddress = deliveryAddress;
-      }
-      if (originalShippingCost !== undefined) {
-        updateData.originalShippingCost = originalShippingCost;
-      }
-      if (shippingDiscount !== undefined) {
-        updateData.shippingDiscount = shippingDiscount;
-      }
-      if (shippingCost !== undefined) {
-        updateData.shippingCost = shippingCost;
-      }
-      if (totalAmount !== undefined) {
-        updateData.totalAmount = totalAmount;
-      }
-      if (notes !== undefined) {
-        updateData.notes = notes;
-      }
-
-      await tx.order.update({
-        where: { id },
-        data: updateData,
+        ],
+        transaction: t,
       });
 
-      // Handle items update for product orders
-      if (items && existingOrder.orderType === "PRODUCT") {
-        // First, restore stock for existing items
-        for (const existingItem of existingOrder.items) {
-          if (existingItem.product && !existingItem.product.isDeleted) {
-            await tx.product.update({
-              where: { id: existingItem.productId },
-              data: {
-                stockQuantity: {
-                  increment: existingItem.quantity,
-                },
-              },
-            });
-          }
-        }
+      if (!existingOrder) {
+        throw new Error("Order not found");
+      }
 
-        // Delete existing items
-        await tx.orderItem.deleteMany({
+      // Update basic order fields
+      await existingOrder.update(
+        {
+          notes: updateData.notes,
+          deliveryAddress: updateData.shippingAddress,
+          shippingCost: updateData.shippingCost || existingOrder.shippingCost,
+          originalShippingCost:
+            updateData.originalShippingCost ||
+            existingOrder.originalShippingCost,
+          shippingDiscount:
+            updateData.shippingDiscount || existingOrder.shippingDiscount,
+        },
+        { transaction: t }
+      );
+
+      // Update order items if provided
+      if (updateData.orderItems) {
+        // Remove existing order items
+        await OrderItem.destroy({
           where: { orderId: id },
+          transaction: t,
         });
 
-        // Create new items with product snapshots
-        for (const item of items) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-            include: {
-              productColors: {
-                include: {
-                  color: true,
-                },
-              },
-              capacity: true,
-              productCategories: {
-                include: {
-                  category: true,
-                },
-              },
-            },
+        // Add new order items and calculate totals
+        let subtotal = 0;
+        for (const item of updateData.orderItems) {
+          const product = await Product.findByPk(item.productId, {
+            transaction: t,
           });
-
-          // Fetch product images separately if needed
-          const productImages = await tx.productImage.findMany({
-            where: { productId: item.productId },
-            orderBy: { order: "asc" },
-          });
-
           if (!product) {
-            throw new Error(`Product ${item.productId} not found`);
+            throw new Error(`Product not found: ${item.productId}`);
           }
 
-          if (product.stockQuantity < item.quantity) {
-            throw new Error(
-              `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Required: ${item.quantity}`
-            );
-          }
+          const itemTotal =
+            item.quantity * parseFloat(product.unitPrice.toString());
+          subtotal += itemTotal;
 
-          // Create product snapshot
-          const productSnapshot = {
-            id: product.id,
-            name: product.name,
-            slug: product.slug,
-            description: product.description,
-            images: productImages,
-            unitPrice: item.unitPrice || 0,
-            requestedColor: item.requestedColor,
-            colors: product.productColors.map((pc) => ({
-              id: pc.color.id,
-              name: pc.color.name,
-              hexCode: pc.color.hexCode,
-            })),
-            capacity: {
-              id: product.capacity.id,
-              name: product.capacity.name,
-              volumeMl: product.capacity.volumeMl,
-            },
-            categories: product.productCategories.map((pc) => ({
-              id: pc.category.id,
-              name: pc.category.name,
-              slug: pc.category.slug,
-            })),
-            capturedAt: new Date().toISOString(),
-          };
-
-          // Create order item
-          await tx.orderItem.create({
-            data: {
+          await OrderItem.create(
+            {
               orderId: id,
               productId: item.productId,
               quantity: item.quantity,
-              productSnapshot,
-            },
-          });
-
-          // Update product stock
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQuantity: {
-                decrement: item.quantity,
+              productSnapshot: {
+                name: product.name,
+                unitPrice: product.unitPrice,
+                totalPrice: itemTotal,
               },
-              // Update product's base price if requested
-              ...(item.updateBasePrice &&
-                item.unitPrice && {
-                  unitPrice: item.unitPrice,
-                }),
             },
-          });
+            { transaction: t }
+          );
         }
+
+        // Update order totals
+        const shippingCost =
+          updateData.shippingCost || existingOrder.shippingCost || 0;
+        const totalAmount = subtotal + shippingCost;
+        await existingOrder.update(
+          {
+            totalAmount,
+          },
+          { transaction: t }
+        );
       }
 
-      // Recalculate total amount if items were updated
-      if (items && items.length > 0) {
-        const newTotalAmount = items.reduce((total, item) => {
-          return total + item.quantity * (item.unitPrice || 0);
-        }, 0);
-
-        await tx.order.update({
-          where: { id },
-          data: {
-            totalAmount: newTotalAmount,
-          },
-        });
-      }
-    });
-
-    // Fetch updated order
-    const updatedOrder = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            messengerId: true,
-          },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                isActive: true,
-                isDeleted: true,
+      return Order.findByPk(id, {
+        include: [
+          {
+            model: OrderItem,
+            as: "items",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                attributes: ["id", "name", "slug", "unitPrice"],
               },
-            },
+            ],
           },
-        },
-        _count: {
-          select: {
-            items: true,
+          {
+            model: Customer,
+            as: "customer",
+            attributes: ["id", "firstName", "lastName", "email", "phoneNumber"],
           },
-        },
-      },
+        ],
+        transaction: t,
+      });
     });
 
     return res.status(200).json(ResponseHelper.success(updatedOrder));
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update order error:", error);
+
+    if (error.message.includes("not found")) {
+      return res
+        .status(404)
+        .json(ResponseHelper.error(error.message, "NOT_FOUND"));
+    }
+
     return res
       .status(500)
       .json(
-        ResponseHelper.error(
-          "Failed to update order",
-          "UPDATE_ORDER_ERROR",
-          error instanceof Error ? error.message : undefined
-        )
+        ResponseHelper.error("Failed to update order", "UPDATE_ORDER_ERROR")
       );
   }
 };
 
 /**
- * Get recent orders for dashboard
+ * Get recent orders
  */
 export const getRecentOrders = async (req: Request, res: Response) => {
   try {
     const { limit = "10" } = req.query;
     const limitNum = parseInt(limit as string);
 
-    const orders = await prisma.order.findMany({
-      take: limitNum,
-      orderBy: { createdAt: "desc" },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            messengerId: true,
-          },
+    const recentOrders = await Order.findAll({
+      limit: limitNum,
+      order: [["createdAt", "DESC"]],
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "fullName", "phone"],
         },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
+        {
+          model: OrderItem,
+          as: "items",
+          include: [
+            {
+              model: Product,
+              as: "product",
+              attributes: ["id", "name", "slug"],
             },
-          },
-          take: 1, // Only first item for display
+          ],
         },
-      },
+      ],
     });
 
-    // Transform data for frontend
-    const recentOrders = orders.map((order) => ({
-      id: order.id,
-      customerName: order.customer.fullName,
-      productName: order.items[0]?.product?.name || null,
-      orderType: order.orderType.toLowerCase(), // Convert PRODUCT/CUSTOM to product/custom
-      status: order.status.toLowerCase(), // Convert to lowercase for frontend
-      totalAmount: order.totalAmount,
-      createdAt: order.createdAt.toISOString(),
-    }));
+    // Convert Sequelize instances to plain objects
+    const plainOrders = recentOrders.map((order) => order.toJSON());
 
-    return res
-      .status(200)
-      .json(ResponseHelper.success({ orders: recentOrders }));
+    // Transform data to match frontend interface expectations
+    const transformedOrders = plainOrders.map((order: any) => {
+      let productName = null;
+
+      if (order.items && order.items.length > 0) {
+        if (order.items.length === 1) {
+          // Chỉ có 1 sản phẩm
+          const item = order.items[0];
+          productName =
+            item?.productSnapshot?.name || item?.product?.name || null;
+        } else {
+          // Có nhiều sản phẩm
+          const firstItem = order.items[0];
+          const firstName =
+            firstItem?.productSnapshot?.name ||
+            firstItem?.product?.name ||
+            "Sản phẩm";
+          const otherCount = order.items.length - 1;
+          productName = `${firstName} + ${otherCount} sản phẩm khác`;
+        }
+      }
+
+      return {
+        id: order.id,
+        customerName: order.customer?.fullName || "Unknown Customer",
+        productName: productName,
+        orderType: order.orderType?.toLowerCase() || "product",
+        status: order.status?.toLowerCase() || "pending",
+        totalAmount: parseFloat(order.totalAmount || "0"),
+        createdAt: order.createdAt,
+      };
+    });
+
+    return res.status(200).json(ResponseHelper.success(transformedOrders));
   } catch (error) {
     console.error("Get recent orders error:", error);
     return res
@@ -1148,3 +1130,6 @@ export const getRecentOrders = async (req: Request, res: Response) => {
       );
   }
 };
+
+// Export additional functions that might be needed
+export { generateOrderNumber };

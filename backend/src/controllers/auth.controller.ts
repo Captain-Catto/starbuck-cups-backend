@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
+import { models, AdminRole } from "../models";
+
+const { AdminUser } = models;
+
 import {
   hashPassword,
   comparePassword,
@@ -9,11 +12,14 @@ import {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
+  hashRefreshToken,
+  getRefreshTokenExpiration,
 } from "../utils/jwt";
 import { ResponseHelper } from "../types/api";
 import { z } from "zod";
+import { AuthRequest } from "../middleware/auth.middleware";
 
-const prisma = new PrismaClient();
+// Request interface extended in auth.middleware.ts
 
 // Validation schemas
 const loginSchema = z.object({
@@ -52,7 +58,7 @@ export const adminLogin = async (req: Request, res: Response) => {
     const { email, password } = validationResult.data;
 
     // Find admin user by email
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { email: email.toLowerCase() },
     });
 
@@ -103,10 +109,7 @@ export const adminLogin = async (req: Request, res: Response) => {
     }
 
     // Update last login
-    await prisma.adminUser.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    await user.update({ lastLoginAt: new Date() });
 
     // Generate tokens
     const accessToken = generateAccessToken({
@@ -121,14 +124,38 @@ export const adminLogin = async (req: Request, res: Response) => {
       tokenVersion: 1,
     });
 
+    // Save refresh token hash to database
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+    const refreshTokenExpiresAt = getRefreshTokenExpiration();
+
+    await user.update({
+      refreshTokenHash,
+      refreshTokenExpiresAt,
+    });
+
     // Set refresh token as HTTP-only cookie
-    res.cookie("admin_refresh_token", refreshToken, {
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      secure:
+        process.env.NODE_ENV === "production" &&
+        process.env.COOKIE_SECURE !== "false",
+      sameSite:
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
+        (process.env.NODE_ENV === "production" ? "none" : "lax"),
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
+      domain: process.env.COOKIE_DOMAIN || undefined,
+    };
+
+    console.log("Admin Login - Setting refresh token cookie:", {
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      domain: cookieOptions.domain,
+      origin: req.headers.origin,
+      userAgent: req.headers["user-agent"]?.substring(0, 50),
     });
+
+    res.cookie("admin_refresh_token", refreshToken, cookieOptions);
 
     return res.status(200).json(
       ResponseHelper.success({
@@ -173,7 +200,7 @@ export const login = async (req: Request, res: Response) => {
     const { email, password } = validationResult.data;
 
     // Find user by email
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { email: email.toLowerCase() },
     });
 
@@ -211,10 +238,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Update last login
-    await prisma.adminUser.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    await user.update({ lastLoginAt: new Date() });
 
     // Generate tokens
     const accessToken = generateAccessToken({
@@ -232,10 +256,15 @@ export const login = async (req: Request, res: Response) => {
     // Set refresh token as HTTP-only cookie
     res.cookie("admin_refresh_token", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      secure:
+        process.env.NODE_ENV === "production" &&
+        process.env.COOKIE_SECURE !== "false",
+      sameSite:
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
+        (process.env.NODE_ENV === "production" ? "none" : "lax"),
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
+      domain: process.env.COOKIE_DOMAIN || undefined,
     });
 
     return res.status(200).json(
@@ -247,7 +276,7 @@ export const login = async (req: Request, res: Response) => {
           role: user.role,
         },
         accessToken,
-        refreshToken
+        refreshToken,
       })
     );
   } catch (error) {
@@ -283,7 +312,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     const decoded = verifyRefreshToken(token);
 
     // Find user and verify token version
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { id: decoded.userId },
     });
 
@@ -325,8 +354,27 @@ export const logout = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
     }
 
-    // For logout, we could implement a token blacklist or just rely on short-lived access tokens
-    // No need to increment token version if not using it
+    // Clear refresh token from database
+    const adminUser = await AdminUser.findByPk(req.user.userId);
+    if (adminUser) {
+      await adminUser.update({
+        refreshTokenHash: undefined,
+        refreshTokenExpiresAt: undefined,
+      });
+    }
+
+    // Clear refresh token cookie
+    res.clearCookie("admin_refresh_token", {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === "production" &&
+        process.env.COOKIE_SECURE !== "false",
+      sameSite:
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
+        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+      path: "/",
+      domain: process.env.COOKIE_DOMAIN || undefined,
+    });
 
     return res
       .status(200)
@@ -383,7 +431,7 @@ export const changePassword = async (req: Request, res: Response) => {
     }
 
     // Find user
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { id: req.user.userId },
     });
 
@@ -413,13 +461,13 @@ export const changePassword = async (req: Request, res: Response) => {
     const hashedNewPassword = await hashPassword(newPassword);
 
     // Update password
-    await prisma.adminUser.update({
-      where: { id: user.id },
-      data: {
+    await AdminUser.update(
+      {
         passwordHash: hashedNewPassword,
         updatedAt: new Date(),
       },
-    });
+      { where: { id: user.id } }
+    );
 
     return res.status(200).json(
       ResponseHelper.success(null, {
@@ -450,17 +498,17 @@ export const verifyToken = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
     }
 
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { id: req.user.userId },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-      },
+      attributes: [
+        "id",
+        "email",
+        "username",
+        "role",
+        "isActive",
+        "lastLoginAt",
+        "createdAt",
+      ],
     });
 
     if (!user) {
@@ -512,16 +560,16 @@ export const getProfile = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
     }
 
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { id: req.user.userId },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        role: true,
-        lastLoginAt: true,
-        createdAt: true,
-      },
+      attributes: [
+        "id",
+        "email",
+        "username",
+        "role",
+        "lastLoginAt",
+        "createdAt",
+      ],
     });
 
     if (!user) {
@@ -551,15 +599,9 @@ export const adminVerifyToken = async (req: Request, res: Response) => {
     }
 
     // Ensure this is an admin user
-    const adminUser = await prisma.adminUser.findUnique({
+    const adminUser = await AdminUser.findOne({
       where: { id: req.user.userId },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        role: true,
-        isActive: true,
-      },
+      attributes: ["id", "email", "username", "role", "isActive"],
     });
 
     if (!adminUser) {
@@ -640,15 +682,17 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
     }
 
     // Check if admin user exists and is active
-    const adminUser = await prisma.adminUser.findUnique({
+    const adminUser = await AdminUser.findOne({
       where: { id: payload.userId },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        role: true,
-        isActive: true,
-      },
+      attributes: [
+        "id",
+        "email",
+        "username",
+        "role",
+        "isActive",
+        "refreshTokenHash",
+        "refreshTokenExpiresAt",
+      ],
     });
 
     if (!adminUser) {
@@ -668,6 +712,31 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
         );
     }
 
+    // Verify refresh token against database
+    const currentTokenHash = hashRefreshToken(refreshToken);
+    if (
+      !adminUser.refreshTokenHash ||
+      adminUser.refreshTokenHash !== currentTokenHash
+    ) {
+      return res
+        .status(401)
+        .json(
+          ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
+        );
+    }
+
+    // Check if refresh token is expired in database
+    if (
+      !adminUser.refreshTokenExpiresAt ||
+      adminUser.refreshTokenExpiresAt < new Date()
+    ) {
+      return res
+        .status(401)
+        .json(
+          ResponseHelper.error("Refresh token expired", "REFRESH_TOKEN_EXPIRED")
+        );
+    }
+
     // Generate new tokens
     const accessToken = generateAccessToken({
       userId: adminUser.id,
@@ -681,13 +750,27 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
       tokenVersion: 0, // You can implement token versioning if needed
     });
 
+    // Save new refresh token hash to database
+    const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
+    const newRefreshTokenExpiresAt = getRefreshTokenExpiration();
+
+    await adminUser.update({
+      refreshTokenHash: newRefreshTokenHash,
+      refreshTokenExpiresAt: newRefreshTokenExpiresAt,
+    });
+
     // Set new refresh token as HTTP-only cookie
     res.cookie("admin_refresh_token", newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      secure:
+        process.env.NODE_ENV === "production" &&
+        process.env.COOKIE_SECURE !== "false",
+      sameSite:
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
+        (process.env.NODE_ENV === "production" ? "none" : "lax"),
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
+      domain: process.env.COOKIE_DOMAIN || undefined,
     });
 
     return res.status(200).json(
@@ -729,7 +812,17 @@ export const adminLogout = async (req: Request, res: Response) => {
     // 3. Log the logout activity
 
     // Clear refresh token cookie
-    res.clearCookie("admin_refresh_token", { path: "/" });
+    res.clearCookie("admin_refresh_token", {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === "production" &&
+        process.env.COOKIE_SECURE !== "false",
+      sameSite:
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
+        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+      path: "/",
+      domain: process.env.COOKIE_DOMAIN || undefined,
+    });
 
     return res
       .status(200)
@@ -765,15 +858,9 @@ export const adminSessionCheck = async (req: Request, res: Response) => {
 
     try {
       const payload = verifyRefreshToken(refreshToken);
-      const user = await prisma.adminUser.findUnique({
+      const user = await AdminUser.findOne({
         where: { id: payload.userId },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          isActive: true,
-          username: true,
-        },
+        attributes: ["id", "email", "role", "isActive", "username"],
       });
 
       if (!user || !user.isActive) {
@@ -799,10 +886,15 @@ export const adminSessionCheck = async (req: Request, res: Response) => {
       // Set new refresh token as HTTP-only cookie
       res.cookie("admin_refresh_token", newRefreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        secure:
+          process.env.NODE_ENV === "production" &&
+          process.env.COOKIE_SECURE !== "false",
+        sameSite:
+          (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
+          (process.env.NODE_ENV === "production" ? "none" : "lax"),
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         path: "/",
+        domain: process.env.COOKIE_DOMAIN || undefined,
       });
 
       return res.status(200).json(

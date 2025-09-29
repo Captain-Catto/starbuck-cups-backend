@@ -344,7 +344,7 @@ router.get("/:id", getPublicProductById);
  *         schema:
  *           type: integer
  *           minimum: 0
- *         description: Low stock threshold (default 10)
+ *         description: Low stock threshold (default 1)
  *       - in: query
  *         name: sortBy
  *         schema:
@@ -645,7 +645,12 @@ router.put(
  *       404:
  *         description: Product not found
  */
-router.patch("/:id/stock", authenticateWithAutoRefresh, requireAdmin, updateProductStock);
+router.patch(
+  "/:id/stock",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  updateProductStock
+);
 
 /**
  * @swagger
@@ -698,7 +703,12 @@ router.patch(
  *       404:
  *         description: Deleted product not found
  */
-router.patch("/:id/reactivate", authenticateWithAutoRefresh, requireAdmin, reactivateProduct);
+router.patch(
+  "/:id/reactivate",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  reactivateProduct
+);
 
 /**
  * @swagger

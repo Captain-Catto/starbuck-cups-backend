@@ -37,8 +37,16 @@ const corsOptions: cors.CorsOptions = {
     "X-Requested-With",
     "X-API-Key",
     "Accept",
+    "Cookie",
+    "Set-Cookie",
   ],
-  exposedHeaders: ["X-Total-Count", "X-Has-Next-Page"],
+  exposedHeaders: [
+    "X-Total-Count",
+    "X-Has-Next-Page",
+    "X-Token-Refresh-Needed",
+    "X-Refresh-Type",
+    "Set-Cookie",
+  ],
   maxAge: 86400, // 24 hours
 };
 
@@ -214,7 +222,7 @@ export const errorHandler = (
     return;
   }
 
-  // Handle Prisma errors
+  // Handle database errors
   if (error.code === "P2002") {
     res
       .status(409)

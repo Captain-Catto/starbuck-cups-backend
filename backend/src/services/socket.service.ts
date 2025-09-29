@@ -4,7 +4,9 @@ import {
   socketAuthMiddleware,
   requireAdminRole,
 } from "../middleware/socket.middleware";
-import { PrismaClient } from "../generated/prisma";
+import { Order } from "../models/Order";
+import { Consultation } from "../models/Consultation";
+import { Customer } from "../models/Customer";
 import {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -28,8 +30,7 @@ class SocketService {
   > | null = null;
 
   private adminSockets = new Map<string, Socket>();
-  private prisma = new PrismaClient();
-
+  
   public initialize(server: HTTPServer): void {
     this.io = new SocketIOServer(server, {
       cors: {
@@ -204,7 +205,7 @@ class SocketService {
   private async getUnreadNotificationCount(): Promise<number> {
     try {
       // Count pending consultations as unread notifications
-      const pendingConsultations = await this.prisma.consultation.count({
+      const pendingConsultations = await Consultation.count({
         where: {
           status: "PENDING",
         },

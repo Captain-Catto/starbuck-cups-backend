@@ -1,26 +1,35 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
-import { ResponseHelper } from "../types/api";
+import { models } from "../models";
 
-const prisma = new PrismaClient();
+const { Order, OrderItem, Customer, Product, Consultation } = models;
+
+import { ResponseHelper } from "../types/api";
+import { Op, QueryTypes } from "sequelize";
+import { sequelize } from "../config/database";
+
+interface TopCustomerQueryResult {
+  customerId: number;
+  totalSpent: string;
+}
 
 /**
  * Get dashboard statistics
  */
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
+    console.log("Getting dashboard stats");
+
     // Get all counts in parallel
     const [totalOrders, totalCustomers, totalProducts, pendingConsultations] =
       await Promise.all([
-        prisma.order.count(),
-        prisma.customer.count(),
-        prisma.product.count({
+        Order.count(),
+        Customer.count(),
+        Product.count({
           where: {
             isActive: true,
-            isDeleted: false,
           },
         }),
-        prisma.consultation.count({
+        Consultation.count({
           where: {
             status: "PENDING",
           },
@@ -34,6 +43,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       pendingConsultations,
     };
 
+    console.log("Dashboard stats:", stats);
     return res.status(200).json(ResponseHelper.success(stats));
   } catch (error) {
     console.error("Get dashboard stats error:", error);
@@ -62,47 +72,38 @@ export const getRevenueData = async (req: Request, res: Response) => {
     const [totalRevenue, thisMonthRevenue, lastMonthRevenue] =
       await Promise.all([
         // Total revenue from all completed orders (DELIVERED or other completion statuses)
-        prisma.order.aggregate({
-          _sum: {
-            totalAmount: true,
-          },
+        Order.sum("totalAmount", {
           where: {
             status: "DELIVERED",
           },
         }),
 
         // This month revenue
-        prisma.order.aggregate({
-          _sum: {
-            totalAmount: true,
-          },
+        Order.sum("totalAmount", {
           where: {
             status: "DELIVERED",
             createdAt: {
-              gte: currentMonth,
-              lt: nextMonth,
+              [Op.gte]: currentMonth,
+              [Op.lt]: nextMonth,
             },
           },
         }),
 
         // Last month revenue
-        prisma.order.aggregate({
-          _sum: {
-            totalAmount: true,
-          },
+        Order.sum("totalAmount", {
           where: {
             status: "DELIVERED",
             createdAt: {
-              gte: lastMonth,
-              lt: currentMonth,
+              [Op.gte]: lastMonth,
+              [Op.lt]: currentMonth,
             },
           },
         }),
       ]);
 
-    const total = Number(totalRevenue._sum.totalAmount || 0);
-    const thisMonth = Number(thisMonthRevenue._sum.totalAmount || 0);
-    const lastMonthAmount = Number(lastMonthRevenue._sum.totalAmount || 0);
+    const total = Number(totalRevenue || 0);
+    const thisMonth = Number(thisMonthRevenue || 0);
+    const lastMonthAmount = Number(lastMonthRevenue || 0);
 
     // Calculate growth percentage
     const growth =
@@ -139,7 +140,9 @@ export const getRevenueData = async (req: Request, res: Response) => {
 export const getStatistics = async (req: Request, res: Response) => {
   try {
     const { period = "month" } = req.query;
+    console.log("Getting statistics for period:", period);
     const now = new Date();
+    console.log("Date range calculation starting...");
 
     // Date calculations
     const currentYear = new Date(now.getFullYear(), 0, 1);
@@ -173,6 +176,7 @@ export const getStatistics = async (req: Request, res: Response) => {
     };
 
     const dateRange = getDateRange(period as string);
+    console.log("Date range:", dateRange);
 
     // Get all statistics in parallel
     const [
@@ -203,221 +207,179 @@ export const getStatistics = async (req: Request, res: Response) => {
       revenueTrend,
     ] = await Promise.all([
       // Total products sold (all time)
-      prisma.orderItem.aggregate({
-        _sum: {
-          quantity: true,
-        },
-        where: {
-          order: {
-            status: "DELIVERED",
-          },
-        },
-      }),
+      sequelize
+        .query(
+          "SELECT COALESCE(SUM(oi.quantity), 0) as sum FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = ?",
+          { replacements: ["DELIVERED"], type: QueryTypes.SELECT, plain: true }
+        )
+        .then((result: any) => result?.sum || 0),
 
       // Current period sales
-      prisma.orderItem.aggregate({
-        _sum: {
-          quantity: true,
-        },
-        where: {
-          order: {
-            status: "DELIVERED",
-            createdAt: dateRange.current,
-          },
-        },
-      }),
+      sequelize
+        .query(
+          "SELECT COALESCE(SUM(oi.quantity), 0) as sum FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = ? AND o.created_at >= ?",
+          {
+            replacements: ["DELIVERED", dateRange.current.gte],
+            type: QueryTypes.SELECT,
+            plain: true,
+          }
+        )
+        .then((result: any) => result?.sum || 0),
 
       // Last period sales
-      prisma.orderItem.aggregate({
-        _sum: {
-          quantity: true,
-        },
-        where: {
-          order: {
-            status: "DELIVERED",
-            createdAt: dateRange.last,
-          },
-        },
-      }),
+      sequelize
+        .query(
+          "SELECT COALESCE(SUM(oi.quantity), 0) as sum FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = ? AND o.created_at >= ? AND o.created_at < ?",
+          {
+            replacements: ["DELIVERED", dateRange.last.gte, dateRange.last.lt],
+            type: QueryTypes.SELECT,
+            plain: true,
+          }
+        )
+        .then((result: any) => result?.sum || 0),
 
       // Total revenue
-      prisma.order.aggregate({
-        _sum: {
-          totalAmount: true,
-        },
+      Order.sum("totalAmount", {
         where: {
           status: "DELIVERED",
         },
       }),
 
       // Current period revenue
-      prisma.order.aggregate({
-        _sum: {
-          totalAmount: true,
-        },
+      Order.sum("totalAmount", {
         where: {
           status: "DELIVERED",
-          createdAt: dateRange.current,
+          createdAt: {
+            [Op.gte]: dateRange.current.gte,
+          },
         },
       }),
 
       // Last period revenue
-      prisma.order.aggregate({
-        _sum: {
-          totalAmount: true,
-        },
+      Order.sum("totalAmount", {
         where: {
           status: "DELIVERED",
-          createdAt: dateRange.last,
+          createdAt: {
+            [Op.gte]: dateRange.last.gte,
+            [Op.lt]: dateRange.last.lt,
+          },
         },
       }),
 
       // Top selling products
-      prisma.orderItem.groupBy({
-        by: ["productId"],
-        _sum: {
-          quantity: true,
-        },
-        where: {
-          order: {
-            status: "DELIVERED",
-          },
-        },
-        orderBy: {
-          _sum: {
-            quantity: "desc",
-          },
-        },
-        take: 10,
-      }),
+      sequelize.query(
+        `SELECT 
+          oi.product_id as "productId",
+          SUM(oi.quantity) as "totalQuantity"
+        FROM order_items oi 
+        INNER JOIN orders o ON oi.order_id = o.id 
+        WHERE o.status = 'DELIVERED' 
+        GROUP BY oi.product_id 
+        ORDER BY SUM(oi.quantity) DESC 
+        LIMIT 10`,
+        { type: QueryTypes.SELECT }
+      ),
 
       // Top customers by total spent
-      prisma.order.groupBy({
-        by: ["customerId"],
-        _sum: {
-          totalAmount: true,
-        },
-        where: {
-          status: "DELIVERED",
-        },
-        orderBy: {
-          _sum: {
-            totalAmount: "desc",
-          },
-        },
-        take: 10,
-      }),
+      sequelize.query(
+        `SELECT 
+          customer_id as "customerId",
+          SUM(total_amount) as "totalSpent"
+        FROM orders 
+        WHERE status = 'DELIVERED' 
+        GROUP BY customer_id 
+        ORDER BY SUM(total_amount) DESC 
+        LIMIT 10`,
+        { type: QueryTypes.SELECT }
+      ),
 
       // Current period orders count
-      prisma.order.count({
+      Order.count({
         where: {
           status: "DELIVERED",
-          createdAt: dateRange.current,
+          createdAt: {
+            [Op.gte]: dateRange.current.gte,
+          },
         },
       }),
 
       // Last period orders count
-      prisma.order.count({
+      Order.count({
         where: {
           status: "DELIVERED",
-          createdAt: dateRange.last,
+          createdAt: {
+            [Op.gte]: dateRange.last.gte,
+            [Op.lt]: dateRange.last.lt,
+          },
         },
       }),
 
       // Low stock products (stock <= 1)
-      prisma.product.findMany({
+      Product.findAll({
         where: {
           isActive: true,
           isDeleted: false,
           stockQuantity: {
-            lte: 1,
+            [Op.lte]: 1,
           },
         },
-        select: {
-          id: true,
-          name: true,
-          stockQuantity: true,
-          capacity: {
-            select: {
-              name: true,
-            },
+        attributes: ["id", "name", "stockQuantity"],
+        include: [
+          {
+            association: "capacity",
+            attributes: ["name"],
           },
-        },
-        orderBy: {
-          stockQuantity: "asc",
-        },
-        take: 20,
+        ],
+        order: [["stockQuantity", "ASC"]],
+        limit: 20,
       }),
 
-      // Revenue trend for the last 12 periods
-      period === "year"
-        ? prisma.$queryRaw`
-            SELECT
-              DATE_TRUNC('year', created_at) as period,
-              SUM(total_amount) as revenue
-            FROM orders
-            WHERE status = 'DELIVERED'
-              AND created_at >= NOW() - INTERVAL '12 years'
-            GROUP BY DATE_TRUNC('year', created_at)
-            ORDER BY period ASC
-          `
-        : period === "week"
-          ? prisma.$queryRaw`
-            SELECT
-              DATE_TRUNC('week', created_at) as period,
-              SUM(total_amount) as revenue
-            FROM orders
-            WHERE status = 'DELIVERED'
-              AND created_at >= NOW() - INTERVAL '12 weeks'
-            GROUP BY DATE_TRUNC('week', created_at)
-            ORDER BY period ASC
-          `
-          : prisma.$queryRaw`
-            SELECT
-              DATE_TRUNC('month', created_at) as period,
-              SUM(total_amount) as revenue
-            FROM orders
-            WHERE status = 'DELIVERED'
-              AND created_at >= NOW() - INTERVAL '12 months'
-            GROUP BY DATE_TRUNC('month', created_at)
-            ORDER BY period ASC
-          `,
+      // Revenue trend - simple query compatible with both PostgreSQL and MySQL
+      sequelize.query(
+        `SELECT 
+          DATE(created_at) as period,
+          SUM(total_amount) as revenue
+        FROM orders 
+        WHERE status = 'DELIVERED' 
+          AND created_at >= ?
+        GROUP BY DATE(created_at)
+        ORDER BY period ASC
+        LIMIT 30`,
+        {
+          replacements: [dateRange.current.gte],
+          type: QueryTypes.SELECT,
+        }
+      ),
     ]);
 
     // Get product details for top selling products
     const topProductsDetails = await Promise.all(
-      topSellingProducts.map(async (item) => {
-        const product = await prisma.product.findUnique({
+      (topSellingProducts as any[]).map(async (item: any) => {
+        const product = await Product.findOne({
           where: { id: item.productId },
-          select: {
-            id: true,
-            name: true,
-            capacity: {
-              select: { name: true },
+          attributes: ["id", "name"],
+          include: [
+            {
+              association: "capacity",
+              attributes: ["name"],
             },
-          },
+          ],
         });
         return {
           id: item.productId,
           name: product?.name || "Unknown",
           capacity: product?.capacity?.name || "Unknown",
-          totalSold: item._sum.quantity || 0,
+          totalSold: item.totalQuantity || 0,
         };
       })
     );
 
     // Get customer details for top customers
     const topCustomersDetails = await Promise.all(
-      topCustomers.map(async (item) => {
-        const customer = await prisma.customer.findUnique({
+      (topCustomers as TopCustomerQueryResult[]).map(async (item) => {
+        const customer = await Customer.findOne({
           where: { id: item.customerId },
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            messengerId: true,
-            zaloId: true,
-          },
+          attributes: ["id", "fullName", "phone", "messengerId", "zaloId"],
         });
         return {
           id: item.customerId,
@@ -425,29 +387,28 @@ export const getStatistics = async (req: Request, res: Response) => {
           phone: customer?.phone || "Unknown",
           messengerId: customer?.messengerId || null,
           zaloId: customer?.zaloId || null,
-          totalSpent: Number(item._sum.totalAmount || 0),
+          totalSpent: Number((item as any).totalSpent || 0),
         };
       })
     );
 
     // Calculate growth percentages
     const salesGrowth =
-      (lastPeriodSales._sum.quantity || 0) > 0
-        ? (((currentPeriodSales._sum.quantity || 0) -
-            (lastPeriodSales._sum.quantity || 0)) /
-            (lastPeriodSales._sum.quantity || 1)) *
+      (lastPeriodSales || 0) > 0
+        ? (((currentPeriodSales || 0) - (lastPeriodSales || 0)) /
+            (lastPeriodSales || 1)) *
           100
-        : (currentPeriodSales._sum.quantity || 0) > 0
+        : (currentPeriodSales || 0) > 0
           ? 100
           : 0;
 
     const revenueGrowth =
-      Number(lastPeriodRevenue._sum.totalAmount || 0) > 0
-        ? ((Number(currentPeriodRevenue._sum.totalAmount || 0) -
-            Number(lastPeriodRevenue._sum.totalAmount || 0)) /
-            Number(lastPeriodRevenue._sum.totalAmount || 1)) *
+      Number(lastPeriodRevenue || 0) > 0
+        ? ((Number(currentPeriodRevenue || 0) -
+            Number(lastPeriodRevenue || 0)) /
+            Number(lastPeriodRevenue || 1)) *
           100
-        : Number(currentPeriodRevenue._sum.totalAmount || 0) > 0
+        : Number(currentPeriodRevenue || 0) > 0
           ? 100
           : 0;
 
@@ -461,12 +422,10 @@ export const getStatistics = async (req: Request, res: Response) => {
     const statistics = {
       period,
       overview: {
-        totalProductsSold: totalSoldProducts._sum.quantity || 0,
-        totalRevenue: Number(totalRevenue._sum.totalAmount || 0),
-        currentPeriodSales: currentPeriodSales._sum.quantity || 0,
-        currentPeriodRevenue: Number(
-          currentPeriodRevenue._sum.totalAmount || 0
-        ),
+        totalProductsSold: Number(totalSoldProducts || 0),
+        totalRevenue: Number(totalRevenue || 0),
+        currentPeriodSales: Number(currentPeriodSales || 0),
+        currentPeriodRevenue: Number(currentPeriodRevenue || 0),
         currentPeriodOrders: currentPeriodOrders,
         salesGrowth: Math.round(salesGrowth * 10) / 10,
         revenueGrowth: Math.round(revenueGrowth * 10) / 10,
@@ -481,13 +440,23 @@ export const getStatistics = async (req: Request, res: Response) => {
       })),
     };
 
+    console.log("Final statistics data:", {
+      period: statistics.period,
+      overviewKeys: Object.keys(statistics.overview),
+      topProductsCount: statistics.topSellingProducts.length,
+      topCustomersCount: statistics.topCustomers.length,
+      lowStockCount: statistics.lowStockProducts.length,
+      revenueTrendCount: statistics.revenueTrend.length,
+    });
     return res.status(200).json(ResponseHelper.success(statistics));
   } catch (error) {
     console.error("Get statistics error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error("Failed to get statistics", "GET_STATISTICS_ERROR")
-      );
+    console.error("Error stack:", (error as Error).stack);
+    return res.status(500).json(
+      ResponseHelper.error("Failed to get statistics", "GET_STATISTICS_ERROR", {
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+      })
+    );
   }
 };

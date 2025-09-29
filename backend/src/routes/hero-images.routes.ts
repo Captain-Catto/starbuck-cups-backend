@@ -9,7 +9,7 @@ import {
   reorderHeroImages,
   uploadMiddleware,
 } from "../controllers/hero-images.controller";
-import { authenticate } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -17,7 +17,7 @@ const router = Router();
 router.get("/public", getHeroImages);
 
 // Admin routes (require authentication)
-router.use(authenticate);
+router.use(authenticateWithAutoRefresh);
 
 router.get("/", getAdminHeroImages);
 router.get("/:id", getHeroImageById);

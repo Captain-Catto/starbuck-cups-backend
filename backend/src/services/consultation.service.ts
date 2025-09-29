@@ -1,20 +1,24 @@
-import { PrismaClient, ConsultationStatus } from "../generated/prisma";
+import { Consultation, ConsultationStatus } from "../models/Consultation";
+import { ConsultationItem } from "../models/ConsultationItem";
+import { Product } from "../models/Product";
+import { ProductImage } from "../models/ProductImage";
+import { sequelize } from "../config/database";
+import { Op } from "sequelize";
 
 export interface ConsultationCreateData {
   customer: {
     customerName: string;
     phoneNumber: string;
+    email?: string;
     address: string;
   };
   items: Array<{
     productId: string;
     productName: string;
-    quantity: number;
     color: string;
     capacity: string;
     category: string;
   }>;
-  totalItems: number;
   createdAt: string;
 }
 
@@ -27,25 +31,20 @@ export interface ConsultationFilters {
 }
 
 export class ConsultationService {
-  private prisma: PrismaClient;
-
-  constructor() {
-    this.prisma = new PrismaClient();
-  }
+  constructor() {}
 
   async createConsultation(data: ConsultationCreateData) {
     try {
+
       // Validate that all product IDs exist
       const productIds = data.items.map((item) => item.productId);
-      const existingProducts = await this.prisma.product.findMany({
+      const existingProducts = await Product.findAll({
         where: {
           id: {
-            in: productIds,
+            [Op.in]: productIds,
           },
         },
-        select: {
-          id: true,
-        },
+        attributes: ["id"],
       });
 
       const existingProductIds = existingProducts.map((p) => p.id);
@@ -57,30 +56,41 @@ export class ConsultationService {
         throw new Error(`Products not found: ${missingProductIds.join(", ")}`);
       }
 
-      // Create consultation with items
-      const consultation = await this.prisma.consultation.create({
-        data: {
-          customerName: data.customer.customerName,
-          phoneNumber: data.customer.phoneNumber,
-          address: data.customer.address,
-          totalItems: data.totalItems,
-          status: "PENDING",
-          createdAt: new Date(data.createdAt),
-          consultationItems: {
-            create: data.items.map((item) => ({
-              productId: item.productId,
-              productName: item.productName,
-              quantity: item.quantity,
-              color: item.color,
-              capacity: item.capacity,
-              category: item.category,
-            })),
-          },
-        },
-        include: {
-          consultationItems: true,
-        },
+      // Create consultation
+      const consultation = await Consultation.create({
+        customerName: data.customer.customerName,
+        phoneNumber: data.customer.phoneNumber,
+        email: data.customer.email,
+        address: data.customer.address,
+        status: ConsultationStatus.PENDING,
       });
+
+      // Create consultation items
+      const consultationItems = await Promise.all(
+        data.items.map((item) =>
+          ConsultationItem.create({
+            consultationId: consultation.id,
+            productId: item.productId,
+            productName: item.productName,
+            color: item.color,
+            capacity: item.capacity,
+            category: item.category,
+          })
+        )
+      );
+
+      // Return consultation with items
+      const consultationWithItems = await Consultation.findByPk(
+        consultation.id,
+        {
+          include: [
+            {
+              model: ConsultationItem,
+              as: "consultationItems",
+            },
+          ],
+        }
+      );
 
       return consultation;
     } catch (error) {
@@ -102,56 +112,52 @@ export class ConsultationService {
 
       // Date filtering
       if (dateFrom || dateTo) {
-        where.createdAt = {};
+        const dateFilter: any = {};
 
         if (dateFrom) {
           // Parse dateFrom and set to start of day
           const fromDate = new Date(dateFrom);
           fromDate.setHours(0, 0, 0, 0);
-          where.createdAt.gte = fromDate;
+          dateFilter[Op.gte] = fromDate;
         }
 
         if (dateTo) {
           // Parse dateTo and set to end of day
           const toDate = new Date(dateTo);
           toDate.setHours(23, 59, 59, 999);
-          where.createdAt.lte = toDate;
+          dateFilter[Op.lte] = toDate;
         }
+
+        where.createdAt = dateFilter;
       }
 
-      const [consultations, total] = await Promise.all([
-        this.prisma.consultation.findMany({
-          where,
-          include: {
-            consultationItems: {
-              include: {
-                product: {
-                  include: {
-                    productImages: {
-                      orderBy: { order: "asc" },
-                    },
-                    productCategories: {
-                      include: {
-                        category: true,
-                      },
-                    },
-                    productColors: {
-                      include: {
-                        color: true,
-                      },
-                    },
-                    capacity: true,
+      const result = await Consultation.findAndCountAll({
+        where,
+        include: [
+          {
+            model: ConsultationItem,
+            as: "consultationItems",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                include: [
+                  {
+                    model: ProductImage,
+                    as: "productImages",
                   },
-                },
+                ],
               },
-            },
+            ],
           },
-          orderBy: { createdAt: "desc" },
-          skip,
-          take: limit,
-        }),
-        this.prisma.consultation.count({ where }),
-      ]);
+        ],
+        order: [["createdAt", "DESC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const consultations = result.rows;
+      const total = result.count;
 
       const totalPages = Math.ceil(total / limit);
 
@@ -174,32 +180,20 @@ export class ConsultationService {
 
   async getConsultationById(id: string) {
     try {
-      const consultation = await this.prisma.consultation.findUnique({
-        where: { id },
-        include: {
-          consultationItems: {
-            include: {
-              product: {
-                include: {
-                  productImages: {
-                    orderBy: { order: "asc" },
-                  },
-                  productCategories: {
-                    include: {
-                      category: true,
-                    },
-                  },
-                  productColors: {
-                    include: {
-                      color: true,
-                    },
-                  },
-                  capacity: true,
-                },
+      const consultation = await Consultation.findByPk(id, {
+        include: [
+          {
+            model: ConsultationItem,
+            as: "consultationItems",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                // Note: Full product relations will need to be defined in Product model
               },
-            },
+            ],
           },
-        },
+        ],
       });
 
       return consultation;
@@ -215,37 +209,32 @@ export class ConsultationService {
     notes?: string
   ) {
     try {
-      const consultation = await this.prisma.consultation.update({
-        where: { id },
-        data: {
+      await Consultation.update(
+        {
           status,
           notes,
           updatedAt: new Date(),
         },
-        include: {
-          consultationItems: {
-            include: {
-              product: {
-                include: {
-                  productImages: {
-                    orderBy: { order: "asc" },
-                  },
-                  productCategories: {
-                    include: {
-                      category: true,
-                    },
-                  },
-                  productColors: {
-                    include: {
-                      color: true,
-                    },
-                  },
-                  capacity: true,
-                },
+        {
+          where: { id },
+        }
+      );
+
+      // Return updated consultation with relations
+      const consultation = await Consultation.findByPk(id, {
+        include: [
+          {
+            model: ConsultationItem,
+            as: "consultationItems",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                // Note: Full product relations will need to be defined in Product model
               },
-            },
+            ],
           },
-        },
+        ],
       });
 
       return consultation;
@@ -258,11 +247,11 @@ export class ConsultationService {
   async deleteConsultation(id: string) {
     try {
       // Delete consultation items first, then consultation
-      await this.prisma.consultationItem.deleteMany({
+      await ConsultationItem.destroy({
         where: { consultationId: id },
       });
 
-      await this.prisma.consultation.delete({
+      await Consultation.destroy({
         where: { id },
       });
 
@@ -275,8 +264,8 @@ export class ConsultationService {
 
   async getPendingConsultationsCount() {
     try {
-      const count = await this.prisma.consultation.count({
-        where: { status: "PENDING" },
+      const count = await Consultation.count({
+        where: { status: ConsultationStatus.PENDING },
       });
 
       return count;

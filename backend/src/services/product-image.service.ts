@@ -1,6 +1,5 @@
-import { PrismaClient } from "../generated/prisma";
-
-const prisma = new PrismaClient();
+import { ProductImage } from "../models/ProductImage";
+import { Product } from "../models/Product";
 
 export interface ProductImageData {
   url: string;
@@ -11,25 +10,31 @@ export class ProductImageService {
   /**
    * Create product images with order
    */
-  async createProductImages(productId: string, images: ProductImageData[]): Promise<void> {
+  async createProductImages(
+    productId: string,
+    images: ProductImageData[]
+  ): Promise<void> {
     // Sort by order to ensure correct sequence
     const sortedImages = images.sort((a, b) => a.order - b.order);
 
-    await prisma.productImage.createMany({
-      data: sortedImages.map(img => ({
+    await ProductImage.bulkCreate(
+      sortedImages.map((img) => ({
         productId,
         url: img.url,
         order: img.order,
-      })),
-    });
+      }))
+    );
   }
 
   /**
    * Update product images with new order
    */
-  async updateProductImages(productId: string, images: ProductImageData[]): Promise<void> {
+  async updateProductImages(
+    productId: string,
+    images: ProductImageData[]
+  ): Promise<void> {
     // Delete existing images
-    await prisma.productImage.deleteMany({
+    await ProductImage.destroy({
       where: { productId },
     });
 
@@ -43,13 +48,10 @@ export class ProductImageService {
    * Get product images ordered by order field
    */
   async getProductImages(productId: string): Promise<ProductImageData[]> {
-    const images = await prisma.productImage.findMany({
+    const images = await ProductImage.findAll({
       where: { productId },
-      orderBy: { order: 'asc' },
-      select: {
-        url: true,
-        order: true,
-      },
+      order: [["order", "ASC"]],
+      attributes: ["url", "order"],
     });
 
     return images;
@@ -59,7 +61,7 @@ export class ProductImageService {
    * Delete product images
    */
   async deleteProductImages(productId: string): Promise<void> {
-    await prisma.productImage.deleteMany({
+    await ProductImage.destroy({
       where: { productId },
     });
   }
@@ -67,9 +69,12 @@ export class ProductImageService {
   /**
    * Migrate existing JSON images to ProductImage table
    */
-  async migrateFromJsonImages(productId: string, jsonImages: string[]): Promise<void> {
+  async migrateFromJsonImages(
+    productId: string,
+    jsonImages: string[]
+  ): Promise<void> {
     // Check if already migrated
-    const existingCount = await prisma.productImage.count({
+    const existingCount = await ProductImage.count({
       where: { productId },
     });
 
@@ -94,7 +99,7 @@ export class ProductImageService {
     const productImages = await this.getProductImages(productId);
 
     if (productImages.length > 0) {
-      return productImages.map(img => img.url);
+      return productImages.map((img) => img.url);
     }
 
     // No legacy images field anymore since we've migrated to ProductImage table

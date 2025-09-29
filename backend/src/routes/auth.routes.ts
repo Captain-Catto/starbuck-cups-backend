@@ -15,7 +15,7 @@ import {
   adminLogout,
   adminSessionCheck,
 } from "../controllers/auth.controller";
-import { authenticate, rateLimitAuth, authenticateWithAutoRefresh } from "../middleware/auth.middleware";
+import { rateLimitAuth, authenticateWithAutoRefresh } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -189,7 +189,7 @@ router.post("/refresh", refreshToken);
  *       401:
  *         description: Authentication required
  */
-router.post("/logout", authenticate, logout);
+router.post("/logout", authenticateWithAutoRefresh, logout);
 
 /**
  * @swagger
@@ -231,7 +231,7 @@ router.post("/logout", authenticate, logout);
  *       404:
  *         description: User not found
  */
-router.get("/profile", authenticate, getProfile);
+router.get("/profile", authenticateWithAutoRefresh, getProfile);
 
 /**
  * @swagger
@@ -272,7 +272,7 @@ router.get("/profile", authenticate, getProfile);
  *       404:
  *         description: User not found
  */
-router.get("/verify", authenticate, verifyToken);
+router.get("/verify", authenticateWithAutoRefresh, verifyToken);
 
 /**
  * @swagger
@@ -298,7 +298,7 @@ router.get("/verify", authenticate, verifyToken);
  *       404:
  *         description: User not found
  */
-router.post("/change-password", authenticate, changePassword);
+router.post("/change-password", authenticateWithAutoRefresh, changePassword);
 
 // ===========================
 // ADMIN-SPECIFIC ROUTES
@@ -334,7 +334,7 @@ router.post("/change-password", authenticate, changePassword);
  *       401:
  *         description: Invalid or expired token
  */
-router.get("/admin/verify", authenticate, adminVerifyToken);
+router.get("/admin/verify", authenticateWithAutoRefresh, adminVerifyToken);
 
 /**
  * @swagger
@@ -386,7 +386,7 @@ router.post("/admin/refresh", adminRefreshToken);
  *       401:
  *         description: Authentication required
  */
-router.post("/admin/logout", authenticate, adminLogout);
+router.post("/admin/logout", authenticateWithAutoRefresh, adminLogout);
 
 /**
  * @swagger

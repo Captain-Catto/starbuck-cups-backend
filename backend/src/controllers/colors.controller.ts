@@ -3,12 +3,14 @@
  * Handles CRUD operations for color entities
  */
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
+import { models } from "../models";
+
+const { Color, AdminUser, ProductColor, Product } = models;
+
 import { ResponseHelper } from "../types/api";
 import { z } from "zod";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
-
-const prisma = new PrismaClient();
+import { Op } from "sequelize";
 
 // Validation schemas
 const createColorSchema = z.object({
@@ -49,6 +51,16 @@ const createColorSchema = z.object({
 
 const updateColorSchema = createColorSchema.partial();
 
+// Query validation schema
+const getColorsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  isActive: z.enum(["true", "false", "all"]).default("all"),
+  sortBy: z.enum(["name", "createdAt", "updatedAt"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+});
+
 const querySchema = z.object({
   page: z.string().transform(Number).pipe(z.number().min(1)).optional(),
   limit: z
@@ -66,71 +78,51 @@ const querySchema = z.object({
 });
 
 /**
- * Get all colors with pagination and filters
+ * Get all colors with pagination and filtering
  */
 export const getColors = async (req: Request, res: Response) => {
   try {
-    // Validate query parameters
-    const queryValidation = querySchema.safeParse(req.query);
-    if (!queryValidation.success) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Invalid query parameters",
-            "VALIDATION_ERROR",
-            queryValidation.error.issues
-          )
-        );
-    }
-
+    const query = getColorsQuerySchema.parse(req.query);
     const {
-      page = 1,
-      limit = 20,
+      page,
+      limit,
       search,
       isActive,
       sortBy = "createdAt",
-      sortOrder = "desc",
-    } = queryValidation.data;
+      sortOrder,
+    } = query;
 
     const offset = (page - 1) * limit;
 
-    // Build where clause
+    // Build where conditions
     const where: any = {};
+
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { slug: { contains: search, mode: "insensitive" } },
-        { hexCode: { contains: search, mode: "insensitive" } },
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { slug: { [Op.like]: `%${search}%` } },
+        { hexCode: { [Op.like]: `%${search}%` } },
       ];
     }
-    if (isActive !== undefined) {
-      where.isActive = isActive;
+
+    if (isActive !== "all") {
+      where.isActive = isActive === "true";
     }
 
-    // Get total count and colors
-    const [total, colors] = await Promise.all([
-      prisma.color.count({ where }),
-      prisma.color.findMany({
-        where,
-        skip: offset,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          createdByAdmin: {
-            select: {
-              username: true,
-              email: true,
-            },
-          },
-          _count: {
-            select: {
-              productColors: true,
-            },
-          },
+    // Get total count and colors (simplified version without subquery)
+    const { count: total, rows: colors } = await Color.findAndCountAll({
+      where,
+      offset,
+      limit,
+      order: [[sortBy, sortOrder.toUpperCase()]],
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
         },
-      }),
-    ]);
+      ],
+    });
 
     const totalPages = Math.ceil(total / limit);
 
@@ -155,27 +147,111 @@ export const getColors = async (req: Request, res: Response) => {
 };
 
 /**
+ * Get all colors for admin with product counts
+ */
+export const getColorsForAdmin = async (req: Request, res: Response) => {
+  try {
+    const query = getColorsQuerySchema.parse(req.query);
+    const {
+      page,
+      limit,
+      search,
+      isActive,
+      sortBy = "createdAt",
+      sortOrder,
+    } = query;
+
+    const offset = (page - 1) * limit;
+
+    // Build where conditions
+    const where: any = {};
+
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { slug: { [Op.like]: `%${search}%` } },
+        { hexCode: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    if (isActive !== "all") {
+      where.isActive = isActive === "true";
+    }
+
+    // Get total count and colors with product counts
+    const { count: total, rows: colors } = await Color.findAndCountAll({
+      where,
+      offset,
+      limit,
+      order: [[sortBy, sortOrder.toUpperCase()]],
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
+        },
+        {
+          model: ProductColor,
+          as: "productColors",
+          attributes: ["id"],
+        },
+      ],
+      distinct: true,
+    });
+
+    // Transform the data to match expected format
+    const transformedColors = colors.map((color: any) => ({
+      ...color.toJSON(),
+      _count: {
+        productColors: color.productColors ? color.productColors.length : 0,
+      },
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json(
+      ResponseHelper.paginated(transformedColors, {
+        current_page: page,
+        per_page: limit,
+        total_pages: totalPages,
+        total_items: total,
+        has_next: page < totalPages,
+        has_prev: page > 1,
+      })
+    );
+  } catch (error) {
+    console.error("Get colors for admin error:", error);
+    return res
+      .status(500)
+      .json(
+        ResponseHelper.error(
+          "Failed to retrieve colors for admin",
+          "GET_COLORS_ADMIN_ERROR"
+        )
+      );
+  }
+};
+
+/**
  * Get color by ID
  */
 export const getColorById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const color = await prisma.color.findUnique({
-      where: { id },
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
+    const color = await Color.findByPk(id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
         },
-        _count: {
-          select: {
-            productColors: true,
-          },
+        {
+          model: ProductColor,
+          as: "productColors",
+          attributes: ["id"],
         },
-      },
+      ],
     });
 
     if (!color) {
@@ -184,7 +260,15 @@ export const getColorById = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Color not found", "COLOR_NOT_FOUND"));
     }
 
-    return res.status(200).json(ResponseHelper.success(color));
+    // Transform the data to include product count
+    const transformedColor = {
+      ...color.toJSON(),
+      _count: {
+        productColors: color.productColors ? color.productColors.length : 0,
+      },
+    };
+
+    return res.status(200).json(ResponseHelper.success(transformedColor));
   } catch (error) {
     console.error("Get color error:", error);
     return res
@@ -206,7 +290,6 @@ export const createColor = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
     }
 
-    // Validate input
     const validationResult = createColorSchema.safeParse(req.body);
     if (!validationResult.success) {
       return res
@@ -225,60 +308,59 @@ export const createColor = async (req: Request, res: Response) => {
     // Generate slug if not provided
     const finalSlug = slug || generateVietnameseSlug(name);
 
-    // Check for duplicate name, slug, or hex code
-    const existingColor = await prisma.color.findFirst({
-      where: {
-        OR: [
-          { name: { equals: name, mode: "insensitive" } },
-          { slug: { equals: finalSlug, mode: "insensitive" } },
-          { hexCode: { equals: hexCode, mode: "insensitive" } },
-        ],
-      },
+    // Check if slug already exists
+    const existingSlug = await Color.findOne({
+      where: { slug: finalSlug },
     });
 
-    if (existingColor) {
-      let duplicateField = "hex code";
-      if (existingColor.name.toLowerCase() === name.toLowerCase()) {
-        duplicateField = "name";
-      } else if (
-        existingColor.slug?.toLowerCase() === finalSlug.toLowerCase()
-      ) {
-        duplicateField = "slug";
-      }
+    if (existingSlug) {
       return res
         .status(409)
         .json(
           ResponseHelper.error(
-            `Color with this ${duplicateField} already exists`,
-            "DUPLICATE_COLOR"
+            "Color with this slug already exists",
+            "SLUG_EXISTS"
+          )
+        );
+    }
+
+    // Check if hex code already exists
+    const existingHexCode = await Color.findOne({
+      where: { hexCode },
+    });
+
+    if (existingHexCode) {
+      return res
+        .status(409)
+        .json(
+          ResponseHelper.error(
+            "Color with this hex code already exists",
+            "HEX_CODE_EXISTS"
           )
         );
     }
 
     // Create color
-    const color = await prisma.color.create({
-      data: {
-        name: name.trim(),
-        slug: finalSlug,
-        hexCode: hexCode.toUpperCase(),
-        createdByAdminId: req.user.userId,
-      },
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
-        },
-        _count: {
-          select: {
-            productColors: true,
-          },
-        },
-      },
+    const color = await Color.create({
+      name,
+      slug: finalSlug,
+      hexCode,
+      isActive: true,
+      createdByAdminId: req.user.userId,
     });
 
-    return res.status(201).json(ResponseHelper.success(color));
+    // Fetch created color with admin details
+    const createdColor = await Color.findByPk(color.id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
+        },
+      ],
+    });
+
+    return res.status(201).json(ResponseHelper.success(createdColor));
   } catch (error) {
     console.error("Create color error:", error);
     return res
@@ -302,18 +384,6 @@ export const updateColor = async (req: Request, res: Response) => {
 
     const { id } = req.params;
 
-    // Check if color exists
-    const existingColor = await prisma.color.findUnique({
-      where: { id },
-    });
-
-    if (!existingColor) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("Color not found", "COLOR_NOT_FOUND"));
-    }
-
-    // Validate input
     const validationResult = updateColorSchema.safeParse(req.body);
     if (!validationResult.success) {
       return res
@@ -327,90 +397,75 @@ export const updateColor = async (req: Request, res: Response) => {
         );
     }
 
+    // Check if color exists
+    const existingColor = await Color.findByPk(id);
+    if (!existingColor) {
+      return res
+        .status(404)
+        .json(ResponseHelper.error("Color not found", "COLOR_NOT_FOUND"));
+    }
+
     const updateData = validationResult.data;
 
-    // Check for duplicates if name, slug, or hexCode is being updated
-    if (updateData.name || updateData.slug || updateData.hexCode) {
-      const duplicateWhere: any = {
-        id: { not: id },
-        OR: [],
-      };
+    // Generate slug if name is being updated and slug is not provided
+    if (updateData.name && !updateData.slug) {
+      updateData.slug = generateVietnameseSlug(updateData.name);
+    }
 
-      if (updateData.name) {
-        duplicateWhere.OR.push({
-          name: { equals: updateData.name, mode: "insensitive" },
-        });
-      }
-      if (updateData.slug) {
-        duplicateWhere.OR.push({
-          slug: { equals: updateData.slug, mode: "insensitive" },
-        });
-      }
-      if (updateData.hexCode) {
-        duplicateWhere.OR.push({
-          hexCode: { equals: updateData.hexCode, mode: "insensitive" },
-        });
-      }
-
-      const duplicateColor = await prisma.color.findFirst({
-        where: duplicateWhere,
+    // Check for slug conflicts (excluding current color)
+    if (updateData.slug) {
+      const existingSlug = await Color.findOne({
+        where: {
+          slug: updateData.slug,
+          id: { [Op.ne]: id },
+        },
       });
 
-      if (duplicateColor) {
-        let duplicateField = "hex code";
-        if (
-          duplicateColor.name.toLowerCase() === updateData.name?.toLowerCase()
-        ) {
-          duplicateField = "name";
-        } else if (
-          duplicateColor.slug?.toLowerCase() === updateData.slug?.toLowerCase()
-        ) {
-          duplicateField = "slug";
-        }
+      if (existingSlug) {
         return res
           .status(409)
           .json(
             ResponseHelper.error(
-              `Color with this ${duplicateField} already exists`,
-              "DUPLICATE_COLOR"
+              "Color with this slug already exists",
+              "SLUG_EXISTS"
             )
           );
       }
     }
 
-    // Prepare update data
-    const processedUpdateData: any = {};
-    if (updateData.name) {
-      processedUpdateData.name = updateData.name.trim();
-      // Auto-generate slug from name if slug not provided
-      if (!updateData.slug) {
-        processedUpdateData.slug = generateVietnameseSlug(updateData.name);
-      }
-    }
-    if (updateData.slug) {
-      processedUpdateData.slug = updateData.slug.trim();
-    }
+    // Check for hex code conflicts (excluding current color)
     if (updateData.hexCode) {
-      processedUpdateData.hexCode = updateData.hexCode.toUpperCase();
+      const existingHexCode = await Color.findOne({
+        where: {
+          hexCode: updateData.hexCode,
+          id: { [Op.ne]: id },
+        },
+      });
+
+      if (existingHexCode) {
+        return res
+          .status(409)
+          .json(
+            ResponseHelper.error(
+              "Color with this hex code already exists",
+              "HEX_CODE_EXISTS"
+            )
+          );
+      }
     }
 
     // Update color
-    const updatedColor = await prisma.color.update({
-      where: { id },
-      data: processedUpdateData,
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
+    await existingColor.update(updateData);
+
+    // Fetch updated color with admin details
+    const updatedColor = await Color.findByPk(id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
         },
-        _count: {
-          select: {
-            productColors: true,
-          },
-        },
-      },
+      ],
     });
 
     return res.status(200).json(ResponseHelper.success(updatedColor));
@@ -425,120 +480,61 @@ export const updateColor = async (req: Request, res: Response) => {
 };
 
 /**
- * Toggle color active status
- */
-export const toggleColorStatus = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    const color = await prisma.color.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            productColors: true,
-          },
-        },
-      },
-    });
-
-    if (!color) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("Color not found", "COLOR_NOT_FOUND"));
-    }
-
-    // Allow deactivating colors even when in use (products keep their color reference)
-    // Note: Deactivated colors won't appear in new product creation but existing products retain their color
-    // if (color.isActive && color._count.productColors > 0) {
-    //   return res
-    //     .status(409)
-    //     .json(
-    //       ResponseHelper.error(
-    //         `Cannot deactivate color that is used by ${color._count.productColors} product(s)`,
-    //         "COLOR_IN_USE"
-    //       )
-    //     );
-    // }
-
-    const updatedColor = await prisma.color.update({
-      where: { id },
-      data: { isActive: !color.isActive },
-      include: {
-        createdByAdmin: {
-          select: {
-            username: true,
-            email: true,
-          },
-        },
-        _count: {
-          select: {
-            productColors: true,
-          },
-        },
-      },
-    });
-
-    return res.status(200).json(ResponseHelper.success(updatedColor));
-  } catch (error) {
-    console.error("Toggle color status error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error(
-          "Failed to toggle color status",
-          "TOGGLE_COLOR_ERROR"
-        )
-      );
-  }
-};
-
-/**
- * Delete color (soft delete if in use)
+ * Delete color (soft delete)
  */
 export const deleteColor = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+    }
+
     const { id } = req.params;
 
-    const color = await prisma.color.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            productColors: true,
-          },
-        },
-      },
-    });
-
+    const color = await Color.findByPk(id);
     if (!color) {
       return res
         .status(404)
         .json(ResponseHelper.error("Color not found", "COLOR_NOT_FOUND"));
     }
 
-    // Check if color is in use
-    if (color._count.productColors > 0) {
+    // Check if color is being used in any products
+    const productColorCount = await ProductColor.count({
+      where: { colorId: id },
+    });
+
+    console.log(`Color ${id} is used by ${productColorCount} products`);
+
+    // Also check with raw query to be sure
+    const [rawCount] =
+      (await ProductColor.sequelize?.query(
+        "SELECT COUNT(*) as count FROM product_colors WHERE color_id = $1",
+        {
+          bind: [id],
+        }
+      )) || [];
+    console.log(`Raw count for color ${id}:`, rawCount);
+
+    if (productColorCount > 0) {
       return res
         .status(409)
         .json(
           ResponseHelper.error(
-            `Cannot delete color that is used by ${color._count.productColors} product(s). Consider deactivating instead.`,
+            "Cannot delete color that is being used by products",
             "COLOR_IN_USE"
           )
         );
     }
 
-    // Delete color
-    await prisma.color.delete({
-      where: { id },
-    });
+    // Hard delete if no products are using this color
+    console.log(`Deleting color ${id}...`);
+    await color.destroy();
+    console.log(`Color ${id} deleted successfully`);
 
     return res
       .status(200)
-      .json(
-        ResponseHelper.success(null, { message: "Color deleted successfully" })
-      );
+      .json(ResponseHelper.success({ message: "Color deleted successfully" }));
   } catch (error) {
     console.error("Delete color error:", error);
     return res
@@ -550,7 +546,84 @@ export const deleteColor = async (req: Request, res: Response) => {
 };
 
 /**
- * Search colors for autocomplete
+ * Toggle color active status
+ */
+export const toggleColorStatus = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+    }
+
+    const { id } = req.params;
+
+    const color = await Color.findByPk(id);
+    if (!color) {
+      return res
+        .status(404)
+        .json(ResponseHelper.error("Color not found", "COLOR_NOT_FOUND"));
+    }
+
+    // Toggle active status
+    await color.update({
+      isActive: !color.isActive,
+    });
+
+    // Fetch updated color with admin details
+    const updatedColor = await Color.findByPk(id, {
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
+        },
+      ],
+    });
+
+    return res.status(200).json(ResponseHelper.success(updatedColor));
+  } catch (error) {
+    console.error("Toggle color status error:", error);
+    return res
+      .status(500)
+      .json(
+        ResponseHelper.error(
+          "Failed to toggle color status",
+          "TOGGLE_COLOR_STATUS_ERROR"
+        )
+      );
+  }
+};
+
+/**
+ * Get active colors for public use
+ */
+export const getActiveColors = async (req: Request, res: Response) => {
+  try {
+    const colors = await Color.findAll({
+      where: {
+        isActive: true,
+      },
+      order: [["name", "ASC"]],
+      attributes: ["id", "name", "slug", "hexCode"],
+    });
+
+    return res.status(200).json(ResponseHelper.success(colors));
+  } catch (error) {
+    console.error("Get active colors error:", error);
+    return res
+      .status(500)
+      .json(
+        ResponseHelper.error(
+          "Failed to retrieve active colors",
+          "GET_ACTIVE_COLORS_ERROR"
+        )
+      );
+  }
+};
+
+/**
+ * Search colors by query string
  */
 export const searchColors = async (req: Request, res: Response) => {
   try {
@@ -560,24 +633,19 @@ export const searchColors = async (req: Request, res: Response) => {
       isActive: active === "true",
     };
 
-    if (query) {
-      where.OR = [
-        { name: { contains: query as string, mode: "insensitive" } },
-        { slug: { contains: query as string, mode: "insensitive" } },
-        { hexCode: { contains: query as string, mode: "insensitive" } },
+    if (query && typeof query === "string") {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${query}%` } },
+        { slug: { [Op.like]: `%${query}%` } },
+        { hexCode: { [Op.like]: `%${query}%` } },
       ];
     }
 
-    const colors = await prisma.color.findMany({
+    const colors = await Color.findAll({
       where,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        hexCode: true,
-      },
-      orderBy: { name: "asc" },
-      take: 50,
+      attributes: ["id", "name", "slug", "hexCode"],
+      order: [["name", "ASC"]],
+      limit: 50,
     });
 
     return res.status(200).json(ResponseHelper.success(colors));
@@ -596,10 +664,6 @@ export const searchColors = async (req: Request, res: Response) => {
 // ============================================================================
 
 /**
- * Get colors for public view (customers)
- * Only returns active colors
- */
-/**
  * Get color by ID or slug for public view
  */
 export const getPublicColorById = async (req: Request, res: Response) => {
@@ -613,38 +677,44 @@ export const getPublicColorById = async (req: Request, res: Response) => {
       );
 
     // Build the where clause based on whether it's a UUID or slug
-    const whereClause = isUUID
-      ? {
-          OR: [{ id: id }, { slug: id }],
-          isActive: true,
-        }
-      : {
-          slug: id,
-          isActive: true,
-        };
+    const where: any = {
+      isActive: true,
+    };
 
-    const color = await prisma.color.findFirst({
-      where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        hexCode: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            productColors: {
-              where: {
-                product: {
-                  isActive: true,
-                },
-              },
+    if (isUUID) {
+      where[Op.or] = [{ id: id }, { slug: id }];
+    } else {
+      where.slug = id;
+    }
+
+    const color = await Color.findOne({
+      where,
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "hexCode",
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        {
+          model: ProductColor,
+          as: "productColors",
+          attributes: [],
+          include: [
+            {
+              model: Product,
+              as: "product",
+              where: { isActive: true },
+              attributes: [],
+              required: false,
             },
-          },
+          ],
+          required: false,
         },
-      },
+      ],
     });
 
     if (!color) {
@@ -667,6 +737,10 @@ export const getPublicColorById = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Get colors for public view (customers)
+ * Only returns active colors
+ */
 export const getPublicColors = async (req: Request, res: Response) => {
   try {
     const validation = querySchema.safeParse(req.query);
@@ -698,44 +772,46 @@ export const getPublicColors = async (req: Request, res: Response) => {
 
     if (search) {
       where.name = {
-        contains: search,
-        mode: "insensitive",
+        [Op.like]: `%${search}%`,
       };
     }
 
-    // Build orderBy
-    const orderBy: any = {};
-    orderBy[sortBy] = sortOrder;
+    // Build order
+    const orderField = sortBy === "createdAt" ? "createdAt" : "name";
+    const orderDirection = sortOrder.toUpperCase() as "ASC" | "DESC";
 
-    const [items, totalItems] = await Promise.all([
-      prisma.color.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          hexCode: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          _count: {
-            select: {
-              productColors: {
-                where: {
-                  product: {
-                    isActive: true,
-                  },
-                },
-              },
+    const { count: totalItems, rows: items } = await Color.findAndCountAll({
+      where,
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "hexCode",
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        {
+          model: ProductColor,
+          as: "productColors",
+          attributes: [],
+          include: [
+            {
+              model: Product,
+              as: "product",
+              where: { isActive: true },
+              attributes: [],
+              required: false,
             },
-          },
+          ],
+          required: false,
         },
-        orderBy,
-        skip: offset,
-        take: limit,
-      }),
-      prisma.color.count({ where }),
-    ]);
+      ],
+      order: [[orderField, orderDirection]],
+      offset,
+      limit,
+    });
 
     const totalPages = Math.ceil(totalItems / limit);
 

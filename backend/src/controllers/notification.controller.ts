@@ -1,8 +1,15 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
-import { ResponseHelper } from "../types/api";
+import { models } from "../models";
+import { ConsultationStatus } from "../models/Consultation";
+import { OrderStatus } from "../models/Order";
 
-const prisma = new PrismaClient();
+const { Order, Consultation, Customer, Product, ConsultationItem } = models;
+
+
+
+
+
+import { ResponseHelper } from "../types/api";
 
 /**
  * Get notifications for admin users
@@ -17,36 +24,34 @@ export const getNotifications = async (req: Request, res: Response) => {
 
     // Get recent consultations as notifications
     if (!type || type === 'consultation') {
-      const consultations = await prisma.consultation.findMany({
-        include: {
-          consultationItems: {
-            include: {
-              product: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        take: Number(limit),
-        skip: type === 'consultation' ? skip : 0
+      const consultations = await Consultation.findAll({
+        include: [{
+          model: ConsultationItem,
+          as: 'consultationItems'
+        }],
+        order: [['createdAt', 'DESC']],
+        limit: Number(limit),
+        offset: type === 'consultation' ? skip : 0
       });
 
-      const consultationNotifications = consultations.map(consultation => ({
-        id: `consultation_${consultation.id}`,
-        type: 'consultation',
-        title: 'Tư vấn mới',
-        message: `${consultation.customerName} đã gửi yêu cầu tư vấn về ${consultation.totalItems} sản phẩm`,
-        timestamp: consultation.createdAt.toISOString(),
-        read: consultation.status !== 'PENDING', // Mark as read if not pending
-        data: {
-          consultationId: consultation.id,
-          customerName: consultation.customerName,
-          itemCount: consultation.totalItems,
-          status: consultation.status,
-          phoneNumber: consultation.phoneNumber
-        }
-      }));
+      const consultationNotifications = consultations.map(consultation => {
+        const itemCount = consultation.consultationItems?.length || 0;
+        return {
+          id: `consultation_${consultation.id}`,
+          type: 'consultation',
+          title: 'Tư vấn mới',
+          message: `${consultation.customerName} đã gửi yêu cầu tư vấn về ${itemCount} sản phẩm`,
+          timestamp: consultation.createdAt.toISOString(),
+          read: consultation.status !== ConsultationStatus.PENDING, // Mark as read if not pending
+          data: {
+            consultationId: consultation.id,
+            customerName: consultation.customerName,
+            itemCount: itemCount,
+            status: consultation.status,
+            phoneNumber: consultation.phoneNumber
+          }
+        };
+      });
 
       notifications.push(...consultationNotifications);
     }
@@ -106,15 +111,15 @@ export const markNotificationAsRead = async (req: Request, res: Response) => {
       const consultationId = notificationId.replace('consultation_', '');
 
       // Update consultation status if it's still pending
-      await prisma.consultation.updateMany({
-        where: {
-          id: consultationId,
-          status: 'PENDING'
-        },
-        data: {
-          status: 'IN_PROGRESS'
+      await Consultation.update(
+        { status: ConsultationStatus.IN_PROGRESS },
+        {
+          where: {
+            id: consultationId,
+            status: ConsultationStatus.PENDING
+          }
         }
-      });
+      );
     }
 
     // For orders, implement similar logic when orders are ready
@@ -143,9 +148,9 @@ export const markNotificationAsRead = async (req: Request, res: Response) => {
 export const getUnreadCount = async (req: Request, res: Response) => {
   try {
     // Count pending consultations as unread notifications
-    const pendingConsultations = await prisma.consultation.count({
+    const pendingConsultations = await Consultation.count({
       where: {
-        status: 'PENDING'
+        status: ConsultationStatus.PENDING
       }
     });
 
@@ -176,20 +181,20 @@ export const getUnreadCount = async (req: Request, res: Response) => {
 export const markAllNotificationsAsRead = async (req: Request, res: Response) => {
   try {
     // Update all PENDING consultations to IN_PROGRESS (mark as read)
-    const result = await prisma.consultation.updateMany({
-      where: {
-        status: 'PENDING'
-      },
-      data: {
-        status: 'IN_PROGRESS'
+    const [updatedCount] = await Consultation.update(
+      { status: ConsultationStatus.IN_PROGRESS },
+      {
+        where: {
+          status: ConsultationStatus.PENDING
+        }
       }
-    });
+    );
 
     const response = {
       success: true,
       data: {
-        updatedCount: result.count,
-        message: `Marked ${result.count} notifications as read`
+        updatedCount,
+        message: `Marked ${updatedCount} notifications as read`
       },
       meta: { timestamp: new Date().toISOString() },
       error: null,

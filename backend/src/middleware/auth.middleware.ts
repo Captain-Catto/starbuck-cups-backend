@@ -2,15 +2,14 @@
  * Authentication and authorization middleware
  */
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient, AdminRole } from "../generated/prisma";
+import { AdminRole } from "../models/AdminUser";
+import { AdminUser } from "../models/AdminUser";
 import {
   verifyAccessToken,
   verifyRefreshToken,
   extractTokenFromHeader,
 } from "../utils/jwt";
 import { ResponseHelper } from "../types/api";
-
-const prisma = new PrismaClient();
 
 // Extend Express Request interface to include user
 declare global {
@@ -24,6 +23,15 @@ declare global {
       };
     }
   }
+}
+
+export interface AuthRequest extends Request {
+  user: {
+    userId: string;
+    email: string;
+    role: AdminRole;
+    username: string;
+  };
 }
 
 /**
@@ -45,10 +53,17 @@ export const authenticate = async (
     );
 
     if (!token) {
-      console.warn("Auth middleware - No token found in request");
+      console.warn("Auth middleware - No token found in request", {
+        url: req.url,
+        method: req.method,
+        userAgent: req.headers["user-agent"]?.substring(0, 50),
+        ip: req.ip,
+      });
       res
         .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+        .json(
+          ResponseHelper.error("Access token required", "MISSING_ACCESS_TOKEN")
+        );
       return;
     }
 
@@ -57,20 +72,26 @@ export const authenticate = async (
     console.log("Auth middleware - Decoded token:", decoded);
 
     // Check if user exists and is active
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-      },
+      attributes: ["id", "email", "role", "isActive"],
     });
 
     if (!user || !user.isActive) {
+      console.warn("Auth middleware - Invalid or inactive user", {
+        userId: decoded.userId,
+        userExists: !!user,
+        isActive: user?.isActive,
+        url: req.url,
+      });
       res
         .status(401)
-        .json(ResponseHelper.error("Invalid or inactive user", "UNAUTHORIZED"));
+        .json(
+          ResponseHelper.error(
+            "Invalid or inactive user account",
+            "INVALID_USER_ACCOUNT"
+          )
+        );
       return;
     }
 
@@ -160,14 +181,9 @@ export const optionalAuthenticate = async (
     }
 
     const decoded = verifyAccessToken(token);
-    const user = await prisma.adminUser.findUnique({
+    const user = await AdminUser.findOne({
       where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-      },
+      attributes: ["id", "email", "role", "isActive"],
     });
 
     if (user && user.isActive) {
@@ -196,8 +212,10 @@ interface LoginAttempt {
 }
 
 const loginAttempts = new Map<string, LoginAttempt>();
-const MAX_LOGIN_ATTEMPTS = 5;
-const BLOCK_DURATION = 15 * 60 * 1000; // 15 minutes
+const MAX_LOGIN_ATTEMPTS = parseInt(process.env.RATE_LIMIT_MAX_ATTEMPTS || "5");
+const BLOCK_DURATION = parseInt(
+  process.env.RATE_LIMIT_BLOCK_DURATION_MS || "900000"
+); // 15 minutes default
 
 export const rateLimitAuth = (
   req: Request,
@@ -274,10 +292,10 @@ export const trackAdminActivity = async (
   if (req.user) {
     // Update last activity timestamp (could be stored in cache for performance)
     try {
-      await prisma.adminUser.update({
-        where: { id: req.user.userId },
-        data: { lastLoginAt: new Date() },
-      });
+      await AdminUser.update(
+        { lastLoginAt: new Date() },
+        { where: { id: req.user.userId } }
+      );
     } catch (error) {
       console.error("Failed to update admin activity:", error);
       // Don't fail the request for this
@@ -301,9 +319,9 @@ export const authenticateWithAutoRefresh = async (
     if (token) {
       try {
         const decoded = verifyAccessToken(token);
-        const user = await prisma.adminUser.findUnique({
+        const user = await AdminUser.findOne({
           where: { id: decoded.userId },
-          select: { id: true, email: true, role: true, isActive: true },
+          attributes: ["id", "email", "role", "isActive"],
         });
 
         if (user && user.isActive) {
@@ -317,7 +335,11 @@ export const authenticateWithAutoRefresh = async (
         }
       } catch (error) {
         // Access token invalid, continue to refresh token logic
-        console.log("Access token invalid, trying refresh token...");
+        console.log("Access token invalid, trying refresh token...", {
+          error: error instanceof Error ? error.message : String(error),
+          url: req.url,
+          hasRefreshTokenCookie: !!req.cookies.admin_refresh_token,
+        });
       }
     }
 
@@ -325,28 +347,41 @@ export const authenticateWithAutoRefresh = async (
     const refreshToken = req.cookies.admin_refresh_token;
 
     if (!refreshToken) {
+      console.warn("No refresh token available", {
+        url: req.url,
+        method: req.method,
+        hasAccessToken: !!token,
+        cookies: Object.keys(req.cookies || {}),
+      });
       return res
         .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+        .json(
+          ResponseHelper.error(
+            "Authentication required - no valid tokens",
+            "NO_VALID_TOKENS"
+          )
+        );
     }
 
     try {
       const refreshPayload = verifyRefreshToken(refreshToken);
-      const user = await prisma.adminUser.findUnique({
+      const user = await AdminUser.findOne({
         where: { id: refreshPayload.userId },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          isActive: true,
-          username: true,
-        },
+        attributes: ["id", "email", "role", "isActive", "username"],
       });
 
       if (!user || !user.isActive) {
+        console.warn("Refresh token - Invalid or inactive user", {
+          userId: refreshPayload.userId,
+          userExists: !!user,
+          isActive: user?.isActive,
+          url: req.url,
+        });
         return res
           .status(401)
-          .json(ResponseHelper.error("Invalid user account", "UNAUTHORIZED"));
+          .json(
+            ResponseHelper.error("Invalid user account", "INVALID_USER_ACCOUNT")
+          );
       }
 
       // Set user for current request
@@ -363,9 +398,22 @@ export const authenticateWithAutoRefresh = async (
 
       next();
     } catch (refreshError) {
+      console.error("Refresh token verification failed", {
+        error:
+          refreshError instanceof Error
+            ? refreshError.message
+            : String(refreshError),
+        url: req.url,
+        hasRefreshToken: !!refreshToken,
+      });
       return res
         .status(401)
-        .json(ResponseHelper.error("Authentication failed", "UNAUTHORIZED"));
+        .json(
+          ResponseHelper.error(
+            "Refresh token invalid or expired",
+            "INVALID_REFRESH_TOKEN"
+          )
+        );
     }
   } catch (error) {
     console.error("Authentication middleware error:", error);
@@ -375,4 +423,36 @@ export const authenticateWithAutoRefresh = async (
         ResponseHelper.error("Authentication error", "AUTHENTICATION_ERROR")
       );
   }
+};
+
+/**
+ * Admin authentication middleware - alias for authenticate + admin role check
+ */
+export const authenticateAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  authenticate(req, res, () => {
+    if (!req.user) {
+      res
+        .status(401)
+        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+      return;
+    }
+
+    // Allow all admin roles (SUPER_ADMIN, ADMIN, STAFF)
+    if (
+      ![AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.STAFF].includes(
+        req.user.role
+      )
+    ) {
+      res
+        .status(403)
+        .json(ResponseHelper.error("Admin access required", "FORBIDDEN"));
+      return;
+    }
+
+    next();
+  });
 };

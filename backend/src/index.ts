@@ -1,6 +1,8 @@
 import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import session from "express-session";
+import SequelizeStoreInit from "connect-session-sequelize";
 import { createServer } from "http";
 
 // Import custom middleware
@@ -28,10 +30,18 @@ import uploadRoutes from "./routes/upload.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import notificationRoutes from "./routes/notification.routes";
 import heroImagesRoutes from "./routes/hero-images.routes";
+import analyticsRoutes from "./routes/analytics.routes";
 // import { searchRoutes } from "./routes/search.routes";
 
 // Import Socket.IO service
 import { socketService } from "./services/socket.service";
+
+// Import database connection
+import sequelize from "./config/database";
+import {
+  initializeDatabase,
+  initializeSessionStore,
+} from "./config/database-init";
 
 // Import MeiliSearch initialization - TEMPORARILY DISABLED
 // import {
@@ -57,6 +67,29 @@ app.use(apiVersioning);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser()); // Add cookie parser middleware
+
+// Session middleware (Sequelize store)
+const SequelizeStore = SequelizeStoreInit(session.Store);
+const sessionStore = new SequelizeStore({
+  db: sequelize,
+  tableName: 'sessions',
+  checkExpirationInterval: 15 * 60 * 1000, // 15 minutes
+  expiration: 24 * 60 * 60 * 1000 // 24 hours
+});
+
+app.use(
+  session({
+    secret: process.env.JWT_SECRET || "your-secret-key",
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
+  })
+);
 
 // Health check endpoint
 app.get("/health", healthCheck);
@@ -87,6 +120,7 @@ app.use("/api/admin/consultations", consultationRoutes);
 app.use("/api/admin/dashboard", dashboardRoutes);
 app.use("/api/admin/notifications", notificationRoutes);
 app.use("/api/admin/hero-images", heroImagesRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // API info endpoint
 app.get("/api/v1", (req, res) => {
@@ -129,14 +163,31 @@ socketService.initialize(server);
 //   syncInitialData();
 // });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📚 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`📖 API docs: http://localhost:${PORT}/docs`);
-  console.log(`🔌 Socket.IO ready for connections`);
-});
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    // Initialize database connection and sync models
+    await initializeDatabase();
+
+    // Initialize session store
+    await initializeSessionStore();
+
+    // Start server
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📚 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`📖 API docs: http://localhost:${PORT}/docs`);
+      console.log(`🔌 Socket.IO ready for connections`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
+};
+
+// Start the application
+startServer();
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
