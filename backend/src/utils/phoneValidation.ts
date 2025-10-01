@@ -2,11 +2,8 @@
  * Phone number validation utilities
  */
 
-// International phone number regex (7-16 digits, optional + prefix)
-export const INTERNATIONAL_PHONE_REGEX = /^[\+]?[1-9][\d]{6,15}$/;
-
 /**
- * Validate international phone number
+ * Validate phone number - simplified to only check if input exists
  * @param phone Phone number string
  * @returns Boolean indicating if phone is valid
  */
@@ -18,7 +15,8 @@ export const isValidPhoneNumber = (phone: string): boolean => {
   // Remove common formatting characters
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
 
-  return INTERNATIONAL_PHONE_REGEX.test(cleanPhone);
+  // Only check if phone has content (at least 1 character)
+  return cleanPhone.length > 0;
 };
 
 /**
@@ -40,7 +38,7 @@ export const cleanPhoneNumber = (phone: string): string => {
  * @returns Error message string
  */
 export const getPhoneValidationErrorMessage = (): string => {
-  return 'Số điện thoại không hợp lệ (phải có 7-16 chữ số)';
+  return 'Số điện thoại là bắt buộc';
 };
 
 /**

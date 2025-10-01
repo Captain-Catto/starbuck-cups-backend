@@ -136,12 +136,9 @@ export const adminLogin = async (req: Request, res: Response) => {
     // Set refresh token as HTTP-only cookie
     const cookieOptions = {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production" &&
-        process.env.COOKIE_SECURE !== "false",
+      secure: process.env.COOKIE_SECURE === "true",
       sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
-        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
       domain: process.env.COOKIE_DOMAIN || undefined,
@@ -256,12 +253,9 @@ export const login = async (req: Request, res: Response) => {
     // Set refresh token as HTTP-only cookie
     res.cookie("admin_refresh_token", refreshToken, {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production" &&
-        process.env.COOKIE_SECURE !== "false",
+      secure: process.env.COOKIE_SECURE === "true",
       sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
-        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
       domain: process.env.COOKIE_DOMAIN || undefined,

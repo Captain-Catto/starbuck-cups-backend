@@ -92,11 +92,19 @@ export class AnalyticsController {
   async getTopClickedProducts(req: Request, res: Response) {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
-      const topProducts = await productAnalyticsService.getTopClickedProducts(limit);
+      const page = parseInt(req.query.page as string) || 1;
+      const offset = (page - 1) * limit;
+
+      const topProducts = await productAnalyticsService.getTopClickedProducts(limit, offset);
 
       return res.json({
         success: true,
         data: topProducts,
+        pagination: {
+          page,
+          limit,
+          offset,
+        },
       });
     } catch (error) {
       console.error("Get top clicked products error:", error);
@@ -112,11 +120,19 @@ export class AnalyticsController {
   async getTopAddedToCartProducts(req: Request, res: Response) {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
-      const topProducts = await productAnalyticsService.getTopAddedToCartProducts(limit);
+      const page = parseInt(req.query.page as string) || 1;
+      const offset = (page - 1) * limit;
+
+      const topProducts = await productAnalyticsService.getTopAddedToCartProducts(limit, offset);
 
       return res.json({
         success: true,
         data: topProducts,
+        pagination: {
+          page,
+          limit,
+          offset,
+        },
       });
     } catch (error) {
       console.error("Get top added to cart products error:", error);
@@ -132,11 +148,19 @@ export class AnalyticsController {
   async getTopConversionProducts(req: Request, res: Response) {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
-      const topProducts = await productAnalyticsService.getTopConversionProducts(limit);
+      const page = parseInt(req.query.page as string) || 1;
+      const offset = (page - 1) * limit;
+
+      const topProducts = await productAnalyticsService.getTopConversionProducts(limit, offset);
 
       return res.json({
         success: true,
         data: topProducts,
+        pagination: {
+          page,
+          limit,
+          offset,
+        },
       });
     } catch (error) {
       console.error("Get top conversion products error:", error);

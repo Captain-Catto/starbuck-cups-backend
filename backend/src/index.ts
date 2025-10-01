@@ -24,6 +24,7 @@ import capacitiesRoutes from "./routes/capacities.routes";
 import categoriesRoutes from "./routes/categories.routes";
 import productsRoutes, { adminProductsRouter } from "./routes/products.routes";
 import customersRoutes from "./routes/customers.routes";
+import customerPhoneRoutes from "./routes/customerPhone.routes";
 import ordersRoutes from "./routes/orders.routes";
 import consultationRoutes from "./routes/consultation.routes";
 import uploadRoutes from "./routes/upload.routes";
@@ -31,6 +32,7 @@ import dashboardRoutes from "./routes/dashboard.routes";
 import notificationRoutes from "./routes/notification.routes";
 import heroImagesRoutes from "./routes/hero-images.routes";
 import analyticsRoutes from "./routes/analytics.routes";
+import promotionalBannersRoutes from "./routes/promotional-banners.routes";
 // import { searchRoutes } from "./routes/search.routes";
 
 // Import Socket.IO service
@@ -103,6 +105,7 @@ app.use("/api/capacities", capacitiesRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/products", productsRoutes);
 app.use("/api/hero-images", heroImagesRoutes);
+app.use("/api/promotional-banners", promotionalBannersRoutes);
 // app.use("/api/search", searchRoutes); // TEMPORARILY DISABLED - Meilisearch not available
 
 // Public routes (for customer-facing website)
@@ -115,6 +118,7 @@ app.use("/api/admin/capacities", capacitiesRoutes);
 app.use("/api/admin/categories", categoriesRoutes);
 app.use("/api/admin/products", adminProductsRouter);
 app.use("/api/admin/customers", customersRoutes);
+app.use("/api/admin", customerPhoneRoutes);
 app.use("/api/admin/orders", ordersRoutes);
 app.use("/api/admin/consultations", consultationRoutes);
 app.use("/api/admin/dashboard", dashboardRoutes);

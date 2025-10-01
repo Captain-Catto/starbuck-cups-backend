@@ -6,6 +6,7 @@ const { Order, OrderItem, Customer, Product, Consultation } = models;
 import { ResponseHelper } from "../types/api";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database";
+import { productAnalyticsService } from "../services/productAnalytics.service";
 
 interface TopCustomerQueryResult {
   customerId: number;
@@ -205,6 +206,12 @@ export const getStatistics = async (req: Request, res: Response) => {
 
       // Weekly/Monthly revenue trend
       revenueTrend,
+
+      // Product analytics data
+      topClickedProducts,
+      topAddToCartProducts,
+      topConversionProducts,
+      analyticsummary,
     ] = await Promise.all([
       // Total products sold (all time)
       sequelize
@@ -350,6 +357,12 @@ export const getStatistics = async (req: Request, res: Response) => {
           type: QueryTypes.SELECT,
         }
       ),
+
+      // Product analytics data
+      productAnalyticsService.getTopClickedProducts(10),
+      productAnalyticsService.getTopAddedToCartProducts(10),
+      productAnalyticsService.getTopConversionProducts(10),
+      productAnalyticsService.getAnalyticsSummary(),
     ]);
 
     // Get product details for top selling products
@@ -379,12 +392,24 @@ export const getStatistics = async (req: Request, res: Response) => {
       (topCustomers as TopCustomerQueryResult[]).map(async (item) => {
         const customer = await Customer.findOne({
           where: { id: item.customerId },
-          attributes: ["id", "fullName", "phone", "messengerId", "zaloId"],
+          attributes: ["id", "fullName", "messengerId", "zaloId"],
+          include: [
+            {
+              association: "customerPhones",
+              attributes: ["phoneNumber", "isMain"],
+            },
+          ],
         });
+
+        const mainPhone = customer?.customerPhones?.find(
+          (phone: any) => phone.isMain
+        );
+        const phoneNumber = mainPhone ? mainPhone.phoneNumber : null;
+
         return {
           id: item.customerId,
           name: customer?.fullName || "Unknown",
-          phone: customer?.phone || "Unknown",
+          phone: phoneNumber || "Unknown",
           messengerId: customer?.messengerId || null,
           zaloId: customer?.zaloId || null,
           totalSpent: Number((item as any).totalSpent || 0),
@@ -438,6 +463,19 @@ export const getStatistics = async (req: Request, res: Response) => {
         period: item.period,
         revenue: Number(item.revenue || 0),
       })),
+      productAnalytics: {
+        topClickedProducts: topClickedProducts,
+        topAddToCartProducts: topAddToCartProducts,
+        topConversionProducts: topConversionProducts,
+        summary: {
+          totalClicks: analyticsummary.totalClicks,
+          totalAddToCarts: analyticsummary.totalAddToCarts,
+          overallConversionRate:
+            Math.round(analyticsummary.overallConversionRate * 1000) / 10, // Convert to percentage with 1 decimal
+          totalTrackedProducts: analyticsummary.totalProducts,
+        },
+        recentActivity: analyticsummary.recentActivity,
+      },
     };
 
     console.log("Final statistics data:", {
@@ -458,5 +496,79 @@ export const getStatistics = async (req: Request, res: Response) => {
         stack: (error as Error).stack,
       })
     );
+  }
+};
+
+/**
+ * Get top selling products with pagination
+ */
+export const getTopSellingProducts = async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 1;
+    const offset = (page - 1) * limit;
+
+    const topSellingProducts = await sequelize.query(
+      `SELECT
+        oi.product_id as "productId",
+        SUM(oi.quantity) as "totalQuantity"
+      FROM order_items oi
+      INNER JOIN orders o ON oi.order_id = o.id
+      WHERE o.status = 'DELIVERED'
+      GROUP BY oi.product_id
+      ORDER BY SUM(oi.quantity) DESC
+      LIMIT ? OFFSET ?`,
+      {
+        replacements: [limit, offset],
+        type: QueryTypes.SELECT
+      }
+    );
+
+    // Get product details
+    const topProductsDetails = await Promise.all(
+      (topSellingProducts as any[]).map(async (item: any) => {
+        const product = await Product.findByPk(item.productId, {
+          attributes: ["id", "name", "slug"],
+          include: [
+            {
+              association: "capacity",
+              attributes: ["name"],
+            },
+          ],
+        });
+
+        if (!product) {
+          return null;
+        }
+
+        return {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          capacity: (product as any).capacity?.name || "N/A",
+          totalSold: parseInt(item.totalQuantity),
+        };
+      })
+    );
+
+    // Filter out null products
+    const validProducts = topProductsDetails.filter((p) => p !== null);
+
+    return res.json({
+      success: true,
+      data: validProducts,
+      pagination: {
+        page,
+        limit,
+        offset,
+      },
+    });
+  } catch (error) {
+    console.error("Get top selling products error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get top selling products",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 };

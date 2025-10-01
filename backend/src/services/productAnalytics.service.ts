@@ -23,26 +23,41 @@ export interface TopProductsData {
 
 export class ProductAnalyticsService {
   // Increment product click count
-  async incrementProductClick(productId: string): Promise<ProductAnalyticsData> {
+  async incrementProductClick(
+    productId: string
+  ): Promise<ProductAnalyticsData> {
     try {
-      const [analytics, created] = await ProductAnalytics.upsert(
-        {
+      console.log("Incrementing product click for:", productId);
+
+      // Try to find existing record first
+      let analytics = await ProductAnalytics.findOne({
+        where: { productId },
+      });
+
+      if (analytics) {
+        // Record exists, increment click count
+        console.log(
+          "Found existing analytics record, incrementing click count"
+        );
+        await analytics.increment("clickCount", { by: 1 });
+        await analytics.update({ lastClicked: new Date() });
+        await analytics.reload();
+      } else {
+        // Create new record
+        console.log("Creating new analytics record");
+        analytics = await ProductAnalytics.create({
           productId,
           clickCount: 1,
           addToCartCount: 0,
           lastClicked: new Date(),
-        },
-        {
-          returning: true,
-        }
-      );
-
-      if (!created) {
-        // If record exists, increment click count
-        await analytics.increment('clickCount', { by: 1 });
-        await analytics.update({ lastClicked: new Date() });
-        await analytics.reload();
+        });
       }
+
+      console.log("Analytics after update:", {
+        productId: analytics.productId,
+        clickCount: analytics.clickCount,
+        addToCartCount: analytics.addToCartCount,
+      });
 
       return {
         productId: analytics.productId,
@@ -50,9 +65,10 @@ export class ProductAnalyticsService {
         addToCartCount: analytics.addToCartCount,
         lastClicked: analytics.lastClicked,
         lastAddedToCart: analytics.lastAddedToCart,
-        conversionRate: analytics.clickCount > 0
-          ? analytics.addToCartCount / analytics.clickCount
-          : 0,
+        conversionRate:
+          analytics.clickCount > 0
+            ? analytics.addToCartCount / analytics.clickCount
+            : 0,
       };
     } catch (error) {
       console.error("Error incrementing product click:", error);
@@ -63,24 +79,37 @@ export class ProductAnalyticsService {
   // Increment add to cart count
   async incrementAddToCart(productId: string): Promise<ProductAnalyticsData> {
     try {
-      const [analytics, created] = await ProductAnalytics.upsert(
-        {
+      console.log("Incrementing add to cart for:", productId);
+
+      // Try to find existing record first
+      let analytics = await ProductAnalytics.findOne({
+        where: { productId },
+      });
+
+      if (analytics) {
+        // Record exists, increment add to cart count
+        console.log(
+          "Found existing analytics record, incrementing add to cart count"
+        );
+        await analytics.increment("addToCartCount", { by: 1 });
+        await analytics.update({ lastAddedToCart: new Date() });
+        await analytics.reload();
+      } else {
+        // Create new record
+        console.log("Creating new analytics record");
+        analytics = await ProductAnalytics.create({
           productId,
           clickCount: 0,
           addToCartCount: 1,
           lastAddedToCart: new Date(),
-        },
-        {
-          returning: true,
-        }
-      );
-
-      if (!created) {
-        // If record exists, increment add to cart count
-        await analytics.increment('addToCartCount', { by: 1 });
-        await analytics.update({ lastAddedToCart: new Date() });
-        await analytics.reload();
+        });
       }
+
+      console.log("Analytics after update:", {
+        productId: analytics.productId,
+        clickCount: analytics.clickCount,
+        addToCartCount: analytics.addToCartCount,
+      });
 
       return {
         productId: analytics.productId,
@@ -88,9 +117,10 @@ export class ProductAnalyticsService {
         addToCartCount: analytics.addToCartCount,
         lastClicked: analytics.lastClicked,
         lastAddedToCart: analytics.lastAddedToCart,
-        conversionRate: analytics.clickCount > 0
-          ? analytics.addToCartCount / analytics.clickCount
-          : 0,
+        conversionRate:
+          analytics.clickCount > 0
+            ? analytics.addToCartCount / analytics.clickCount
+            : 0,
       };
     } catch (error) {
       console.error("Error incrementing add to cart:", error);
@@ -99,7 +129,9 @@ export class ProductAnalyticsService {
   }
 
   // Get analytics for specific product
-  async getProductAnalytics(productId: string): Promise<ProductAnalyticsData | null> {
+  async getProductAnalytics(
+    productId: string
+  ): Promise<ProductAnalyticsData | null> {
     try {
       const analytics = await ProductAnalytics.findOne({
         where: { productId },
@@ -123,9 +155,10 @@ export class ProductAnalyticsService {
         addToCartCount: analytics.addToCartCount,
         lastClicked: analytics.lastClicked,
         lastAddedToCart: analytics.lastAddedToCart,
-        conversionRate: analytics.clickCount > 0
-          ? analytics.addToCartCount / analytics.clickCount
-          : 0,
+        conversionRate:
+          analytics.clickCount > 0
+            ? analytics.addToCartCount / analytics.clickCount
+            : 0,
       };
     } catch (error) {
       console.error("Error getting product analytics:", error);
@@ -134,7 +167,10 @@ export class ProductAnalyticsService {
   }
 
   // Get top products by clicks
-  async getTopClickedProducts(limit: number = 10): Promise<TopProductsData[]> {
+  async getTopClickedProducts(
+    limit: number = 10,
+    offset: number = 0
+  ): Promise<TopProductsData[]> {
     try {
       const topProducts = await ProductAnalytics.findAll({
         include: [
@@ -147,6 +183,7 @@ export class ProductAnalyticsService {
         ],
         order: [["clickCount", "DESC"]],
         limit,
+        offset,
       });
 
       return topProducts.map((analytics) => ({
@@ -155,9 +192,10 @@ export class ProductAnalyticsService {
         productSlug: (analytics as any).product.slug,
         clickCount: analytics.clickCount,
         addToCartCount: analytics.addToCartCount,
-        conversionRate: analytics.clickCount > 0
-          ? analytics.addToCartCount / analytics.clickCount
-          : 0,
+        conversionRate:
+          analytics.clickCount > 0
+            ? analytics.addToCartCount / analytics.clickCount
+            : 0,
       }));
     } catch (error) {
       console.error("Error getting top clicked products:", error);
@@ -166,7 +204,10 @@ export class ProductAnalyticsService {
   }
 
   // Get top products by add to cart
-  async getTopAddedToCartProducts(limit: number = 10): Promise<TopProductsData[]> {
+  async getTopAddedToCartProducts(
+    limit: number = 10,
+    offset: number = 0
+  ): Promise<TopProductsData[]> {
     try {
       const topProducts = await ProductAnalytics.findAll({
         include: [
@@ -179,6 +220,7 @@ export class ProductAnalyticsService {
         ],
         order: [["addToCartCount", "DESC"]],
         limit,
+        offset,
       });
 
       return topProducts.map((analytics) => ({
@@ -187,9 +229,10 @@ export class ProductAnalyticsService {
         productSlug: (analytics as any).product.slug,
         clickCount: analytics.clickCount,
         addToCartCount: analytics.addToCartCount,
-        conversionRate: analytics.clickCount > 0
-          ? analytics.addToCartCount / analytics.clickCount
-          : 0,
+        conversionRate:
+          analytics.clickCount > 0
+            ? analytics.addToCartCount / analytics.clickCount
+            : 0,
       }));
     } catch (error) {
       console.error("Error getting top added to cart products:", error);
@@ -198,7 +241,10 @@ export class ProductAnalyticsService {
   }
 
   // Get products with highest conversion rates
-  async getTopConversionProducts(limit: number = 10): Promise<TopProductsData[]> {
+  async getTopConversionProducts(
+    limit: number = 10,
+    offset: number = 0
+  ): Promise<TopProductsData[]> {
     try {
       const products = await ProductAnalytics.findAll({
         include: [
@@ -225,7 +271,7 @@ export class ProductAnalyticsService {
           conversionRate: analytics.addToCartCount / analytics.clickCount,
         }))
         .sort((a, b) => b.conversionRate - a.conversionRate)
-        .slice(0, limit);
+        .slice(offset, offset + limit);
 
       return productsWithConversion;
     } catch (error) {
@@ -241,7 +287,8 @@ export class ProductAnalyticsService {
       const totalAddToCarts = await ProductAnalytics.sum("addToCartCount");
       const totalProducts = await ProductAnalytics.count();
 
-      const overallConversionRate = totalClicks > 0 ? totalAddToCarts / totalClicks : 0;
+      const overallConversionRate =
+        totalClicks > 0 ? totalAddToCarts / totalClicks : 0;
 
       // Get most recent activity
       const recentActivity = await ProductAnalytics.findAll({
@@ -277,7 +324,9 @@ export class ProductAnalyticsService {
   }
 
   // Get analytics for multiple products (for admin product list)
-  async getBulkProductAnalytics(productIds: string[]): Promise<Map<string, ProductAnalyticsData>> {
+  async getBulkProductAnalytics(
+    productIds: string[]
+  ): Promise<Map<string, ProductAnalyticsData>> {
     try {
       const analyticsRecords = await ProductAnalytics.findAll({
         where: {
@@ -294,9 +343,10 @@ export class ProductAnalyticsService {
           addToCartCount: analytics.addToCartCount,
           lastClicked: analytics.lastClicked,
           lastAddedToCart: analytics.lastAddedToCart,
-          conversionRate: analytics.clickCount > 0
-            ? analytics.addToCartCount / analytics.clickCount
-            : 0,
+          conversionRate:
+            analytics.clickCount > 0
+              ? analytics.addToCartCount / analytics.clickCount
+              : 0,
         });
       });
 

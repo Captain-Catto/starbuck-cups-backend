@@ -31,6 +31,7 @@ export interface OrderAttributes {
   deliveryAddress?: any;
   originalShippingCost: number;
   shippingDiscount: number;
+  customerMainPhone?: string;
 }
 
 export interface OrderCreationAttributes extends Omit<OrderAttributes, 'id' | 'createdAt' | 'updatedAt'> {
@@ -54,6 +55,7 @@ export class Order extends Model<OrderAttributes, OrderCreationAttributes> imple
   public deliveryAddress?: any;
   declare originalShippingCost: number;
   declare shippingDiscount: number;
+  public customerMainPhone?: string;
 
   // Associations
   public items?: any[];
@@ -158,6 +160,11 @@ export const OrderModel = (sequelize: Sequelize) => {
         allowNull: false,
         defaultValue: 0,
         field: 'shipping_discount',
+      },
+      customerMainPhone: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        field: 'customer_main_phone',
       },
     },
     {

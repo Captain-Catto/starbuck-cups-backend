@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { models, ConsultationStatus } from "../models";
 import { ConsultationService } from "../services/consultation.service";
 import { ApiResponse, ResponseHelper } from "../types/api";
+import { validateAndFormatPhone } from "../utils/phoneValidation";
 
 import { socketService } from "../services/socket.service";
 
@@ -24,6 +25,22 @@ export const createConsultation = async (req: Request, res: Response) => {
         error: {
           message: "Customer information is required",
           code: "MISSING_CUSTOMER_INFO",
+        },
+      };
+      res.status(400).json(response);
+      return;
+    }
+
+    // Validate phone number
+    const phoneValidation = validateAndFormatPhone(consultationData.customer.phoneNumber);
+    if (!phoneValidation.isValid) {
+      const response: ApiResponse = {
+        success: false,
+        data: null,
+        meta: { timestamp: new Date().toISOString() },
+        error: {
+          message: phoneValidation.error || "Invalid phone number",
+          code: "INVALID_PHONE_NUMBER",
         },
       };
       res.status(400).json(response);

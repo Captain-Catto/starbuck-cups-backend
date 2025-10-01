@@ -5,6 +5,7 @@ const {
   Order,
   OrderItem,
   Customer,
+  CustomerPhone,
   Product,
   ProductImage,
   Capacity,
@@ -223,7 +224,14 @@ export const getOrders = async (req: Request, res: Response) => {
           {
             model: Customer,
             as: "customer",
-            attributes: ["id", "fullName", "phone"],
+            attributes: ["id", "fullName"],
+            include: [
+              {
+                model: CustomerPhone,
+                as: "customerPhones",
+                attributes: ["id", "phoneNumber", "isMain"],
+              },
+            ],
           },
           {
             model: OrderItem,
@@ -289,7 +297,14 @@ export const getOrderById = async (req: Request, res: Response) => {
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "fullName", "phone", "messengerId", "zaloId"],
+          attributes: ["id", "fullName", "messengerId", "zaloId"],
+          include: [
+            {
+              model: CustomerPhone,
+              as: "customerPhones",
+              attributes: ["id", "phoneNumber", "isMain"],
+            },
+          ],
         },
         {
           model: OrderItem,
@@ -550,7 +565,14 @@ export const createOrder = async (req: Request, res: Response) => {
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "fullName", "phone"],
+          attributes: ["id", "fullName"],
+          include: [
+            {
+              model: CustomerPhone,
+              as: "customerPhones",
+              attributes: ["id", "phoneNumber", "isMain"],
+            },
+          ],
         },
         {
           model: OrderItem,
@@ -673,7 +695,14 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "fullName", "phone"],
+          attributes: ["id", "fullName"],
+          include: [
+            {
+              model: CustomerPhone,
+              as: "customerPhones",
+              attributes: ["id", "phoneNumber", "isMain"],
+            },
+          ],
         },
         {
           model: OrderItem,
@@ -1065,7 +1094,14 @@ export const getRecentOrders = async (req: Request, res: Response) => {
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "fullName", "phone"],
+          attributes: ["id", "fullName"],
+          include: [
+            {
+              model: CustomerPhone,
+              as: "customerPhones",
+              attributes: ["id", "phoneNumber", "isMain"],
+            },
+          ],
         },
         {
           model: OrderItem,

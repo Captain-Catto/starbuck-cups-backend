@@ -5,6 +5,7 @@ import sequelize from "../config/database";
 import { AdminUser, AdminUserModel, AdminRole } from "./AdminUser";
 import { Customer, CustomerModel } from "./Customer";
 import { CustomerAddress, CustomerAddressModel } from "./CustomerAddress";
+import { CustomerPhone, CustomerPhoneModel } from "./CustomerPhone";
 import { Color, ColorModel } from "./Color";
 import { Capacity, CapacityModel } from "./Capacity";
 import { Category, CategoryModel } from "./Category";
@@ -18,12 +19,14 @@ import { Consultation, ConsultationModel, ConsultationStatus } from "./Consultat
 import { ConsultationItem, ConsultationItemModel } from "./ConsultationItem";
 import { HeroImage, HeroImageModel } from "./HeroImage";
 import { ProductAnalytics, ProductAnalyticsModel } from "./ProductAnalytics";
+import { PromotionalBanner, PromotionalBannerModel } from "./PromotionalBanner";
 
 // Initialize all models
 const models = {
   AdminUser: AdminUserModel(sequelize),
   Customer: CustomerModel(sequelize),
   CustomerAddress: CustomerAddressModel(sequelize),
+  CustomerPhone: CustomerPhoneModel(sequelize),
   Color: ColorModel(sequelize),
   Capacity: CapacityModel(sequelize),
   Category: CategoryModel(sequelize),
@@ -37,6 +40,7 @@ const models = {
   ConsultationItem: ConsultationItemModel(sequelize),
   HeroImage: HeroImageModel(sequelize),
   ProductAnalytics: ProductAnalyticsModel(sequelize),
+  PromotionalBanner: PromotionalBannerModel(sequelize),
 };
 
 // Define associations
@@ -53,6 +57,7 @@ export {
   AdminRole,
   Customer,
   CustomerAddress,
+  CustomerPhone,
   Color,
   Capacity,
   Category,
@@ -69,6 +74,7 @@ export {
   ConsultationItem,
   HeroImage,
   ProductAnalytics,
+  PromotionalBanner,
 };
 
 export default models;

@@ -97,9 +97,9 @@ export const getProducts = async (req: Request, res: Response) => {
       search = "",
       isActive = "all",
       isDeleted = "false",
-      categorySlug,
       colorSlug,
-      capacitySlug,
+      minCapacity,
+      maxCapacity,
       sortBy = "createdAt",
       sortOrder = "desc",
       lowStock = "false",
@@ -138,22 +138,24 @@ export const getProducts = async (req: Request, res: Response) => {
       where.stockQuantity = { [Op.lte]: threshold };
     }
 
-    // Category filtering
-    const categoryWhere: any = {};
-    if (categorySlug) {
-      categoryWhere.slug = categorySlug;
-    }
-
     // Color filtering
     const colorWhere: any = {};
     if (colorSlug) {
       colorWhere.slug = colorSlug;
     }
 
-    // Capacity filtering
+    // Capacity filtering by min/max volume
     const capacityWhere: any = {};
-    if (capacitySlug) {
-      capacityWhere.slug = capacitySlug;
+    if (minCapacity || maxCapacity) {
+      if (minCapacity && maxCapacity) {
+        capacityWhere.volumeMl = {
+          [Op.between]: [parseInt(minCapacity as string), parseInt(maxCapacity as string)]
+        };
+      } else if (minCapacity) {
+        capacityWhere.volumeMl = { [Op.gte]: parseInt(minCapacity as string) };
+      } else if (maxCapacity) {
+        capacityWhere.volumeMl = { [Op.lte]: parseInt(maxCapacity as string) };
+      }
     }
 
     const { count: totalCount, rows: products } = await Product.findAndCountAll(
@@ -174,10 +176,6 @@ export const getProducts = async (req: Request, res: Response) => {
               {
                 model: Category,
                 as: "category",
-                where:
-                  Object.keys(categoryWhere).length > 0
-                    ? categoryWhere
-                    : undefined,
                 attributes: ["id", "name", "slug"],
               },
             ],
@@ -1173,10 +1171,6 @@ export const searchProducts = async (req: Request, res: Response) => {
               {
                 model: Category,
                 as: "category",
-                where:
-                  Object.keys(categoryWhere).length > 0
-                    ? categoryWhere
-                    : undefined,
                 attributes: ["id", "name", "slug"],
               },
             ],
@@ -1398,10 +1392,6 @@ export const getPublicProducts = async (req: Request, res: Response) => {
               {
                 model: Category,
                 as: "category",
-                where:
-                  Object.keys(categoryWhere).length > 0
-                    ? categoryWhere
-                    : undefined,
                 attributes: ["id", "name", "slug"],
               },
             ],

@@ -1,21 +1,36 @@
 import { Request, Response } from "express";
 import { models } from "../models";
 
-const { Customer, CustomerAddress, AdminUser, Order, OrderItem, Product } =
-  models;
+const {
+  Customer,
+  CustomerPhone,
+  CustomerAddress,
+  AdminUser,
+  Order,
+  OrderItem,
+  Product,
+} = models;
 
 import { ResponseHelper } from "../types/api";
 import { z } from "zod";
 import { sequelize } from "../config/database";
 import { Op } from "sequelize";
-import { INTERNATIONAL_PHONE_REGEX, getPhoneValidationErrorMessage } from "../utils/phoneValidation";
+import {
+  isValidPhoneNumber,
+  getPhoneValidationErrorMessage,
+} from "../utils/phoneValidation";
 
 // Validation schemas
 const createCustomerSchema = z.object({
   messengerId: z.string().nullable().optional(),
   zaloId: z.string().nullable().optional(),
   fullName: z.string().min(1, "Full name is required"),
-  phone: z.string().min(1, "Phone number is required").regex(INTERNATIONAL_PHONE_REGEX, getPhoneValidationErrorMessage()),
+  phoneNumber: z
+    .string()
+    .min(1, "Phone number is required")
+    .refine(isValidPhoneNumber, {
+      message: getPhoneValidationErrorMessage(),
+    }),
   notes: z.string().nullable().optional(),
   isVip: z.boolean().optional(),
   address: z
@@ -34,7 +49,12 @@ const updateCustomerSchema = z.object({
   messengerId: z.string().nullable().optional(),
   zaloId: z.string().nullable().optional(),
   fullName: z.string().optional(),
-  phone: z.string().regex(INTERNATIONAL_PHONE_REGEX, getPhoneValidationErrorMessage()).optional(),
+  phoneNumber: z
+    .string()
+    .refine(isValidPhoneNumber, {
+      message: getPhoneValidationErrorMessage(),
+    })
+    .optional(),
   notes: z.string().optional(),
   isVip: z.boolean().optional(),
 });
@@ -68,13 +88,20 @@ export const getCustomers = async (req: Request, res: Response) => {
     const offset = (pageNum - 1) * limitNum;
 
     const where: any = {};
+    const includePhoneSearch = search ? true : false;
 
     if (search) {
       where[Op.or] = [
         { fullName: { [Op.like]: `%${search}%` } },
-        { phone: { [Op.like]: `%${search}%` } },
         { messengerId: { [Op.like]: `%${search}%` } },
         { zaloId: { [Op.like]: `%${search}%` } },
+        ...(includePhoneSearch
+          ? [
+              {
+                "$customerPhones.phone_number$": { [Op.like]: `%${search}%` },
+              },
+            ]
+          : []),
       ];
     }
 
@@ -105,6 +132,7 @@ export const getCustomers = async (req: Request, res: Response) => {
       }
     }
 
+    // Use findAndCountAll with distinct to get accurate count and avoid duplicates
     const { count: totalCount, rows: customers } =
       await Customer.findAndCountAll({
         where,
@@ -113,6 +141,12 @@ export const getCustomers = async (req: Request, res: Response) => {
             model: AdminUser,
             as: "createdByAdmin",
             attributes: ["username", "email"],
+          },
+          {
+            model: CustomerPhone,
+            as: "customerPhones",
+            attributes: ["id", "phoneNumber", "isMain"],
+            required: false, // Always LEFT JOIN to include customers without phones
           },
           {
             model: CustomerAddress,
@@ -130,7 +164,8 @@ export const getCustomers = async (req: Request, res: Response) => {
         order: [["createdAt", "DESC"]],
         offset,
         limit: limitNum,
-        distinct: true,
+        subQuery: false,
+        distinct: true, // This will count distinct customers and handle duplicates
       });
 
     const totalPages = Math.ceil(totalCount / limitNum);
@@ -196,6 +231,11 @@ export const getCustomerById = async (req: Request, res: Response) => {
           model: AdminUser,
           as: "createdByAdmin",
           attributes: ["username", "email"],
+        },
+        {
+          model: CustomerPhone,
+          as: "customerPhones",
+          attributes: ["id", "phoneNumber", "isMain"],
         },
         {
           model: CustomerAddress,
@@ -269,8 +309,15 @@ export const createCustomer = async (req: Request, res: Response) => {
         );
     }
 
-    const { messengerId, zaloId, fullName, phone, notes, isVip, address } =
-      validationResult.data;
+    const {
+      messengerId,
+      zaloId,
+      fullName,
+      phoneNumber,
+      notes,
+      isVip,
+      address,
+    } = validationResult.data;
 
     // Create customer with address in a transaction
     const result = await sequelize.transaction(async (t) => {
@@ -279,10 +326,19 @@ export const createCustomer = async (req: Request, res: Response) => {
           messengerId: messengerId || undefined,
           zaloId: zaloId || undefined,
           fullName,
-          phone,
           notes: notes || undefined,
           isVip: isVip || false,
           createdByAdminId: req.user!.userId,
+        },
+        { transaction: t }
+      );
+
+      // Create main phone number
+      await CustomerPhone.create(
+        {
+          customerId: customer.id,
+          phoneNumber,
+          isMain: true,
         },
         { transaction: t }
       );
@@ -310,6 +366,11 @@ export const createCustomer = async (req: Request, res: Response) => {
             model: AdminUser,
             as: "createdByAdmin",
             attributes: ["username", "email"],
+          },
+          {
+            model: CustomerPhone,
+            as: "customerPhones",
+            attributes: ["id", "phoneNumber", "isMain"],
           },
           {
             model: CustomerAddress,
@@ -383,9 +444,6 @@ export const updateCustomer = async (req: Request, res: Response) => {
     if (validationResult.data.fullName !== undefined) {
       updateData.fullName = validationResult.data.fullName;
     }
-    if (validationResult.data.phone !== undefined) {
-      updateData.phone = validationResult.data.phone;
-    }
     if (validationResult.data.notes !== undefined) {
       updateData.notes = validationResult.data.notes || undefined;
     }
@@ -394,7 +452,38 @@ export const updateCustomer = async (req: Request, res: Response) => {
     }
 
     console.log("Update data to be applied:", updateData);
-    await existingCustomer.update(updateData);
+
+    // Handle customer and phone updates in transaction
+    await sequelize.transaction(async (t) => {
+      // Update customer data
+      await existingCustomer.update(updateData, { transaction: t });
+
+      // Update phone number if provided
+      if (validationResult.data.phoneNumber !== undefined) {
+        // Find existing main phone or create new one
+        const mainPhone = await CustomerPhone.findOne({
+          where: { customerId: id, isMain: true },
+          transaction: t,
+        });
+
+        if (mainPhone) {
+          await mainPhone.update(
+            { phoneNumber: validationResult.data.phoneNumber },
+            { transaction: t }
+          );
+        } else {
+          await CustomerPhone.create(
+            {
+              customerId: id,
+              phoneNumber: validationResult.data.phoneNumber,
+              isMain: true,
+            },
+            { transaction: t }
+          );
+        }
+      }
+    });
+
     console.log("Customer updated successfully");
 
     // Fetch updated customer with details and addresses ordered by isDefault
@@ -404,6 +493,11 @@ export const updateCustomer = async (req: Request, res: Response) => {
           model: AdminUser,
           as: "createdByAdmin",
           attributes: ["username", "email"],
+        },
+        {
+          model: CustomerPhone,
+          as: "customerPhones",
+          attributes: ["id", "phoneNumber", "isMain"],
         },
         {
           model: CustomerAddress,
@@ -783,19 +877,35 @@ export const getCustomersForSelect = async (req: Request, res: Response) => {
     const { search = "" } = req.query;
 
     const where: any = {}; // Customer model doesn't have isActive field
+    const includePhoneSearch = search ? true : false;
 
     if (search) {
       where[Op.or] = [
         { fullName: { [Op.like]: `%${search}%` } },
-        { phone: { [Op.like]: `%${search}%` } },
+        ...(includePhoneSearch
+          ? [
+              {
+                "$customerPhones.phone_number$": { [Op.like]: `%${search}%` },
+              },
+            ]
+          : []),
       ];
     }
 
     const customers = await Customer.findAll({
       where,
-      attributes: ["id", "fullName", "phone", "isVip"],
+      attributes: ["id", "fullName", "isVip"],
+      include: [
+        {
+          model: CustomerPhone,
+          as: "customerPhones",
+          attributes: ["id", "phoneNumber", "isMain"],
+          required: includePhoneSearch, // Use INNER JOIN if searching by phone
+        },
+      ],
       order: [["fullName", "ASC"]],
       limit: 50,
+      subQuery: false, // Disable subquery to allow proper JOINs with WHERE
     });
 
     return res.status(200).json(ResponseHelper.success(customers));
@@ -820,20 +930,36 @@ export const searchCustomers = async (req: Request, res: Response) => {
     const { q: query = "" } = req.query;
 
     const where: any = {};
+    const includePhoneSearch = query ? true : false;
 
     if (query && typeof query === "string") {
       where[Op.or] = [
         { fullName: { [Op.like]: `%${query}%` } },
-        { phone: { [Op.like]: `%${query}%` } },
         { messengerId: { [Op.like]: `%${query}%` } },
+        ...(includePhoneSearch
+          ? [
+              {
+                "$customerPhones.phone_number$": { [Op.like]: `%${query}%` },
+              },
+            ]
+          : []),
       ];
     }
 
     const customers = await Customer.findAll({
       where,
-      attributes: ["id", "fullName", "phone", "messengerId"],
+      attributes: ["id", "fullName", "messengerId"],
+      include: [
+        {
+          model: CustomerPhone,
+          as: "customerPhones",
+          attributes: ["id", "phoneNumber", "isMain"],
+          required: includePhoneSearch, // Use INNER JOIN if searching by phone
+        },
+      ],
       order: [["fullName", "ASC"]],
       limit: 50,
+      subQuery: false, // Disable subquery to allow proper JOINs with WHERE
     });
 
     return res.status(200).json(ResponseHelper.success(customers));

@@ -9,10 +9,14 @@ import { ResponseHelper } from "../types/api";
 // CORS configuration
 const corsOptions: cors.CorsOptions = {
   origin: function (origin, callback) {
+    // Get allowed origins from environment variable
+    const envOrigins =
+      process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()) || [];
+
     const allowedOrigins = [
+      ...envOrigins,
       process.env.FRONTEND_URL || "http://localhost:3000",
       process.env.ADMIN_URL || "http://localhost:8081",
-      "https://starbuck-cups-frontend.vercel.app",
       "http://localhost:3000",
       "http://localhost:8081",
       "http://127.0.0.1:3000",
@@ -37,8 +41,10 @@ const corsOptions: cors.CorsOptions = {
     "X-Requested-With",
     "X-API-Key",
     "Accept",
+    "Origin",
     "Cookie",
     "Set-Cookie",
+    "Access-Control-Allow-Credentials",
   ],
   exposedHeaders: [
     "X-Total-Count",

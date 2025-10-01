@@ -5,7 +5,6 @@ export interface CustomerAttributes {
   messengerId?: string;
   zaloId?: string;
   fullName: string;
-  phone: string;
   notes?: string;
   isVip: boolean;
   createdAt: Date;
@@ -22,7 +21,6 @@ export class Customer extends Model<CustomerAttributes, CustomerCreationAttribut
   public messengerId?: string;
   public zaloId?: string;
   declare fullName: string;
-  declare phone: string;
   public notes?: string;
   declare isVip: boolean;
   declare createdAt: Date;
@@ -33,6 +31,13 @@ export class Customer extends Model<CustomerAttributes, CustomerCreationAttribut
   public addresses?: any[];
   public createdByAdmin?: any;
   public orders?: any[];
+  public customerPhones?: any[];
+
+  // Helper method to get main phone
+  getMainPhone(): string | null {
+    const mainPhone = this.customerPhones?.find((phone: any) => phone.isMain);
+    return mainPhone ? mainPhone.phoneNumber : null;
+  }
 
   static associate(models: any) {
     Customer.hasMany(models.CustomerAddress, {
@@ -47,6 +52,11 @@ export class Customer extends Model<CustomerAttributes, CustomerCreationAttribut
     Customer.hasMany(models.Order, {
       foreignKey: 'customerId',
       as: 'orders',
+    });
+    Customer.hasMany(models.CustomerPhone, {
+      foreignKey: 'customerId',
+      as: 'customerPhones',
+      onDelete: 'CASCADE',
     });
   }
 }
@@ -73,10 +83,6 @@ export const CustomerModel = (sequelize: Sequelize) => {
         type: DataTypes.STRING(200),
         allowNull: false,
         field: 'full_name',
-      },
-      phone: {
-        type: DataTypes.STRING(20),
-        allowNull: false,
       },
       notes: {
         type: DataTypes.TEXT,
