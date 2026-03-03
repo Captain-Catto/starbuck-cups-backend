@@ -18,6 +18,7 @@ import {
   authenticateWithAutoRefresh,
   requireAdmin,
 } from "../middleware/auth.middleware";
+import { syncCapacity } from "../middleware/auto-sync.middleware";
 
 const router = Router();
 
@@ -235,7 +236,13 @@ router.get("/:id", authenticateWithAutoRefresh, getCapacityById);
  *       409:
  *         description: Capacity with same name or volume already exists
  */
-router.post("/", authenticateWithAutoRefresh, requireAdmin, createCapacity);
+router.post(
+  "/",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCapacity.create(),
+  createCapacity
+);
 
 /**
  * @swagger
@@ -266,7 +273,13 @@ router.post("/", authenticateWithAutoRefresh, requireAdmin, createCapacity);
  *       409:
  *         description: Capacity with same name or volume already exists
  */
-router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateCapacity);
+router.put(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCapacity.update(),
+  updateCapacity
+);
 
 /**
  * @swagger
@@ -295,6 +308,7 @@ router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncCapacity.update(),
   toggleCapacityStatus
 );
 
@@ -325,6 +339,7 @@ router.delete(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncCapacity.delete(),
   deleteCapacity
 );
 

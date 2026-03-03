@@ -373,6 +373,17 @@ class SocketService {
     );
     this.sendNotificationCount();
   }
+  // Emit settings update
+  public emitSettingsUpdate(settings: any): void {
+    if (!this.io) {
+      console.error("Socket.IO not initialized");
+      return;
+    }
+
+    // Emit to all connected clients (settings are global)
+    this.io.emit("settings:updated", settings);
+    console.log("⚙️ Settings update broadcasted");
+  }
 }
 
 // Export singleton instance

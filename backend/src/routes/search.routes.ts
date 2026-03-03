@@ -3,6 +3,10 @@
  */
 import { Router } from "express";
 import { searchController } from "../controllers/search.controller";
+import {
+  authenticateWithAutoRefresh,
+  requireAdmin,
+} from "../middleware/auth.middleware";
 
 const searchRoutes = Router();
 
@@ -78,7 +82,12 @@ searchRoutes.get(
  * GET /api/search/customers
  * Tìm kiếm khách hàng (chỉ admin)
  */
-searchRoutes.get("/customers", searchController.searchCustomers);
+searchRoutes.get(
+  "/customers",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  searchController.searchCustomers
+);
 
 /**
  * GET /api/search/customers/autocomplete
@@ -86,6 +95,8 @@ searchRoutes.get("/customers", searchController.searchCustomers);
  */
 searchRoutes.get(
   "/customers/autocomplete",
+  authenticateWithAutoRefresh,
+  requireAdmin,
   searchController.autocompleteCustomers
 );
 

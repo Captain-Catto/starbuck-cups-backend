@@ -61,6 +61,22 @@ cd frontend && npm run dev
    - API Docs: http://localhost:8080/docs
    - Database Admin: http://localhost:8081
 
+## 🐳 Run Backend With Docker
+
+Chạy từ thư mục `starbucks-shop/`:
+
+```bash
+cp .env.docker.example .env
+docker compose up -d --build
+docker compose logs -f backend
+```
+
+Sau khi có dữ liệu DB, sync MeiliSearch:
+
+```bash
+docker compose exec backend node dist/scripts/sync-meilisearch.js
+```
+
 ## 📋 Implementation Tasks
 
 See [specs/001-starbucks-website/tasks.md](./specs/001-starbucks-website/tasks.md) for detailed implementation breakdown.

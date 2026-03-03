@@ -33,7 +33,8 @@ import notificationRoutes from "./routes/notification.routes";
 import heroImagesRoutes from "./routes/hero-images.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import promotionalBannersRoutes from "./routes/promotional-banners.routes";
-// import { searchRoutes } from "./routes/search.routes";
+import settingsRoutes from "./routes/settings.routes";
+import { searchRoutes } from "./routes/search.routes";
 
 // Import Socket.IO service
 import { socketService } from "./services/socket.service";
@@ -45,11 +46,7 @@ import {
   initializeSessionStore,
 } from "./config/database-init";
 
-// Import MeiliSearch initialization - TEMPORARILY DISABLED
-// import {
-//   initializeMeiliSearch,
-//   syncInitialData,
-// } from "./config/meilisearch-init";
+import { initializeMeiliSearch, syncInitialData } from "./config/meilisearch-init";
 
 // Load environment variables
 dotenv.config();
@@ -106,7 +103,9 @@ app.use("/api/categories", categoriesRoutes);
 app.use("/api/products", productsRoutes);
 app.use("/api/hero-images", heroImagesRoutes);
 app.use("/api/promotional-banners", promotionalBannersRoutes);
-// app.use("/api/search", searchRoutes); // TEMPORARILY DISABLED - Meilisearch not available
+app.use("/api/settings", settingsRoutes);
+app.use("/api/api/settings", settingsRoutes); // Support double /api prefix from frontend
+app.use("/api/search", searchRoutes);
 
 // Public routes (for customer-facing website)
 app.use("/api/consultations", consultationRoutes);
@@ -142,6 +141,7 @@ app.get("/api/v1", (req, res) => {
         capacities: "/api/admin/capacities",
         categories: "/api/admin/categories",
         products: "/api/admin/products",
+        search: "/api/search",
         customers: "/api/admin/customers",
         orders: "/api/admin/orders",
         admin: "/api/v1/admin",
@@ -162,10 +162,11 @@ app.use(errorHandler);
 // Initialize Socket.IO
 socketService.initialize(server);
 
-// Initialize MeiliSearch - TEMPORARILY DISABLED
-// initializeMeiliSearch().then(() => {
-//   syncInitialData();
-// });
+initializeMeiliSearch().then((isReady) => {
+  if (isReady) {
+    syncInitialData();
+  }
+});
 
 // Initialize database and start server
 const startServer = async () => {

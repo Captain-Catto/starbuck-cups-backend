@@ -102,6 +102,7 @@ export interface ServerToClientEvents {
   "notification:count_update": (count: number) => void;
   "consultation:created": (data: ConsultationNotification) => void;
   "order:created": (data: OrderNotification) => void;
+  "settings:updated": (settings: any) => void;
 }
 
 export interface ClientToServerEvents {

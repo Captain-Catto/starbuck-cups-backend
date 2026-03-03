@@ -18,6 +18,7 @@ import {
   authenticateWithAutoRefresh,
   requireAdmin,
 } from "../middleware/auth.middleware";
+import { syncColor } from "../middleware/auto-sync.middleware";
 
 const router = Router();
 
@@ -269,7 +270,13 @@ router.get("/:id", authenticateWithAutoRefresh, getColorById);
  *       409:
  *         description: Color with same name or hex code already exists
  */
-router.post("/", authenticateWithAutoRefresh, requireAdmin, createColor);
+router.post(
+  "/",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncColor.create(),
+  createColor
+);
 
 /**
  * @swagger
@@ -300,7 +307,13 @@ router.post("/", authenticateWithAutoRefresh, requireAdmin, createColor);
  *       409:
  *         description: Color with same name or hex code already exists
  */
-router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateColor);
+router.put(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncColor.update(),
+  updateColor
+);
 
 /**
  * @swagger
@@ -329,6 +342,7 @@ router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncColor.update(),
   toggleColorStatus
 );
 
@@ -355,6 +369,12 @@ router.patch(
  *       409:
  *         description: Cannot delete color that is in use
  */
-router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteColor);
+router.delete(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncColor.delete(),
+  deleteColor
+);
 
 export default router;

@@ -21,6 +21,8 @@ const corsOptions: cors.CorsOptions = {
       "http://localhost:8081",
       "http://127.0.0.1:3000",
       "http://127.0.0.1:8081",
+      "https://www.hasron.vn",
+      "https://hasron.vn"
     ];
 
     // Allow requests with no origin (mobile apps, Postman, etc.)

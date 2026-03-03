@@ -17,6 +17,7 @@ import {
   authenticateWithAutoRefresh,
   requireAdmin,
 } from "../middleware/auth.middleware";
+import { syncCustomer } from "../middleware/auto-sync.middleware";
 
 const router = express.Router();
 
@@ -25,12 +26,25 @@ router.get("/", authenticateWithAutoRefresh, getCustomers);
 router.get("/search", authenticateWithAutoRefresh, searchCustomers);
 router.get("/:id", authenticateWithAutoRefresh, getCustomerById);
 router.get("/:id/orders", authenticateWithAutoRefresh, getCustomerOrders);
-router.post("/", authenticateWithAutoRefresh, requireAdmin, createCustomer);
-router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateCustomer);
+router.post(
+  "/",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCustomer.create(),
+  createCustomer
+);
+router.put(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCustomer.update(),
+  updateCustomer
+);
 router.delete(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncCustomer.delete(),
   deleteCustomer
 );
 

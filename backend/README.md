@@ -86,6 +86,34 @@ backend/
 
 Server sẽ chạy tại: http://localhost:8080
 
+## 🐳 Docker (Backend + PostgreSQL + MeiliSearch)
+
+Chạy từ thư mục project root `starbucks-shop/`:
+
+1. Tạo file env cho Docker Compose:
+
+   ```bash
+   cp .env.docker.example .env
+   ```
+
+2. Build và start toàn bộ backend stack:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. Xem log backend:
+
+   ```bash
+   docker compose logs -f backend
+   ```
+
+4. Sync dữ liệu ban đầu sang MeiliSearch (chạy 1 lần sau khi DB có data):
+
+   ```bash
+   docker compose exec backend node dist/scripts/sync-meilisearch.js
+   ```
+
 ## 🎯 Available Scripts
 
 ### Development

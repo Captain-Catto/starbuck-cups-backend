@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { HeroImage, AdminUser } from "../models";
-import { s3Service } from "../services/s3.service";
+// import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
+import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
+// import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace
 import { z } from "zod";
 import multer from "multer";
 import { sequelize } from "../config/database";
@@ -12,7 +14,7 @@ const upload = multer({
     fileSize: parseInt(process.env.MAX_FILE_SIZE || "5242880"), // 5MB default
   },
   fileFilter: (req, file, cb) => {
-    if (!s3Service.isValidImageType(file.originalname)) {
+    if (!googleDriveService.isValidImageType(file.originalname)) {
       return cb(new Error("Only image files are allowed"));
     }
     cb(null, true);
@@ -156,8 +158,8 @@ export const createHeroImage = async (req: Request, res: Response) => {
       });
     }
 
-    // Upload image to S3
-    const uploadResult = await s3Service.uploadFile(
+    // Upload image to Google Drive (OAuth2)
+    const uploadResult = await googleDriveService.uploadFile(
       file.buffer,
       file.originalname,
       "hero-images"
@@ -254,17 +256,17 @@ export const updateHeroImage = async (req: Request, res: Response) => {
     // Handle image upload if new file provided
     const file = req.file as Express.Multer.File;
     if (file) {
-      // Upload new image to S3
-      const uploadResult = await s3Service.uploadFile(
+      // Upload new image to Google Drive (OAuth2)
+      const uploadResult = await googleDriveService.uploadFile(
         file.buffer,
         file.originalname,
         "hero-images"
       );
 
-      // Delete old image from S3
-      const oldKey = s3Service.extractKeyFromUrl(existingHeroImage.imageUrl);
+      // Delete old image from Google Drive
+      const oldKey = googleDriveService.extractKeyFromUrl(existingHeroImage.imageUrl);
       if (oldKey) {
-        await s3Service.deleteFile(oldKey);
+        await googleDriveService.deleteFile(oldKey);
       }
 
       imageUrl = uploadResult.url;
@@ -328,10 +330,10 @@ export const deleteHeroImage = async (req: Request, res: Response) => {
       });
     }
 
-    // Delete image from S3
-    const imageKey = s3Service.extractKeyFromUrl(existingHeroImage.imageUrl);
+    // Delete image from Google Drive (OAuth2)
+    const imageKey = googleDriveService.extractKeyFromUrl(existingHeroImage.imageUrl);
     if (imageKey) {
-      await s3Service.deleteFile(imageKey);
+      await googleDriveService.deleteFile(imageKey);
     }
 
     // Delete hero image record

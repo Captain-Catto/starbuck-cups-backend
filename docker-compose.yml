@@ -1,70 +1,90 @@
-version: "3.8"
-
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: starbucks-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: starbucks_shop
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - starbucks-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: starbucks-redis
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - starbucks-network
-
-  adminer:
-    image: adminer:4-standalone
-    container_name: starbucks-adminer
-    ports:
-      - "8081:8080"
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: starbucks-meilisearch
+    restart: unless-stopped
     environment:
-      ADMINER_DEFAULT_SERVER: postgres
-    networks:
-      - starbucks-network
-    depends_on:
-      - postgres
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-change-this-meili-master-key}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili_data:/meili_data
 
-  # meilisearch: # TEMPORARILY DISABLED - Meilisearch not supported
-  #   image: getmeili/meilisearch:v1.5
-  #   container_name: starbucks-meilisearch
-  #   ports:
-  #     - "7700:7700"
-  #   environment:
-  #     MEILI_MASTER_KEY: starbucks_meilisearch_key_2024
-  #     MEILI_ENV: development
-  #     MEILI_LOG_LEVEL: INFO
-  #     MEILI_DB_PATH: /meili_data
-  #   volumes:
-  #     - meilisearch_data:/meili_data
-  #   networks:
-  #     - starbucks-network
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: starbucks-backend
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/starbucks_shop
+      DB_SSL: "false"
+
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_MASTER_KEY: ${MEILI_MASTER_KEY:-change-this-meili-master-key}
+
+      JWT_SECRET: ${JWT_SECRET:-change-this-session-secret}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-this-access-secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret}
+      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
+      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
+
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: lax
+      COOKIE_DOMAIN: ""
+
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+
+      GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${GOOGLE_DRIVE_REFRESH_TOKEN:-}
+      GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID:-}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:8080/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
 volumes:
   postgres_data:
-  redis_data:
-  # meilisearch_data: # TEMPORARILY DISABLED
-
-networks:
-  starbucks-network:
-    driver: bridge
+  meili_data:

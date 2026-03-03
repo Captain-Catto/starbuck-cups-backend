@@ -16,6 +16,7 @@ import {
   getPublicCategoryById,
 } from "../controllers/categories.controller";
 import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import { syncCategory } from "../middleware/auto-sync.middleware";
 
 const router = Router();
 
@@ -322,7 +323,13 @@ router.get("/:id", authenticateWithAutoRefresh, getCategoryById);
  *       400:
  *         description: Validation failed or max depth exceeded
  */
-router.post("/", authenticateWithAutoRefresh, requireAdmin, createCategory);
+router.post(
+  "/",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCategory.create(),
+  createCategory
+);
 
 /**
  * @swagger
@@ -353,7 +360,13 @@ router.post("/", authenticateWithAutoRefresh, requireAdmin, createCategory);
  *       400:
  *         description: Validation failed or circular reference detected
  */
-router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateCategory);
+router.put(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCategory.update(),
+  updateCategory
+);
 
 /**
  * @swagger
@@ -382,6 +395,7 @@ router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncCategory.update(),
   toggleCategoryStatus
 );
 
@@ -408,6 +422,12 @@ router.patch(
  *       409:
  *         description: Cannot delete category that is in use
  */
-router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteCategory);
+router.delete(
+  "/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  syncCategory.delete(),
+  deleteCategory
+);
 
 export default router;

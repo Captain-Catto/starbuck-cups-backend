@@ -7,7 +7,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "start:low-memory": "node --max-old-space-size=512 --optimize-for-size dist/index.js"
+    "start:low-memory": "node --max-old-space-size=512 --optimize-for-size dist/index.js",
+    "sync-meilisearch": "ts-node src/scripts/sync-meilisearch.ts",
+    "test-meilisearch": "ts-node src/test-meilisearch.ts"
   },
   "keywords": [
     "starbucks",
@@ -20,6 +22,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "aws-sdk": "^2.1692.0",
     "bcryptjs": "^3.0.2",
     "connect-session-sequelize": "^7.1.7",
     "cookie-parser": "^1.4.7",
@@ -28,16 +31,19 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "express-session": "^1.18.1",
+    "googleapis": "^161.0.0",
     "helmet": "^8.1.0",
     "joi": "^18.0.1",
     "jsonwebtoken": "^9.0.2",
+    "meilisearch": "^0.55.0",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.15.1",
+    "pg": "^8.19.0",
+    "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.1",
     "uuid": "^10.0.0",
-    "zod": "^3.23.8",
-    "aws-sdk": "^2.1692.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

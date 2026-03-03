@@ -7,6 +7,20 @@ import {
   type SearchOptions,
 } from "../services/meilisearch.service";
 
+const parseIdList = (value: unknown): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => String(item).split(","))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 export class SearchController {
   // ==================== PRODUCT SEARCH ====================
 
@@ -40,22 +54,30 @@ export class SearchController {
       }
 
       if (categoryIds) {
-        const ids = Array.isArray(categoryIds) ? categoryIds : [categoryIds];
-        filters.push(
-          `category.id IN [${ids.map((id) => `"${id}"`).join(", ")}]`
-        );
+        const ids = parseIdList(categoryIds);
+        if (ids.length > 0) {
+          filters.push(
+            `categories.id IN [${ids.map((id) => `"${id}"`).join(", ")}]`
+          );
+        }
       }
 
       if (colorIds) {
-        const ids = Array.isArray(colorIds) ? colorIds : [colorIds];
-        filters.push(`color.id IN [${ids.map((id) => `"${id}"`).join(", ")}]`);
+        const ids = parseIdList(colorIds);
+        if (ids.length > 0) {
+          filters.push(
+            `colors.id IN [${ids.map((id) => `"${id}"`).join(", ")}]`
+          );
+        }
       }
 
       if (capacityIds) {
-        const ids = Array.isArray(capacityIds) ? capacityIds : [capacityIds];
-        filters.push(
-          `capacity.id IN [${ids.map((id) => `"${id}"`).join(", ")}]`
-        );
+        const ids = parseIdList(capacityIds);
+        if (ids.length > 0) {
+          filters.push(
+            `capacity.id IN [${ids.map((id) => `"${id}"`).join(", ")}]`
+          );
+        }
       }
 
       if (filters.length > 0) {
@@ -112,8 +134,9 @@ export class SearchController {
           id: hit.id,
           name: hit.name,
           slug: hit.slug,
-          category: hit.category.name,
-          image: hit.images[0] || null,
+          category: hit.categories?.[0]?.name || null,
+          capacity: hit.capacity?.name || null,
+          image: hit.images?.[0] || null,
         })),
       });
     } catch (error) {
@@ -134,7 +157,7 @@ export class SearchController {
       // Sử dụng search với facets để lấy thông tin facet
       const results = await meilisearchService.searchProducts("", {
         limit: 0,
-        facets: ["category.name", "color.name", "capacity.name", "isActive"],
+        facets: ["categories.name", "colors.name", "capacity.name", "isActive"],
       });
 
       res.json({

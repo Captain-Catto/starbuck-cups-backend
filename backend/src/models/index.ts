@@ -20,6 +20,7 @@ import { ConsultationItem, ConsultationItemModel } from "./ConsultationItem";
 import { HeroImage, HeroImageModel } from "./HeroImage";
 import { ProductAnalytics, ProductAnalyticsModel } from "./ProductAnalytics";
 import { PromotionalBanner, PromotionalBannerModel } from "./PromotionalBanner";
+import { Setting, SettingModel } from "./Setting";
 
 // Initialize all models
 const models = {
@@ -40,7 +41,9 @@ const models = {
   ConsultationItem: ConsultationItemModel(sequelize),
   HeroImage: HeroImageModel(sequelize),
   ProductAnalytics: ProductAnalyticsModel(sequelize),
+
   PromotionalBanner: PromotionalBannerModel(sequelize),
+  Setting: SettingModel(sequelize),
 };
 
 // Define associations
@@ -74,7 +77,9 @@ export {
   ConsultationItem,
   HeroImage,
   ProductAnalytics,
+
   PromotionalBanner,
+  Setting
 };
 
 export default models;

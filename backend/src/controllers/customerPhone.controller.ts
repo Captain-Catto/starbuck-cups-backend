@@ -195,11 +195,14 @@ export const deleteCustomerPhone = async (req: Request, res: Response) => {
       return;
     }
 
-    await customerPhoneService.deleteCustomerPhone(phoneId);
+    const result = await customerPhoneService.deleteCustomerPhone(phoneId);
 
     const response: ApiResponse = {
       success: true,
-      data: { message: "Phone number deleted successfully" },
+      data: {
+        message: "Phone number deleted successfully",
+        customerId: result.customerId,
+      },
       meta: { timestamp: new Date().toISOString() },
       error: null,
     };

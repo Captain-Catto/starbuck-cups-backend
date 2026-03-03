@@ -226,8 +226,9 @@ export class CustomerPhoneService {
         }
       }
 
+      const customerId = phone.customerId;
       await phone.destroy();
-      return { success: true };
+      return { success: true, customerId };
     } catch (error) {
       console.error("Database error deleting customer phone:", error);
       throw error;
@@ -259,7 +260,7 @@ export class CustomerPhoneService {
       await phone.update({ isMain: true }, { transaction });
 
       await transaction.commit();
-      return { success: true };
+      return { success: true, customerId: phone.customerId };
     } catch (error) {
       await transaction.rollback();
       console.error("Database error setting main phone:", error);

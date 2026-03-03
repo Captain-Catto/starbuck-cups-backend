@@ -1,5 +1,7 @@
 import express, { Request, Response } from "express";
-import { s3Service } from "../services/s3.service";
+// import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
+import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
+// import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace (Shared Drive)
 import {
   uploadSingle,
   uploadMultiple,
@@ -43,8 +45,8 @@ router.post(
         return;
       }
 
-      // Upload to S3
-      const result = await s3Service.uploadFile(
+      // Upload to Google Drive (OAuth2)
+      const result = await googleDriveService.uploadFile(
         req.file.buffer,
         req.file.originalname,
         folder
@@ -111,8 +113,8 @@ router.post(
         filename: file.originalname,
       }));
 
-      // Upload to S3
-      const results = await s3Service.uploadFiles(files, folder);
+      // Upload to Google Drive (OAuth2)
+      const results = await googleDriveService.uploadFiles(files, folder);
 
       res.json({
         success: true,
@@ -152,7 +154,7 @@ router.delete(
       }
 
       // Check if file exists
-      const exists = await s3Service.fileExists(key);
+      const exists = await googleDriveService.fileExists(key);
       if (!exists) {
         res.status(404).json({
           success: false,
@@ -161,8 +163,8 @@ router.delete(
         return;
       }
 
-      // Delete from S3
-      await s3Service.deleteFile(key);
+      // Delete from Google Drive (OAuth2)
+      await googleDriveService.deleteFile(key);
 
       res.json({
         success: true,
@@ -178,14 +180,13 @@ router.delete(
   }
 );
 
-// Get signed URL for temporary access
+// Get public URL (Google Drive doesn't need signed URLs - files are already public)
 router.get(
   "/signed-url",
   authenticateWithAutoRefresh,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const key = req.query.key as string; // Use query parameter
-      const expires = parseInt(req.query.expires as string) || 3600; // 1 hour default
+      const key = req.query.key as string; // Use query parameter (file ID)
 
       if (!key) {
         res.status(400).json({
@@ -196,7 +197,7 @@ router.get(
       }
 
       // Check if file exists
-      const exists = await s3Service.fileExists(key);
+      const exists = await googleDriveService.fileExists(key);
       if (!exists) {
         res.status(404).json({
           success: false,
@@ -205,22 +206,22 @@ router.get(
         return;
       }
 
-      // Generate signed URL
-      const signedUrl = s3Service.getSignedUrl(key, expires);
+      // Get public URL (Google Drive files are already public)
+      const publicUrl = googleDriveService.getPublicUrl(key);
 
       res.json({
         success: true,
         data: {
-          url: signedUrl,
-          expires: expires,
+          url: publicUrl,
+          expires: null, // Google Drive public URLs don't expire
         },
-        message: "Signed URL generated successfully",
+        message: "Public URL retrieved successfully",
       });
     } catch (error: any) {
-      console.error("Signed URL error:", error);
+      console.error("Public URL error:", error);
       res.status(500).json({
         success: false,
-        message: error?.message || "Failed to generate signed URL",
+        message: error?.message || "Failed to get public URL",
       });
     }
   }

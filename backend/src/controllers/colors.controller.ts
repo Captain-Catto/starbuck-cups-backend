@@ -54,7 +54,7 @@ const updateColorSchema = createColorSchema.partial();
 // Query validation schema
 const getColorsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().min(-1).max(100).default(20),
   search: z.string().optional(),
   isActive: z.enum(["true", "false", "all"]).default("all"),
   sortBy: z.enum(["name", "createdAt", "updatedAt"]).optional(),
@@ -66,7 +66,7 @@ const querySchema = z.object({
   limit: z
     .string()
     .transform(Number)
-    .pipe(z.number().min(1).max(100))
+    .pipe(z.number().min(-1).max(100))
     .optional(),
   search: z.string().optional(),
   isActive: z
@@ -178,11 +178,9 @@ export const getColorsForAdmin = async (req: Request, res: Response) => {
       where.isActive = isActive === "true";
     }
 
-    // Get total count and colors with product counts
-    const { count: total, rows: colors } = await Color.findAndCountAll({
+    // Build query options
+    const queryOptions: any = {
       where,
-      offset,
-      limit,
       order: [[sortBy, sortOrder.toUpperCase()]],
       include: [
         {
@@ -197,7 +195,16 @@ export const getColorsForAdmin = async (req: Request, res: Response) => {
         },
       ],
       distinct: true,
-    });
+    };
+
+    // Only apply pagination if limit is not -1 (get all)
+    if (limit !== -1) {
+      queryOptions.offset = offset;
+      queryOptions.limit = limit;
+    }
+
+    // Get total count and colors with product counts
+    const { count: total, rows: colors } = await Color.findAndCountAll(queryOptions);
 
     // Transform the data to match expected format
     const transformedColors = colors.map((color: any) => ({
@@ -207,15 +214,15 @@ export const getColorsForAdmin = async (req: Request, res: Response) => {
       },
     }));
 
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = limit !== -1 ? Math.ceil(total / limit) : 1;
 
     return res.status(200).json(
       ResponseHelper.paginated(transformedColors, {
         current_page: page,
-        per_page: limit,
+        per_page: limit !== -1 ? limit : total,
         total_pages: totalPages,
         total_items: total,
-        has_next: page < totalPages,
+        has_next: limit !== -1 ? page < totalPages : false,
         has_prev: page > 1,
       })
     );

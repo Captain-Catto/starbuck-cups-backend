@@ -27,7 +27,7 @@ const querySchema = z.object({
   limit: z
     .string()
     .transform(Number)
-    .pipe(z.number().min(1).max(100))
+    .pipe(z.number().min(-1).max(100))
     .optional(),
   search: z.string().optional(),
   isActive: z
@@ -92,37 +92,44 @@ export const getCategories = async (req: Request, res: Response) => {
       where.parentId = parentId;
     }
 
+    // Build query options
+    const queryOptions: any = {
+      where,
+      order: [[sortBy, sortOrder.toUpperCase()]],
+      include: [
+        {
+          model: AdminUser,
+          as: "createdByAdmin",
+          attributes: ["username", "email"],
+        },
+        {
+          model: Category,
+          as: "parent",
+          attributes: ["id", "name", "slug"],
+        },
+        ...(includeChildren
+          ? [
+              {
+                model: Category,
+                as: "children",
+                attributes: ["id", "name", "slug", "isActive"],
+                where: { isActive: true },
+              },
+            ]
+          : []),
+      ],
+    };
+
+    // Only apply pagination if limit is not -1 (get all)
+    if (limit !== -1) {
+      queryOptions.offset = offset;
+      queryOptions.limit = limit;
+    }
+
     // Get total count and categories
     const [total, categories] = await Promise.all([
       Category.count({ where }),
-      Category.findAll({
-        where,
-        offset,
-        limit,
-        order: [[sortBy, sortOrder.toUpperCase()]],
-        include: [
-          {
-            model: AdminUser,
-            as: "createdByAdmin",
-            attributes: ["username", "email"],
-          },
-          {
-            model: Category,
-            as: "parent",
-            attributes: ["id", "name", "slug"],
-          },
-          ...(includeChildren
-            ? [
-                {
-                  model: Category,
-                  as: "children",
-                  attributes: ["id", "name", "slug", "isActive"],
-                  where: { isActive: true },
-                },
-              ]
-            : []),
-        ],
-      }),
+      Category.findAll(queryOptions),
     ]);
 
     // Add product count for each category
@@ -141,15 +148,15 @@ export const getCategories = async (req: Request, res: Response) => {
       })
     );
 
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = limit !== -1 ? Math.ceil(total / limit) : 1;
 
     return res.status(200).json(
       ResponseHelper.paginated(categoriesWithCount, {
         current_page: page,
-        per_page: limit,
+        per_page: limit !== -1 ? limit : total,
         total_pages: totalPages,
         total_items: total,
-        has_next: page < totalPages,
+        has_next: limit !== -1 ? page < totalPages : false,
         has_prev: page > 1,
       })
     );
@@ -818,7 +825,14 @@ export const getPublicCategories = async (req: Request, res: Response) => {
         );
     }
 
-    const { page = 1, limit = 20, search, parentId } = validation.data;
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      parentId,
+      sortBy = "name",
+      sortOrder = "asc"
+    } = validation.data;
     const offset = (page - 1) * limit;
 
     // Build where clause for public categories (only active)
@@ -864,7 +878,7 @@ export const getPublicCategories = async (req: Request, res: Response) => {
             attributes: ["id", "name", "slug", "isActive"],
           },
         ],
-        order: [["createdAt", "DESC"]],
+        order: [[sortBy, sortOrder.toUpperCase()]],
         offset,
         limit,
       }),

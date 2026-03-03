@@ -112,10 +112,6 @@ class MeilisearchService {
     const host = process.env.MEILISEARCH_HOST || "http://localhost:7700";
     const apiKey = process.env.MEILISEARCH_MASTER_KEY;
 
-    if (!apiKey) {
-      throw new Error("MEILISEARCH_MASTER_KEY is required");
-    }
-
     this.client = new MeiliSearch({
       host,
       apiKey,

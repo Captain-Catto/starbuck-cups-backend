@@ -10,6 +10,8 @@ export interface ProductAttributes {
   productUrl?: string;
   isActive: boolean;
   isDeleted: boolean;
+  isVip: boolean;
+  isFeatured: boolean;
   deletedAt?: Date;
   deletedByAdminId?: string;
   createdAt: Date;
@@ -36,6 +38,8 @@ export class Product
   declare productUrl?: string;
   declare isActive: boolean;
   declare isDeleted: boolean;
+  declare isVip: boolean;
+  declare isFeatured: boolean;
   declare deletedAt?: Date;
   declare deletedByAdminId?: string;
   declare createdAt: Date;
@@ -142,6 +146,18 @@ export const ProductModel = (sequelize: Sequelize) => {
         allowNull: false,
         defaultValue: false,
         field: "is_deleted",
+      },
+      isVip: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: "is_vip",
+      },
+      isFeatured: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: "is_featured",
       },
       deletedAt: {
         type: DataTypes.DATE,

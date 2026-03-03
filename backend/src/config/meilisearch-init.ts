@@ -3,7 +3,7 @@
  */
 import { meilisearchService } from "../services/meilisearch.service";
 
-export async function initializeMeiliSearch(): Promise<void> {
+export async function initializeMeiliSearch(): Promise<boolean> {
   try {
     console.log("🔍 Initializing MeiliSearch...");
 
@@ -21,12 +21,14 @@ export async function initializeMeiliSearch(): Promise<void> {
     // Log stats
     const stats = await meilisearchService.getIndexStats();
     console.log("📊 MeiliSearch Index Stats:", stats);
+    return true;
   } catch (error) {
     console.error("❌ Failed to initialize MeiliSearch:", error);
 
     // Don't crash the app if MeiliSearch fails
     // Just log the error and continue
     console.warn("⚠️ App will continue without search functionality");
+    return false;
   }
 }
 

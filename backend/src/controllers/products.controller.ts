@@ -15,7 +15,9 @@ import {
 } from "../models";
 import { ResponseHelper } from "../types/api";
 import { z } from "zod";
-import { s3Service } from "../services/s3.service";
+// import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
+import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
+// import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace
 import { productImageService } from "../services/product-image.service";
 // import {
 //   meilisearchService,
@@ -51,6 +53,8 @@ const createProductSchema = z.object({
     .optional()
     .default(0),
   productUrl: z.string().url().optional().or(z.literal("")),
+  isVip: z.boolean().optional().default(false),
+  isFeatured: z.boolean().optional().default(false),
   categoryIds: z
     .array(z.string().uuid())
     .min(1, "At least one category is required"),
@@ -97,6 +101,8 @@ export const getProducts = async (req: Request, res: Response) => {
       search = "",
       isActive = "all",
       isDeleted = "false",
+      isFeatured = "all",
+      categorySlug,
       colorSlug,
       minCapacity,
       maxCapacity,
@@ -124,6 +130,10 @@ export const getProducts = async (req: Request, res: Response) => {
       where.isActive = isActive === "true";
     }
 
+    if (isFeatured !== "all") {
+      where.isFeatured = isFeatured === "true";
+    }
+
     // Search functionality
     if (search) {
       where[Op.or] = [
@@ -138,6 +148,12 @@ export const getProducts = async (req: Request, res: Response) => {
       where.stockQuantity = { [Op.lte]: threshold };
     }
 
+    // Category filtering
+    const categoryWhere: any = {};
+    if (categorySlug) {
+      categoryWhere.slug = categorySlug;
+    }
+
     // Color filtering
     const colorWhere: any = {};
     if (colorSlug) {
@@ -149,7 +165,10 @@ export const getProducts = async (req: Request, res: Response) => {
     if (minCapacity || maxCapacity) {
       if (minCapacity && maxCapacity) {
         capacityWhere.volumeMl = {
-          [Op.between]: [parseInt(minCapacity as string), parseInt(maxCapacity as string)]
+          [Op.between]: [
+            parseInt(minCapacity as string),
+            parseInt(maxCapacity as string),
+          ],
         };
       } else if (minCapacity) {
         capacityWhere.volumeMl = { [Op.gte]: parseInt(minCapacity as string) };
@@ -158,56 +177,136 @@ export const getProducts = async (req: Request, res: Response) => {
       }
     }
 
-    const { count: totalCount, rows: products } = await Product.findAndCountAll(
+    // Build common include configuration for counting
+    const countInclude = [
       {
-        where,
-        include: [
-          {
-            model: Capacity,
-            as: "capacity",
-            where:
-              Object.keys(capacityWhere).length > 0 ? capacityWhere : undefined,
-            attributes: ["id", "name", "slug", "volumeMl"],
-          },
-          {
-            model: ProductCategory,
-            as: "productCategories",
-            include: [
-              {
-                model: Category,
-                as: "category",
-                attributes: ["id", "name", "slug"],
-              },
-            ],
-          },
-          {
-            model: ProductColor,
-            as: "productColors",
-            include: [
-              {
-                model: Color,
-                as: "color",
-                where:
-                  Object.keys(colorWhere).length > 0 ? colorWhere : undefined,
-                attributes: ["id", "name", "slug", "hexCode"],
-              },
-            ],
-          },
-          {
-            model: ProductImage,
-            as: "productImages",
-            attributes: ["id", "url", "altText", "order"],
-          },
-        ],
-        order: [
-          [sortBy as string, (sortOrder as string).toUpperCase()],
-          [{ model: ProductImage, as: "productImages" }, "order", "ASC"],
-        ],
-        offset,
-        limit: limitNum,
-        distinct: true,
+        model: Capacity,
+        as: "capacity",
+        where: Object.keys(capacityWhere).length > 0 ? capacityWhere : undefined,
+        required: Object.keys(capacityWhere).length > 0,
+        attributes: [],
+      },
+      {
+        model: ProductCategory,
+        as: "productCategories",
+        attributes: [],
+        ...(Object.keys(categoryWhere).length > 0 && {
+          required: true,
+          include: [
+            {
+              model: Category,
+              as: "category",
+              where: categoryWhere,
+              required: true,
+              attributes: [],
+            },
+          ],
+        }),
+      },
+      {
+        model: ProductColor,
+        as: "productColors",
+        attributes: [],
+        ...(Object.keys(colorWhere).length > 0 && {
+          required: true,
+          include: [
+            {
+              model: Color,
+              as: "color",
+              where: colorWhere,
+              required: true,
+              attributes: [],
+            },
+          ],
+        }),
+      },
+    ];
+
+    // Determine sort order - featured products first when filtering
+    const orderClauses: any[] = [];
+    if (isFeatured === "true") {
+      orderClauses.push(["isFeatured", "DESC"]);
+    }
+    // If sorting by isFeatured, use createdAt DESC as secondary sort instead of duplicate
+    if (sortBy === "isFeatured") {
+      orderClauses.push(["createdAt", "DESC"]);
+    } else {
+      orderClauses.push([sortBy as string, (sortOrder as string).toUpperCase()]);
+    }
+
+    // First, get ALL matching products with minimal data and proper ordering
+    const allMatchingProducts = await Product.findAll({
+      where,
+      include: countInclude,
+      attributes: ["id"],
+      order: orderClauses,
+      raw: true,
+    });
+
+    // Remove duplicates while preserving sort order
+    const seenIds = new Set<string>();
+    const orderedUniqueProductIds: string[] = [];
+
+    for (const product of allMatchingProducts) {
+      const id = (product as any).id;
+      if (!seenIds.has(id)) {
+        seenIds.add(id);
+        orderedUniqueProductIds.push(id);
       }
-    );
+    }
+
+    const totalCount = orderedUniqueProductIds.length;
+
+    // Apply pagination on the ordered unique product IDs
+    const paginatedProductIds = orderedUniqueProductIds.slice(offset, offset + limitNum);
+
+    // Now fetch the full product details for these specific IDs
+    const productsUnsorted = await Product.findAll({
+      where: {
+        id: { [Op.in]: paginatedProductIds },
+      },
+      include: [
+        {
+          model: Capacity,
+          as: "capacity",
+          attributes: ["id", "name", "slug", "volumeMl"],
+        },
+        {
+          model: ProductCategory,
+          as: "productCategories",
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name", "slug"],
+            },
+          ],
+        },
+        {
+          model: ProductColor,
+          as: "productColors",
+          include: [
+            {
+              model: Color,
+              as: "color",
+              attributes: ["id", "name", "slug", "hexCode"],
+            },
+          ],
+        },
+        {
+          model: ProductImage,
+          as: "productImages",
+          attributes: ["id", "url", "altText", "order"],
+        },
+      ],
+      order: [
+        [{ model: ProductImage, as: "productImages" }, "order", "ASC"],
+      ],
+    });
+
+    // Sort products according to the original paginated order
+    const productsMap = new Map(productsUnsorted.map(p => [p.id, p]));
+    const products = paginatedProductIds.map(id => productsMap.get(id)!).filter(Boolean);
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
@@ -328,6 +427,8 @@ export const createProduct = async (req: Request, res: Response) => {
       stockQuantity,
       unitPrice,
       productUrl,
+      isVip,
+      isFeatured,
       categoryIds,
       colorIds,
       productImages,
@@ -391,6 +492,8 @@ export const createProduct = async (req: Request, res: Response) => {
           stockQuantity,
           unitPrice,
           productUrl,
+          isVip: Boolean(isVip),
+          isFeatured: Boolean(isFeatured),
           isActive: true,
           isDeleted: false,
           createdByAdminId: req.user!.userId,
@@ -534,8 +637,9 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       // Handle file uploads if present
       if (files && files.length > 0) {
         const uploadPromises = files.map(async (file, index) => {
-          const uploadResult = await s3Service.uploadFile(
+          const uploadResult = await googleDriveService.uploadFile(
             file.buffer,
+            file.originalname,
             "products"
           );
           return {
@@ -1086,7 +1190,9 @@ export const toggleProductStatus = async (req: Request, res: Response) => {
 
     return res.status(200).json(
       ResponseHelper.success({
-        message: `Product ${product.isActive ? "activated" : "deactivated"} successfully`,
+        message: `Product ${
+          product.isActive ? "activated" : "deactivated"
+        } successfully`,
         isActive: product.isActive,
       })
     );
@@ -1332,6 +1438,9 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       colorSlug,
       capacity,
       capacitySlug,
+      minCapacity,
+      maxCapacity,
+      isFeatured = "all",
       sortBy = "createdAt",
       sortOrder = "desc",
     } = req.query;
@@ -1353,6 +1462,10 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       ];
     }
 
+    if (isFeatured !== "all") {
+      where.isFeatured = isFeatured === "true";
+    }
+
     // Category filtering - support both 'category' and 'categorySlug' parameters
     const categoryWhere: any = {};
     const categorySlugValue = category || categorySlug;
@@ -1367,73 +1480,162 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       colorWhere.slug = colorSlugValue;
     }
 
-    // Capacity filtering - support both 'capacity' and 'capacitySlug' parameters
+    // Capacity filtering - support both 'capacity' and 'capacitySlug' parameters, or min/max volume
     const capacityWhere: any = {};
     const capacitySlugValue = capacity || capacitySlug;
     if (capacitySlugValue) {
       capacityWhere.slug = capacitySlugValue;
+    } else if (minCapacity || maxCapacity) {
+      // Filter by volume range
+      if (minCapacity && maxCapacity) {
+        capacityWhere.volumeMl = {
+          [Op.between]: [
+            parseInt(minCapacity as string),
+            parseInt(maxCapacity as string),
+          ],
+        };
+      } else if (minCapacity) {
+        capacityWhere.volumeMl = { [Op.gte]: parseInt(minCapacity as string) };
+      } else if (maxCapacity) {
+        capacityWhere.volumeMl = { [Op.lte]: parseInt(maxCapacity as string) };
+      }
     }
 
-    const { count: totalCount, rows: products } = await Product.findAndCountAll(
+    // Build common include configuration for both count and findAll
+    const countInclude = [
       {
-        where,
-        include: [
-          {
-            model: Capacity,
-            as: "capacity",
-            where:
-              Object.keys(capacityWhere).length > 0 ? capacityWhere : undefined,
-            attributes: ["id", "name", "slug", "volumeMl"],
-          },
-          {
-            model: ProductCategory,
-            as: "productCategories",
-            include: [
-              {
-                model: Category,
-                as: "category",
-                attributes: ["id", "name", "slug"],
-              },
-            ],
-          },
-          {
-            model: ProductColor,
-            as: "productColors",
-            include: [
-              {
-                model: Color,
-                as: "color",
-                where:
-                  Object.keys(colorWhere).length > 0 ? colorWhere : undefined,
-                attributes: ["id", "name", "slug", "hexCode"],
-              },
-            ],
-          },
-          {
-            model: ProductImage,
-            as: "productImages",
-            attributes: ["id", "url", "altText", "order"],
-          },
-        ],
-        attributes: [
-          "id",
-          "name",
-          "slug",
-          "description",
-          "stockQuantity",
-          "unitPrice",
-          "productUrl",
-          "createdAt",
-        ], // Limited attributes for public
-        order: [
-          [sortBy as string, (sortOrder as string).toUpperCase()],
-          [{ model: ProductImage, as: "productImages" }, "order", "ASC"],
-        ],
-        offset,
-        limit: limitNum,
-        distinct: true,
-      }
-    );
+        model: Capacity,
+        as: "capacity",
+        where:
+          Object.keys(capacityWhere).length > 0 ? capacityWhere : undefined,
+        required: Object.keys(capacityWhere).length > 0,
+        attributes: [],
+      },
+      {
+        model: ProductCategory,
+        as: "productCategories",
+        attributes: [],
+        ...(Object.keys(categoryWhere).length > 0 && {
+          required: true,
+          include: [
+            {
+              model: Category,
+              as: "category",
+              where: categoryWhere,
+              required: true,
+              attributes: [],
+            },
+          ],
+        }),
+      },
+      {
+        model: ProductColor,
+        as: "productColors",
+        attributes: [],
+        ...(Object.keys(colorWhere).length > 0 && {
+          required: true,
+          include: [
+            {
+              model: Color,
+              as: "color",
+              where: colorWhere,
+              required: true,
+              attributes: [],
+            },
+          ],
+        }),
+      },
+    ];
+
+    // Get accurate count by finding all matching product IDs first
+    const matchingProductIds = await Product.findAll({
+      where,
+      include: countInclude,
+      attributes: ["id"],
+      group: ["Product.id"],
+      raw: true,
+    });
+
+    const totalCount = matchingProductIds.length;
+
+    // Now fetch the paginated products with full details
+    const products = await Product.findAll({
+      where,
+      include: [
+        {
+          model: Capacity,
+          as: "capacity",
+          where:
+            Object.keys(capacityWhere).length > 0 ? capacityWhere : undefined,
+          required: Object.keys(capacityWhere).length > 0,
+          attributes: ["id", "name", "slug", "volumeMl"],
+        },
+        {
+          model: ProductCategory,
+          as: "productCategories",
+          include: [
+            {
+              model: Category,
+              as: "category",
+              where:
+                Object.keys(categoryWhere).length > 0
+                  ? categoryWhere
+                  : undefined,
+              required: Object.keys(categoryWhere).length > 0,
+              attributes: ["id", "name", "slug"],
+            },
+          ],
+        },
+        {
+          model: ProductColor,
+          as: "productColors",
+          include: [
+            {
+              model: Color,
+              as: "color",
+              where:
+                Object.keys(colorWhere).length > 0 ? colorWhere : undefined,
+              required: Object.keys(colorWhere).length > 0,
+              attributes: ["id", "name", "slug", "hexCode"],
+            },
+          ],
+        },
+        {
+          model: ProductImage,
+          as: "productImages",
+          attributes: ["id", "url", "altText", "order"],
+        },
+      ],
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "description",
+        "stockQuantity",
+        "unitPrice",
+        "productUrl",
+        "isVip",
+        "isFeatured",
+        "createdAt",
+      ],
+      order: [
+        // Primary sort
+        ...(sortBy === "isFeatured" && isFeatured !== "true"
+          ? [["isFeatured", (sortOrder as string).toUpperCase()] as any]
+          : isFeatured === "true"
+          ? [["isFeatured", "DESC"] as any]
+          : []),
+        // Secondary sort
+        ...(sortBy === "isFeatured"
+          ? [["createdAt", "DESC"] as any]
+          : [[sortBy as string, (sortOrder as string).toUpperCase()] as any]),
+        // Image order
+        [{ model: ProductImage, as: "productImages" }, "order", "ASC"],
+      ],
+      offset,
+      limit: limitNum,
+      subQuery: true,
+    });
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
@@ -1523,6 +1725,8 @@ export const getPublicProductById = async (req: Request, res: Response) => {
         "stockQuantity",
         "unitPrice",
         "productUrl",
+        "isVip",
+        "isFeatured",
         "createdAt",
       ],
     });
@@ -1542,6 +1746,58 @@ export const getPublicProductById = async (req: Request, res: Response) => {
         ResponseHelper.error(
           "Failed to retrieve product",
           "GET_PUBLIC_PRODUCT_ERROR"
+        )
+      );
+  }
+};
+
+/**
+ * Get featured products statistics
+ */
+export const getFeaturedProductsStats = async (req: Request, res: Response) => {
+  try {
+    const [totalProducts, featuredProducts, activeProducts, activeFeaturedProducts] =
+      await Promise.all([
+        Product.count({ where: { isDeleted: false } }),
+        Product.count({ where: { isFeatured: true, isDeleted: false } }),
+        Product.count({ where: { isActive: true, isDeleted: false } }),
+        Product.count({ where: { isFeatured: true, isActive: true, isDeleted: false } }),
+      ]);
+
+    const featuredPercentage = totalProducts > 0
+      ? Math.round((featuredProducts / totalProducts) * 1000) / 10
+      : 0;
+
+    const activeFeaturedPercentage = activeProducts > 0
+      ? Math.round((activeFeaturedProducts / activeProducts) * 1000) / 10
+      : 0;
+
+    const stats = {
+      total: {
+        allProducts: totalProducts,
+        activeProducts: activeProducts,
+        featuredProducts: featuredProducts,
+        activeFeaturedProducts: activeFeaturedProducts,
+      },
+      percentages: {
+        featuredOfTotal: featuredPercentage,
+        featuredOfActive: activeFeaturedPercentage,
+      },
+      breakdown: {
+        notFeatured: totalProducts - featuredProducts,
+        inactiveFeatured: featuredProducts - activeFeaturedProducts,
+      },
+    };
+
+    return res.status(200).json(ResponseHelper.success(stats));
+  } catch (error) {
+    console.error("Get featured products stats error:", error);
+    return res
+      .status(500)
+      .json(
+        ResponseHelper.error(
+          "Failed to retrieve featured products statistics",
+          "GET_FEATURED_STATS_ERROR"
         )
       );
   }

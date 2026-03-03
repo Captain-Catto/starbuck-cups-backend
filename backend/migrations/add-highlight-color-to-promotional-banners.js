@@ -5,7 +5,6 @@ module.exports = {
     await queryInterface.addColumn("promotional_banners", "highlight_color", {
       type: Sequelize.STRING(50),
       allowNull: true,
-      after: "highlight_text",
     });
   },
 

@@ -125,3 +125,10 @@ Thumbs.db
 
 # Prisma
 /src/generated/prisma
+
+# Google Drive Service Account Credentials
+credentials/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json

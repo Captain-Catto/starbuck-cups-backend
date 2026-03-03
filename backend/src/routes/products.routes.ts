@@ -17,6 +17,7 @@ import {
   getPublicProducts,
   getPublicProductById,
   reorderProductImages,
+  getFeaturedProductsStats,
 } from "../controllers/products.controller";
 import {
   authenticateWithAutoRefresh,
@@ -28,7 +29,7 @@ import {
   uploadMultiple,
   handleMulterError,
 } from "../middleware/upload.middleware";
-// import { syncProduct } from "../middleware/auto-sync.middleware"; // DISABLED - Meilisearch removed
+import { syncProduct } from "../middleware/auto-sync.middleware";
 
 const router = Router();
 
@@ -66,6 +67,13 @@ const router = Router();
  *         name: capacityId
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: isFeatured
+ *         schema:
+ *           type: string
+ *           enum: [all, true, false]
+ *           default: all
+ *         description: Filter by featured status
  *       - in: query
  *         name: sortBy
  *         schema:
@@ -160,6 +168,12 @@ router.get("/:id", getPublicProductById);
  *           type: boolean
  *         isDeleted:
  *           type: boolean
+ *         isVip:
+ *           type: boolean
+ *           description: Whether product is VIP/premium
+ *         isFeatured:
+ *           type: boolean
+ *           description: Whether product is featured
  *         deletedAt:
  *           type: string
  *           format: date-time
@@ -230,6 +244,12 @@ router.get("/:id", getPublicProductById);
  *         productUrl:
  *           type: string
  *           format: uri
+ *         isVip:
+ *           type: boolean
+ *           default: false
+ *         isFeatured:
+ *           type: boolean
+ *           default: false
  *     UpdateProductRequest:
  *       type: object
  *       properties:
@@ -261,6 +281,10 @@ router.get("/:id", getPublicProductById);
  *         productUrl:
  *           type: string
  *           format: uri
+ *         isVip:
+ *           type: boolean
+ *         isFeatured:
+ *           type: boolean
  *     StockUpdateRequest:
  *       type: object
  *       required:
@@ -509,7 +533,7 @@ router.post(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  // syncProduct.create(), // DISABLED - Meilisearch removed
+  syncProduct.create(),
   createProduct
 );
 
@@ -546,7 +570,7 @@ router.put(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  // syncProduct.update(), // DISABLED - Meilisearch removed
+  syncProduct.update(),
   updateProduct
 );
 
@@ -612,7 +636,7 @@ router.put(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  // syncProduct.update(), // DISABLED - Meilisearch removed
+  syncProduct.update(),
   updateProductWithFiles
 );
 
@@ -649,6 +673,7 @@ router.patch(
   "/:id/stock",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   updateProductStock
 );
 
@@ -677,6 +702,7 @@ router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   toggleProductStatus
 );
 
@@ -707,6 +733,7 @@ router.patch(
   "/:id/reactivate",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   reactivateProduct
 );
 
@@ -735,7 +762,7 @@ router.delete(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  // syncProduct.delete(), // DISABLED - Meilisearch removed
+  syncProduct.delete(),
   deleteProduct
 );
 
@@ -780,6 +807,7 @@ router.patch(
   "/:id/reorder-images",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   reorderProductImages
 );
 
@@ -794,6 +822,59 @@ adminProductsRouter.get(
   getLowStockProducts
 );
 adminProductsRouter.get("/search", authenticateWithAutoRefresh, searchProducts);
+
+/**
+ * @swagger
+ * /api/admin/products/stats/featured:
+ *   get:
+ *     summary: Get featured products statistics
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Featured products statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: object
+ *                       properties:
+ *                         allProducts:
+ *                           type: integer
+ *                         activeProducts:
+ *                           type: integer
+ *                         featuredProducts:
+ *                           type: integer
+ *                         activeFeaturedProducts:
+ *                           type: integer
+ *                     percentages:
+ *                       type: object
+ *                       properties:
+ *                         featuredOfTotal:
+ *                           type: number
+ *                         featuredOfActive:
+ *                           type: number
+ *                     breakdown:
+ *                       type: object
+ *                       properties:
+ *                         notFeatured:
+ *                           type: integer
+ *                         inactiveFeatured:
+ *                           type: integer
+ */
+adminProductsRouter.get(
+  "/stats/featured",
+  authenticateWithAutoRefresh,
+  getFeaturedProductsStats
+);
 adminProductsRouter.get("/:id", authenticateWithAutoRefresh, getProductById);
 adminProductsRouter.post(
   "/",
@@ -801,14 +882,14 @@ adminProductsRouter.post(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  // syncProduct.create(), // DISABLED - Meilisearch removed
+  syncProduct.create(),
   createProduct
 );
 adminProductsRouter.put(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  // syncProduct.update(), // DISABLED - Meilisearch removed
+  syncProduct.update(),
   updateProduct
 );
 adminProductsRouter.put(
@@ -817,38 +898,42 @@ adminProductsRouter.put(
   requireAdmin,
   uploadMultiple("images", 10),
   handleMulterError,
-  // syncProduct.update(), // DISABLED - Meilisearch removed
+  syncProduct.update(),
   updateProductWithFiles
 );
 adminProductsRouter.patch(
   "/:id/stock",
   authenticateWithAutoRefresh,
   requireStaff,
+  syncProduct.update(),
   updateProductStock
 );
 adminProductsRouter.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   toggleProductStatus
 );
 adminProductsRouter.patch(
   "/:id/reactivate",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   reactivateProduct
 );
 adminProductsRouter.delete(
   "/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
-  // syncProduct.delete(), // DISABLED - Meilisearch removed
+  syncProduct.delete(),
   deleteProduct
 );
 adminProductsRouter.patch(
   "/:id/reorder-images",
   authenticateWithAutoRefresh,
   requireAdmin,
+  syncProduct.update(),
   reorderProductImages
 );
 
