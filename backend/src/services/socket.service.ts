@@ -20,6 +20,7 @@ import {
   PaymentNotification,
   InventoryNotification,
 } from "../types/socket.types";
+import { getAllowedOrigins, isAllowedOrigin } from "../config/cors";
 
 class SocketService {
   private io: SocketIOServer<
@@ -30,11 +31,39 @@ class SocketService {
   > | null = null;
 
   private adminSockets = new Map<string, Socket>();
+
+  private readonly isSocketLoggingEnabled =
+    process.env.SOCKET_LOG_ENABLED === "true" ||
+    (process.env.SOCKET_LOG_ENABLED !== "false" &&
+      process.env.NODE_ENV !== "production");
+
+  private info(message: string, ...args: unknown[]): void {
+    if (!this.isSocketLoggingEnabled) {
+      return;
+    }
+
+    if (args.length > 0) {
+      console.log(message, ...args);
+      return;
+    }
+
+    console.log(message);
+  }
   
   public initialize(server: HTTPServer): void {
+    const allowedOrigins = getAllowedOrigins();
+
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
+        origin: (origin, callback) => {
+          if (isAllowedOrigin(origin, allowedOrigins)) {
+            callback(null, true);
+            return;
+          }
+
+          console.warn(`Socket CORS blocked origin: ${origin}`);
+          callback(new Error("Not allowed by CORS"));
+        },
         methods: ["GET", "POST"],
         credentials: true,
       },
@@ -49,7 +78,7 @@ class SocketService {
       this.handleConnection(socket);
     });
 
-    console.log("🔌 Socket.IO server initialized");
+    this.info("🔌 Socket.IO server initialized");
   }
 
   private handleConnection(socket: Socket): void {
@@ -61,7 +90,7 @@ class SocketService {
       return;
     }
 
-    console.log(`👤 User connected: ${user.name} (${user.email})`);
+    this.info("👤 Socket client connected");
 
     // Handle admin joining
     socket.on("admin:join", () => {
@@ -75,15 +104,13 @@ class SocketService {
 
     // Handle notification mark as read
     socket.on("notification:mark_read", (notificationId: string) => {
-      console.log(
-        `📱 Notification marked as read: ${notificationId} by ${user.name}`
-      );
+      this.info(`📱 Notification marked as read: ${notificationId}`);
       // Future: Update notification status in database
     });
 
     // Handle disconnection
     socket.on("disconnect", (reason) => {
-      console.log(`👋 User disconnected: ${user.name} - Reason: ${reason}`);
+      this.info(`👋 Socket client disconnected: ${reason}`);
       this.adminSockets.delete(user.id);
     });
   }
@@ -93,9 +120,7 @@ class SocketService {
     const adminRoles = ["SUPER_ADMIN", "ADMIN", "STAFF"];
     if (!adminRoles.includes(user.role)) {
       socket.emit("error", "Admin role required");
-      console.log(
-        `❌ User ${user.name} attempted to join admin room with role: ${user.role}`
-      );
+      this.info("❌ Admin room join rejected due to role");
       return;
     }
 
@@ -103,7 +128,7 @@ class SocketService {
     socket.join("admin-room");
     this.adminSockets.set(user.id, socket);
 
-    console.log(`🔑 Admin joined: ${user.name} (${user.role})`);
+    this.info("🔑 Admin joined socket room");
 
     // Confirm successful join
     socket.emit("admin:joined");
@@ -115,7 +140,7 @@ class SocketService {
   private handleAdminLeave(socket: Socket, user: any): void {
     socket.leave("admin-room");
     this.adminSockets.delete(user.id);
-    console.log(`🚪 Admin left: ${user.name}`);
+    this.info("🚪 Admin left socket room");
   }
 
   // Emit consultation created notification
@@ -145,9 +170,7 @@ class SocketService {
     // Emit to admin room
     this.io.to("admin-room").emit("notification:new", notification);
 
-    console.log(
-      `📧 Consultation notification sent: ${consultationData.customerName}`
-    );
+    this.info(`📧 Consultation notification sent: ${consultationData.id}`);
 
     // Update notification count
     this.sendNotificationCount();
@@ -180,7 +203,7 @@ class SocketService {
     // Emit to admin room
     this.io.to("admin-room").emit("notification:new", notification);
 
-    console.log(`📧 Order notification sent: ${orderData.customerName}`);
+    this.info(`📧 Order notification sent: ${orderData.id}`);
 
     // Update notification count
     this.sendNotificationCount();
@@ -214,7 +237,7 @@ class SocketService {
       // Add other unread counts when orders are implemented
       const unreadCount = pendingConsultations;
 
-      console.log("📊 Socket service calculated unreadCount:", unreadCount);
+      this.info(`📊 Socket unreadCount: ${unreadCount}`);
       return unreadCount;
     } catch (error) {
       console.error("Error calculating unread notification count:", error);
@@ -262,9 +285,7 @@ class SocketService {
     };
 
     this.io.to("admin-room").emit("notification:new", notification);
-    console.log(
-      `👤 User notification sent: ${userData.userName} ${userData.action}`
-    );
+    this.info(`👤 User notification sent: ${userData.id} ${userData.action}`);
     this.sendNotificationCount();
   }
 
@@ -294,7 +315,7 @@ class SocketService {
     };
 
     this.io.to("admin-room").emit("notification:new", notification);
-    console.log(
+    this.info(
       `🔧 System notification sent: ${systemData.level} from ${systemData.module}`
     );
     this.sendNotificationCount();
@@ -327,7 +348,7 @@ class SocketService {
     };
 
     this.io.to("admin-room").emit("notification:new", notification);
-    console.log(
+    this.info(
       `💳 Payment notification sent: ${paymentData.status} for order ${paymentData.orderId}`
     );
     this.sendNotificationCount();
@@ -368,8 +389,8 @@ class SocketService {
     };
 
     this.io.to("admin-room").emit("notification:new", notification);
-    console.log(
-      `📦 Inventory notification sent: ${inventoryData.action} for ${inventoryData.productName}`
+    this.info(
+      `📦 Inventory notification sent: ${inventoryData.action} for ${inventoryData.productId}`
     );
     this.sendNotificationCount();
   }
@@ -382,7 +403,7 @@ class SocketService {
 
     // Emit to all connected clients (settings are global)
     this.io.emit("settings:updated", settings);
-    console.log("⚙️ Settings update broadcasted");
+    this.info("⚙️ Settings update broadcasted");
   }
 }
 

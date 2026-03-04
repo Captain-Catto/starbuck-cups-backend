@@ -35,6 +35,8 @@ const changePasswordSchema = z.object({
 const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required"),
 });
+const shouldExposeRefreshToken = (): boolean =>
+  process.env.EXPOSE_REFRESH_TOKEN === "true";
 
 /**
  * Login admin user (specific endpoint for admin panel)
@@ -144,28 +146,25 @@ export const adminLogin = async (req: Request, res: Response) => {
       domain: process.env.COOKIE_DOMAIN || undefined,
     };
 
-    console.log("Admin Login - Setting refresh token cookie:", {
-      secure: cookieOptions.secure,
-      sameSite: cookieOptions.sameSite,
-      domain: cookieOptions.domain,
-      origin: req.headers.origin,
-      userAgent: req.headers["user-agent"]?.substring(0, 50),
-    });
-
     res.cookie("admin_refresh_token", refreshToken, cookieOptions);
 
+    const responseData: Record<string, unknown> = {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.username,
+        role: user.role,
+      },
+      token: accessToken,
+      message: "Admin login successful",
+    };
+
+    if (shouldExposeRefreshToken()) {
+      responseData.refreshToken = refreshToken;
+    }
+
     return res.status(200).json(
-      ResponseHelper.success({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.username,
-          role: user.role,
-        },
-        token: accessToken,
-        refreshToken: refreshToken,
-        message: "Admin login successful",
-      })
+      ResponseHelper.success(responseData)
     );
   } catch (error) {
     console.error("Admin login error:", error);
@@ -261,18 +260,21 @@ export const login = async (req: Request, res: Response) => {
       domain: process.env.COOKIE_DOMAIN || undefined,
     });
 
-    return res.status(200).json(
-      ResponseHelper.success({
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          role: user.role,
-        },
-        accessToken,
-        refreshToken,
-      })
-    );
+    const responseData: Record<string, unknown> = {
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      },
+      accessToken,
+    };
+
+    if (shouldExposeRefreshToken()) {
+      responseData.refreshToken = refreshToken;
+    }
+
+    return res.status(200).json(ResponseHelper.success(responseData));
   } catch (error) {
     console.error("Login error:", error);
     return res
@@ -658,13 +660,6 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
         );
     }
 
-    console.log("Admin refresh token attempt:", {
-      tokenPresent: !!refreshToken,
-      tokenLength: refreshToken?.length,
-      tokenStart: refreshToken?.substring(0, 20) + "...",
-      source: req.body.refreshToken ? "body" : "cookie",
-    });
-
     // Verify refresh token
     const payload = verifyRefreshToken(refreshToken);
     if (!payload) {
@@ -767,18 +762,21 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
       domain: process.env.COOKIE_DOMAIN || undefined,
     });
 
-    return res.status(200).json(
-      ResponseHelper.success({
-        token: accessToken,
-        refreshToken: newRefreshToken,
-        user: {
-          id: adminUser.id,
-          email: adminUser.email,
-          name: adminUser.username,
-          role: adminUser.role,
-        },
-      })
-    );
+    const responseData: Record<string, unknown> = {
+      token: accessToken,
+      user: {
+        id: adminUser.id,
+        email: adminUser.email,
+        name: adminUser.username,
+        role: adminUser.role,
+      },
+    };
+
+    if (shouldExposeRefreshToken()) {
+      responseData.refreshToken = newRefreshToken;
+    }
+
+    return res.status(200).json(ResponseHelper.success(responseData));
   } catch (error) {
     console.error("Admin refresh token error:", error);
     return res
@@ -836,12 +834,6 @@ export const adminLogout = async (req: Request, res: Response) => {
  */
 export const adminSessionCheck = async (req: Request, res: Response) => {
   try {
-    console.log("Admin session check request:", {
-      hasCookies: !!req.cookies,
-      cookies: req.cookies,
-      headers: req.headers.cookie,
-    });
-
     const refreshToken = req.cookies?.admin_refresh_token;
 
     if (!refreshToken) {

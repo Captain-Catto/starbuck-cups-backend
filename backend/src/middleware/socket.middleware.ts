@@ -40,7 +40,6 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: Error) => void
     // Attach user data to socket
     (socket as AuthenticatedSocket).data = { user };
 
-    console.log(`Socket authenticated for user: ${user.name} (${user.email})`);
     next();
   } catch (error) {
     console.error('Socket authentication error:', error);

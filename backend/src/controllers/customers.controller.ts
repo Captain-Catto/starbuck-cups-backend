@@ -408,12 +408,10 @@ export const updateCustomer = async (req: Request, res: Response) => {
     }
 
     const { id } = req.params;
-    console.log("Update customer request body:", req.body);
 
     // Validate input
     const validationResult = updateCustomerSchema.safeParse(req.body);
     if (!validationResult.success) {
-      console.log("Validation errors:", validationResult.error.issues);
       return res
         .status(400)
         .json(
@@ -451,8 +449,6 @@ export const updateCustomer = async (req: Request, res: Response) => {
       updateData.isVip = validationResult.data.isVip;
     }
 
-    console.log("Update data to be applied:", updateData);
-
     // Handle customer and phone updates in transaction
     await sequelize.transaction(async (t) => {
       // Update customer data
@@ -483,8 +479,6 @@ export const updateCustomer = async (req: Request, res: Response) => {
         }
       }
     });
-
-    console.log("Customer updated successfully");
 
     // Fetch updated customer with details and addresses ordered by isDefault
     const updatedCustomer = await Customer.findByPk(id, {

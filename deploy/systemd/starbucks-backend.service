@@ -1,0 +1,22 @@
+[Unit]
+Description=Starbucks Shop Backend API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/starbucks-shop/backend
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/starbucks-shop/backend/.env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+NoNewPrivileges=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

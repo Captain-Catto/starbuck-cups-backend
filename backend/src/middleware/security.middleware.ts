@@ -5,30 +5,19 @@ import { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import cors from "cors";
 import { ResponseHelper } from "../types/api";
+import { getAllowedOrigins, isAllowedOrigin } from "../config/cors";
+
+const requestLoggingEnabled =
+  process.env.REQUEST_LOG_ENABLED === "true" ||
+  (process.env.REQUEST_LOG_ENABLED !== "false" &&
+    process.env.NODE_ENV !== "production");
 
 // CORS configuration
 const corsOptions: cors.CorsOptions = {
   origin: function (origin, callback) {
-    // Get allowed origins from environment variable
-    const envOrigins =
-      process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()) || [];
+    const allowedOrigins = getAllowedOrigins();
 
-    const allowedOrigins = [
-      ...envOrigins,
-      process.env.FRONTEND_URL || "http://localhost:3000",
-      process.env.ADMIN_URL || "http://localhost:8081",
-      "http://localhost:3000",
-      "http://localhost:8081",
-      "http://127.0.0.1:3000",
-      "http://127.0.0.1:8081",
-      "https://www.hasron.vn",
-      "https://hasron.vn"
-    ];
-
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin, allowedOrigins)) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked origin: ${origin}`);
@@ -96,6 +85,11 @@ export const requestLogger = (
   res: Response,
   next: NextFunction
 ) => {
+  if (!requestLoggingEnabled) {
+    next();
+    return;
+  }
+
   const start = Date.now();
   const timestamp = new Date().toISOString();
 

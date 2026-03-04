@@ -5,11 +5,17 @@ import jwt from "jsonwebtoken";
 import { createHash } from "crypto";
 import { AdminRole } from "../models/AdminUser";
 
+const getRequiredEnv = (key: string): string => {
+  const value = process.env[key];
+  if (!value || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+};
+
 // JWT Configuration
-const ACCESS_TOKEN_SECRET =
-  process.env.JWT_ACCESS_SECRET || "your-access-token-secret-key";
-const REFRESH_TOKEN_SECRET =
-  process.env.JWT_REFRESH_SECRET || "your-refresh-token-secret-key";
+const ACCESS_TOKEN_SECRET = getRequiredEnv("JWT_ACCESS_SECRET");
+const REFRESH_TOKEN_SECRET = getRequiredEnv("JWT_REFRESH_SECRET");
 const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES || "15m";
 const REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES || "7d";
 
@@ -93,22 +99,11 @@ export function verifyAccessToken(token: string): DecodedAccessToken {
  */
 export function verifyRefreshToken(token: string): DecodedRefreshToken {
   try {
-    console.log("Verifying refresh token:", {
-      tokenPresent: !!token,
-      tokenLength: token?.length,
-      tokenStart: token?.substring(0, 20) + "...",
-    });
-
     return jwt.verify(token, REFRESH_TOKEN_SECRET, {
       issuer: "cups-shop",
       audience: "cups-shop-admin",
     }) as DecodedRefreshToken;
   } catch (error) {
-    console.log("Refresh token verification failed:", {
-      errorType: error instanceof Error ? error.constructor.name : "Unknown",
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-
     if (error instanceof jwt.TokenExpiredError) {
       throw new Error("Refresh token expired");
     } else if (error instanceof jwt.JsonWebTokenError) {

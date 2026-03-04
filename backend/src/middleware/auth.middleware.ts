@@ -2,6 +2,9 @@
  * Authentication and authorization middleware
  */
 import { Request, Response, NextFunction } from "express";
+import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+import { createClient } from "redis";
 import { AdminRole } from "../models/AdminUser";
 import { AdminUser } from "../models/AdminUser";
 import {
@@ -43,22 +46,10 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    console.log("Auth middleware - Request headers:", req.headers);
-
     // Extract token from Authorization header
     const token = extractTokenFromHeader(req.headers.authorization);
-    console.log(
-      "Auth middleware - Extracted token:",
-      token ? `${token.substring(0, 20)}...` : "null"
-    );
 
     if (!token) {
-      console.warn("Auth middleware - No token found in request", {
-        url: req.url,
-        method: req.method,
-        userAgent: req.headers["user-agent"]?.substring(0, 50),
-        ip: req.ip,
-      });
       res
         .status(401)
         .json(
@@ -69,7 +60,6 @@ export const authenticate = async (
 
     // Verify token
     const decoded = verifyAccessToken(token);
-    console.log("Auth middleware - Decoded token:", decoded);
 
     // Check if user exists and is active
     const user = await AdminUser.findOne({
@@ -78,12 +68,6 @@ export const authenticate = async (
     });
 
     if (!user || !user.isActive) {
-      console.warn("Auth middleware - Invalid or inactive user", {
-        userId: decoded.userId,
-        userExists: !!user,
-        isActive: user?.isActive,
-        url: req.url,
-      });
       res
         .status(401)
         .json(
@@ -205,81 +189,69 @@ export const optionalAuthenticate = async (
 /**
  * Rate limiting middleware for authentication endpoints
  */
-interface LoginAttempt {
-  count: number;
-  lastAttempt: Date;
-  blocked: boolean;
-}
-
-const loginAttempts = new Map<string, LoginAttempt>();
 const MAX_LOGIN_ATTEMPTS = parseInt(process.env.RATE_LIMIT_MAX_ATTEMPTS || "5");
 const BLOCK_DURATION = parseInt(
   process.env.RATE_LIMIT_BLOCK_DURATION_MS || "900000"
 ); // 15 minutes default
+const AUTH_RATE_LIMIT_STORE =
+  process.env.AUTH_RATE_LIMIT_STORE ||
+  (process.env.NODE_ENV === "production" ? "redis" : "memory");
 
-export const rateLimitAuth = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  const clientId = req.ip || req.socket.remoteAddress || "unknown";
-  const now = new Date();
-
-  const attempt = loginAttempts.get(clientId);
-
-  if (attempt) {
-    // Check if block period has expired
-    if (
-      attempt.blocked &&
-      now.getTime() - attempt.lastAttempt.getTime() > BLOCK_DURATION
-    ) {
-      attempt.blocked = false;
-      attempt.count = 0;
-    }
-
-    if (attempt.blocked) {
-      const timeRemaining =
-        BLOCK_DURATION - (now.getTime() - attempt.lastAttempt.getTime());
-      res
-        .status(429)
-        .json(
-          ResponseHelper.error(
-            "Too many login attempts. Please try again later.",
-            "RATE_LIMIT_EXCEEDED",
-            { retryAfter: Math.ceil(timeRemaining / 1000) }
-          )
-        );
-      return;
-    }
+let authRateLimitStore: RedisStore | undefined;
+if (AUTH_RATE_LIMIT_STORE === "redis") {
+  if (!process.env.REDIS_URL) {
+    throw new Error(
+      "AUTH_RATE_LIMIT_STORE=redis requires REDIS_URL to be configured"
+    );
   }
 
-  // Add middleware to track failed attempts
-  const originalJson = res.json;
-  res.json = function (body) {
-    if (body && !body.success && body.error?.code === "INVALID_CREDENTIALS") {
-      const currentAttempt = loginAttempts.get(clientId) || {
-        count: 0,
-        lastAttempt: now,
-        blocked: false,
-      };
-      currentAttempt.count++;
-      currentAttempt.lastAttempt = now;
+  const redisClient = createClient({
+    url: process.env.REDIS_URL,
+  });
 
-      if (currentAttempt.count >= MAX_LOGIN_ATTEMPTS) {
-        currentAttempt.blocked = true;
-      }
+  redisClient.on("error", (error) => {
+    console.error("Redis rate limit client error:", error);
+  });
 
-      loginAttempts.set(clientId, currentAttempt);
-    } else if (body && body.success) {
-      // Reset on successful login
-      loginAttempts.delete(clientId);
-    }
+  redisClient.connect().catch((error) => {
+    console.error("Failed to connect Redis rate limit client:", error);
+  });
 
-    return originalJson.call(this, body);
-  };
+  authRateLimitStore = new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.sendCommand(args),
+    prefix: "auth_rate_limit:",
+  });
+} else if (
+  process.env.NODE_ENV === "production" &&
+  process.env.ALLOW_IN_MEMORY_RATE_LIMIT !== "true"
+) {
+  throw new Error(
+    "In production, set AUTH_RATE_LIMIT_STORE=redis (or explicitly set ALLOW_IN_MEMORY_RATE_LIMIT=true)"
+  );
+}
 
-  next();
-};
+export const rateLimitAuth = rateLimit({
+  windowMs: BLOCK_DURATION,
+  max: MAX_LOGIN_ATTEMPTS,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  passOnStoreError: true,
+  store: authRateLimitStore,
+  keyGenerator: (req: Request): string =>
+    req.ip || req.socket.remoteAddress || "unknown",
+  handler: (_req, res) => {
+    return res
+      .status(429)
+      .json(
+        ResponseHelper.error(
+          "Too many login attempts. Please try again later.",
+          "RATE_LIMIT_EXCEEDED",
+          { retryAfter: Math.ceil(BLOCK_DURATION / 1000) }
+        )
+      );
+  },
+});
 
 /**
  * Admin session middleware - tracks admin activity
@@ -335,11 +307,7 @@ export const authenticateWithAutoRefresh = async (
         }
       } catch (error) {
         // Access token invalid, continue to refresh token logic
-        console.log("Access token invalid, trying refresh token...", {
-          error: error instanceof Error ? error.message : String(error),
-          url: req.url,
-          hasRefreshTokenCookie: !!req.cookies.admin_refresh_token,
-        });
+        // Fall back to refresh token flow
       }
     }
 
@@ -347,12 +315,6 @@ export const authenticateWithAutoRefresh = async (
     const refreshToken = req.cookies.admin_refresh_token;
 
     if (!refreshToken) {
-      console.warn("No refresh token available", {
-        url: req.url,
-        method: req.method,
-        hasAccessToken: !!token,
-        cookies: Object.keys(req.cookies || {}),
-      });
       return res
         .status(401)
         .json(
@@ -371,12 +333,6 @@ export const authenticateWithAutoRefresh = async (
       });
 
       if (!user || !user.isActive) {
-        console.warn("Refresh token - Invalid or inactive user", {
-          userId: refreshPayload.userId,
-          userExists: !!user,
-          isActive: user?.isActive,
-          url: req.url,
-        });
         return res
           .status(401)
           .json(
@@ -398,14 +354,7 @@ export const authenticateWithAutoRefresh = async (
 
       next();
     } catch (refreshError) {
-      console.error("Refresh token verification failed", {
-        error:
-          refreshError instanceof Error
-            ? refreshError.message
-            : String(refreshError),
-        url: req.url,
-        hasRefreshToken: !!refreshToken,
-      });
+      console.error("Refresh token verification failed");
       return res
         .status(401)
         .json(

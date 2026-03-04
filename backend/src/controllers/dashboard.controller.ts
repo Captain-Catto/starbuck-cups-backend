@@ -18,8 +18,6 @@ interface TopCustomerQueryResult {
  */
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
-    console.log("Getting dashboard stats");
-
     // Get all counts in parallel
     const [totalOrders, totalCustomers, totalProducts, pendingConsultations] =
       await Promise.all([
@@ -44,7 +42,6 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       pendingConsultations,
     };
 
-    console.log("Dashboard stats:", stats);
     return res.status(200).json(ResponseHelper.success(stats));
   } catch (error) {
     console.error("Get dashboard stats error:", error);
@@ -141,9 +138,7 @@ export const getRevenueData = async (req: Request, res: Response) => {
 export const getStatistics = async (req: Request, res: Response) => {
   try {
     const { period = "month" } = req.query;
-    console.log("Getting statistics for period:", period);
     const now = new Date();
-    console.log("Date range calculation starting...");
 
     // Date calculations
     const currentYear = new Date(now.getFullYear(), 0, 1);
@@ -177,7 +172,6 @@ export const getStatistics = async (req: Request, res: Response) => {
     };
 
     const dateRange = getDateRange(period as string);
-    console.log("Date range:", dateRange);
 
     // Get all statistics in parallel
     const [
@@ -478,24 +472,14 @@ export const getStatistics = async (req: Request, res: Response) => {
       },
     };
 
-    console.log("Final statistics data:", {
-      period: statistics.period,
-      overviewKeys: Object.keys(statistics.overview),
-      topProductsCount: statistics.topSellingProducts.length,
-      topCustomersCount: statistics.topCustomers.length,
-      lowStockCount: statistics.lowStockProducts.length,
-      revenueTrendCount: statistics.revenueTrend.length,
-    });
     return res.status(200).json(ResponseHelper.success(statistics));
   } catch (error) {
     console.error("Get statistics error:", error);
-    console.error("Error stack:", (error as Error).stack);
-    return res.status(500).json(
-      ResponseHelper.error("Failed to get statistics", "GET_STATISTICS_ERROR", {
-        message: (error as Error).message,
-        stack: (error as Error).stack,
-      })
-    );
+    return res
+      .status(500)
+      .json(
+        ResponseHelper.error("Failed to get statistics", "GET_STATISTICS_ERROR")
+      );
   }
 };
 

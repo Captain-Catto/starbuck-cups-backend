@@ -1,5 +1,16 @@
 import sequelize from './database';
-import { hashPassword } from '../utils/password';
+
+const shouldSyncDatabaseOnStart = (): boolean => {
+  if (process.env.DB_SYNC_ON_START === "true") {
+    return true;
+  }
+
+  if (process.env.DB_SYNC_ON_START === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV !== "production";
+};
 
 /**
  * Initialize database connection and create tables
@@ -12,10 +23,13 @@ export const initializeDatabase = async (): Promise<boolean> => {
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
 
-    // Sync models (create tables)
-    console.log('🔄 Syncing database models...');
-    await sequelize.sync({ alter: false });
-    console.log('✅ Database models synced successfully.');
+    if (shouldSyncDatabaseOnStart()) {
+      console.log('🔄 Syncing database models...');
+      await sequelize.sync({ alter: false });
+      console.log('✅ Database models synced successfully.');
+    } else {
+      console.log('ℹ️ Skipping model sync (DB_SYNC_ON_START=false)');
+    }
 
     return true;
   } catch (error) {
@@ -28,10 +42,20 @@ export const initializeDatabase = async (): Promise<boolean> => {
 /**
  * Initialize session store
  */
-export const initializeSessionStore = async (): Promise<void> => {
+export const initializeSessionStore = async (sessionStore?: any): Promise<void> => {
   try {
     console.log('🔄 Initializing session store...');
-    // Session table will be automatically created by connect-session-sequelize
+
+    const shouldSyncSessionStore =
+      process.env.SESSION_STORE_SYNC_ON_START === "true" ||
+      (process.env.SESSION_STORE_SYNC_ON_START !== "false" &&
+        process.env.NODE_ENV !== "production");
+
+    if (shouldSyncSessionStore && sessionStore?.sync) {
+      await sessionStore.sync();
+      console.log("✅ Session store table synced.");
+    }
+
     console.log('✅ Session store initialized.');
   } catch (error) {
     console.error('⚠️  Session store initialization warning:', error);

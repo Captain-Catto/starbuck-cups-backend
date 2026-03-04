@@ -1,5 +1,5 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import SequelizeStoreInit from "connect-session-sequelize";
@@ -45,15 +45,48 @@ import {
   initializeDatabase,
   initializeSessionStore,
 } from "./config/database-init";
+import { validateRequiredEnv } from "./config/env";
 
 import { initializeMeiliSearch, syncInitialData } from "./config/meilisearch-init";
-
-// Load environment variables
-dotenv.config();
+validateRequiredEnv();
 
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 8080;
+
+const parseTrustProxy = (): boolean | number | string => {
+  const raw = process.env.TRUST_PROXY;
+
+  if (!raw || raw.trim() === "") {
+    return process.env.NODE_ENV === "production" ? 1 : false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+
+  const asNumber = Number(raw);
+  if (!Number.isNaN(asNumber)) {
+    return asNumber;
+  }
+
+  return raw;
+};
+
+const shouldUseSecureCookie =
+  process.env.COOKIE_SECURE === "true" ||
+  (process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false");
+
+const sessionSameSite =
+  (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax";
+
+const sessionCookieDomain = process.env.COOKIE_DOMAIN || undefined;
+
+app.set("trust proxy", parseTrustProxy());
 
 // Security and middleware setup
 app.use(securityHeaders);
@@ -78,13 +111,16 @@ const sessionStore = new SequelizeStore({
 
 app.use(
   session({
-    secret: process.env.JWT_SECRET || "your-secret-key",
+    secret: process.env.JWT_SECRET as string,
+    proxy: shouldUseSecureCookie,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldUseSecureCookie,
       httpOnly: true,
+      sameSite: sessionSameSite,
+      domain: sessionCookieDomain,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   })
@@ -175,7 +211,7 @@ const startServer = async () => {
     await initializeDatabase();
 
     // Initialize session store
-    await initializeSessionStore();
+    await initializeSessionStore(sessionStore);
 
     // Start server
     server.listen(PORT, () => {

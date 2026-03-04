@@ -100,6 +100,7 @@ Available tasks (Ctrl+Shift+P → "Tasks: Run Task"):
 - [Data Model](./specs/001-starbucks-website/data-model-overview.md)
 - [API Contracts](./specs/001-starbucks-website/contracts/)
 - [Tasks Breakdown](./specs/001-starbucks-website/tasks.md)
+- [VPS + Cloudflare Deployment](./deploy/README.md)
 
 ## 🔧 Technology Stack
 
