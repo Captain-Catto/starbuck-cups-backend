@@ -6,6 +6,7 @@ import { googleDriveService } from "../services/google-drive.service"; // OAuth2
 import { z } from "zod";
 import multer from "multer";
 import { sequelize } from "../config/database";
+import { processImage, IMAGE_PRESETS } from "../services/image-processing.service";
 
 // Configure multer for memory storage
 const upload = multer({
@@ -158,10 +159,17 @@ export const createHeroImage = async (req: Request, res: Response) => {
       });
     }
 
-    // Upload image to Google Drive (OAuth2)
-    const uploadResult = await googleDriveService.uploadFile(
+    // Resize & convert to WebP before uploading (hero preset: max 1920px)
+    const processed = await processImage(
       file.buffer,
       file.originalname,
+      IMAGE_PRESETS.hero
+    );
+
+    // Upload processed image to Google Drive
+    const uploadResult = await googleDriveService.uploadFile(
+      processed.buffer,
+      processed.filename,
       "hero-images"
     );
 
@@ -256,10 +264,17 @@ export const updateHeroImage = async (req: Request, res: Response) => {
     // Handle image upload if new file provided
     const file = req.file as Express.Multer.File;
     if (file) {
-      // Upload new image to Google Drive (OAuth2)
-      const uploadResult = await googleDriveService.uploadFile(
+      // Resize & convert to WebP before uploading
+      const processed = await processImage(
         file.buffer,
         file.originalname,
+        IMAGE_PRESETS.hero
+      );
+
+      // Upload processed image to Google Drive
+      const uploadResult = await googleDriveService.uploadFile(
+        processed.buffer,
+        processed.filename,
         "hero-images"
       );
 

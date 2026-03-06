@@ -8,6 +8,11 @@ import {
   handleMulterError,
 } from "../middleware/upload.middleware";
 import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
+import {
+  processImage,
+  processImages,
+  IMAGE_PRESETS,
+} from "../services/image-processing.service";
 
 const router = express.Router();
 
@@ -45,10 +50,25 @@ router.post(
         return;
       }
 
-      // Upload to Google Drive (OAuth2)
-      const result = await googleDriveService.uploadFile(
+      // Determine processing preset based on folder
+      const preset =
+        folder === "products"
+          ? IMAGE_PRESETS.product
+          : folder === "avatars" || folder === "categories"
+            ? IMAGE_PRESETS.thumbnail
+            : IMAGE_PRESETS.product;
+
+      // Resize & convert to WebP before uploading
+      const processed = await processImage(
         req.file.buffer,
         req.file.originalname,
+        preset
+      );
+
+      // Upload processed image to Google Drive
+      const result = await googleDriveService.uploadFile(
+        processed.buffer,
+        processed.filename,
         folder
       );
 
@@ -57,9 +77,9 @@ router.post(
         data: {
           url: result.url,
           key: result.key,
-          filename: req.file.originalname,
-          size: req.file.size,
-          mimetype: req.file.mimetype,
+          filename: processed.filename,
+          size: processed.buffer.length,
+          mimetype: `image/${processed.format}`,
         },
         message: "File uploaded successfully",
       });
@@ -107,23 +127,36 @@ router.post(
         return;
       }
 
-      // Prepare files for upload
-      const files = req.files.map((file: any) => ({
+      // Determine processing preset based on folder
+      const preset =
+        folder === "products"
+          ? IMAGE_PRESETS.product
+          : folder === "avatars" || folder === "categories"
+            ? IMAGE_PRESETS.thumbnail
+            : IMAGE_PRESETS.product;
+
+      // Resize & convert all images to WebP before uploading
+      const originalFiles = req.files.map((file: any) => ({
         buffer: file.buffer,
         filename: file.originalname,
       }));
+      const processedFiles = await processImages(originalFiles, preset);
 
-      // Upload to Google Drive (OAuth2)
-      const results = await googleDriveService.uploadFiles(files, folder);
+      // Upload processed images to Google Drive
+      const uploadFiles = processedFiles.map((pf) => ({
+        buffer: pf.buffer,
+        filename: pf.filename,
+      }));
+      const results = await googleDriveService.uploadFiles(uploadFiles, folder);
 
       res.json({
         success: true,
         data: results.map((result, index) => ({
           url: result.url,
           key: result.key,
-          filename: (req.files as any)[index].originalname,
-          size: (req.files as any)[index].size,
-          mimetype: (req.files as any)[index].mimetype,
+          filename: processedFiles[index].filename,
+          size: processedFiles[index].buffer.length,
+          mimetype: `image/${processedFiles[index].format}`,
         })),
         message: `${results.length} files uploaded successfully`,
       });

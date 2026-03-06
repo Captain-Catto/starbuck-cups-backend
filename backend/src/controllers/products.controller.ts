@@ -18,6 +18,7 @@ import { z } from "zod";
 // import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
 // import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace
+import { processImage, IMAGE_PRESETS } from "../services/image-processing.service";
 import { productImageService } from "../services/product-image.service";
 // import {
 //   meilisearchService,
@@ -637,9 +638,16 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       // Handle file uploads if present
       if (files && files.length > 0) {
         const uploadPromises = files.map(async (file, index) => {
-          const uploadResult = await googleDriveService.uploadFile(
+          // Resize & convert to WebP before uploading
+          const processed = await processImage(
             file.buffer,
             file.originalname,
+            IMAGE_PRESETS.product
+          );
+
+          const uploadResult = await googleDriveService.uploadFile(
+            processed.buffer,
+            processed.filename,
             "products"
           );
           return {
