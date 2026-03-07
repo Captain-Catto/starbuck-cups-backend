@@ -6,6 +6,8 @@
 import { Request, Response } from "express";
 import {
   Product,
+  ProductLocale,
+  ProductTranslation,
   ProductCategory,
   ProductColor,
   ProductImage,
@@ -28,6 +30,15 @@ import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 import { sequelize } from "../config/database";
 import { Op } from "sequelize";
 
+const SUPPORTED_LOCALES = ["vi", "en", "zh"] as const;
+type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+type TranslationPayload = {
+  name?: string;
+  description?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+};
+
 // Helper function to generate SEO-friendly slug with Vietnamese support
 const generateProductSlug = (
   name: string,
@@ -38,7 +49,124 @@ const generateProductSlug = (
   return generateVietnameseSlug(combined);
 };
 
+const normalizeLocale = (rawLocale?: string): SupportedLocale => {
+  if (!rawLocale) return "vi";
+  const normalized = rawLocale.trim().toLowerCase();
+  if (normalized.startsWith("en")) return "en";
+  if (normalized.startsWith("zh")) return "zh";
+  return "vi";
+};
+
+const toTranslationMap = (translations: any[] = []) => {
+  return Object.fromEntries(
+    translations.map((translation) => [
+      translation.locale,
+      {
+        locale: translation.locale,
+        name: translation.name,
+        description: translation.description || "",
+        metaTitle: translation.metaTitle || "",
+        metaDescription: translation.metaDescription || "",
+      },
+    ])
+  ) as Partial<
+    Record<
+      SupportedLocale,
+      {
+        locale: SupportedLocale;
+        name: string;
+        description: string;
+        metaTitle: string;
+        metaDescription: string;
+      }
+    >
+  >;
+};
+
+const applyLocaleToProduct = (
+  product: any,
+  locale: SupportedLocale,
+  includeTranslationsMap = false
+) => {
+  const plainProduct = typeof product.toJSON === "function" ? product.toJSON() : product;
+  const translationMap = toTranslationMap(plainProduct.translations);
+  const localized = translationMap[locale] || translationMap.vi;
+  const { translations: _translations, ...restProduct } = plainProduct;
+
+  const transformed = {
+    ...restProduct,
+    name: localized?.name || plainProduct.name,
+    description: localized?.description || plainProduct.description || "",
+  };
+
+  if (includeTranslationsMap) {
+    return {
+      ...transformed,
+      translations: translationMap,
+    };
+  }
+
+  return transformed;
+};
+
+const parseTranslationPayload = (
+  translations?: unknown
+): Partial<Record<SupportedLocale, TranslationPayload>> => {
+  if (!translations) return {};
+
+  let parsedInput: unknown = translations;
+  if (typeof parsedInput === "string") {
+    try {
+      parsedInput = JSON.parse(parsedInput);
+    } catch {
+      return {};
+    }
+  }
+
+  if (
+    typeof parsedInput !== "object" ||
+    parsedInput === null ||
+    Array.isArray(parsedInput)
+  ) {
+    return {};
+  }
+
+  const translationObject = parsedInput as Record<string, TranslationPayload>;
+
+  const parsed: Partial<Record<SupportedLocale, TranslationPayload>> = {};
+  for (const locale of SUPPORTED_LOCALES) {
+    const value = translationObject[locale];
+    if (!value) continue;
+
+    parsed[locale] = {
+      name: value.name?.trim(),
+      description: value.description?.trim(),
+      metaTitle: value.metaTitle?.trim(),
+      metaDescription: value.metaDescription?.trim(),
+    };
+  }
+
+  return parsed;
+};
+
 // Validation schemas
+const translationEntrySchema = z
+  .object({
+    name: z.string().min(1, "Translation name is required").max(255).optional(),
+    description: z.string().optional(),
+    metaTitle: z.string().max(300).optional(),
+    metaDescription: z.string().optional(),
+  })
+  .optional();
+
+const translationsSchema = z
+  .object({
+    vi: translationEntrySchema,
+    en: translationEntrySchema,
+    zh: translationEntrySchema,
+  })
+  .optional();
+
 const createProductSchema = z.object({
   name: z.string().min(1, "Product name is required").max(255),
   slug: z.string().optional(),
@@ -69,6 +197,7 @@ const createProductSchema = z.object({
     )
     .optional()
     .default([]),
+  translations: translationsSchema,
 });
 
 const updateProductSchema = createProductSchema.partial().extend({
@@ -107,11 +236,13 @@ export const getProducts = async (req: Request, res: Response) => {
       colorSlug,
       minCapacity,
       maxCapacity,
+      locale,
       sortBy = "createdAt",
       sortOrder = "desc",
       lowStock = "false",
       lowStockThreshold = "1",
     } = req.query;
+    const requestedLocale = normalizeLocale(locale as string | undefined);
 
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
@@ -299,6 +430,18 @@ export const getProducts = async (req: Request, res: Response) => {
           as: "productImages",
           attributes: ["id", "url", "altText", "order"],
         },
+        {
+          model: ProductTranslation,
+          as: "translations",
+          attributes: [
+            "locale",
+            "name",
+            "description",
+            "metaTitle",
+            "metaDescription",
+          ],
+          required: false,
+        },
       ],
       order: [
         [{ model: ProductImage, as: "productImages" }, "order", "ASC"],
@@ -307,7 +450,10 @@ export const getProducts = async (req: Request, res: Response) => {
 
     // Sort products according to the original paginated order
     const productsMap = new Map(productsUnsorted.map(p => [p.id, p]));
-    const products = paginatedProductIds.map(id => productsMap.get(id)!).filter(Boolean);
+    const products = paginatedProductIds
+      .map((id) => productsMap.get(id)!)
+      .filter(Boolean)
+      .map((product) => applyLocaleToProduct(product, requestedLocale, true));
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
@@ -340,6 +486,7 @@ export const getProducts = async (req: Request, res: Response) => {
 export const getProductById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const locale = normalizeLocale(req.query.locale as string | undefined);
 
     const product = await Product.findByPk(id, {
       include: [
@@ -375,6 +522,18 @@ export const getProductById = async (req: Request, res: Response) => {
           as: "productImages",
           attributes: ["id", "url", "altText", "order"],
         },
+        {
+          model: ProductTranslation,
+          as: "translations",
+          attributes: [
+            "locale",
+            "name",
+            "description",
+            "metaTitle",
+            "metaDescription",
+          ],
+          required: false,
+        },
       ],
       order: [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]],
     });
@@ -385,7 +544,9 @@ export const getProductById = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Product not found", "PRODUCT_NOT_FOUND"));
     }
 
-    return res.status(200).json(ResponseHelper.success(product));
+    return res
+      .status(200)
+      .json(ResponseHelper.success(applyLocaleToProduct(product, locale, true)));
   } catch (error) {
     console.error("Get product error:", error);
     return res
@@ -433,7 +594,17 @@ export const createProduct = async (req: Request, res: Response) => {
       categoryIds,
       colorIds,
       productImages,
+      translations,
     } = validationResult.data;
+    const parsedTranslations = parseTranslationPayload(
+      translations as Record<string, TranslationPayload>
+    );
+    const viTranslation = parsedTranslations.vi;
+    const canonicalName = viTranslation?.name?.trim() || name.trim();
+    const canonicalDescription =
+      viTranslation?.description !== undefined
+        ? viTranslation.description
+        : description?.trim();
 
     // Sort images by order and extract URLs
     const imagesToProcess = productImages
@@ -470,7 +641,12 @@ export const createProduct = async (req: Request, res: Response) => {
 
       // Generate slug if not provided
       let finalSlug =
-        slug || generateProductSlug(name, colors[0].name, capacity.name);
+        slug?.trim() ||
+        generateProductSlug(canonicalName, colors[0].name, capacity.name);
+
+      if (!finalSlug) {
+        finalSlug = `product-${Date.now()}`;
+      }
 
       // Check for duplicate slug and resolve conflicts
       let slugCounter = 0;
@@ -486,9 +662,9 @@ export const createProduct = async (req: Request, res: Response) => {
       // Create product
       const product = await Product.create(
         {
-          name: name.trim(),
+          name: canonicalName,
           slug: finalSlug,
-          description: description?.trim(),
+          description: canonicalDescription,
           capacityId,
           stockQuantity,
           unitPrice,
@@ -526,11 +702,59 @@ export const createProduct = async (req: Request, res: Response) => {
           imagesToProcess.map((imageUrl, index) => ({
             productId: product.id,
             url: imageUrl,
-            altText: name,
+            altText: canonicalName,
             order: index,
           })),
           { transaction: t }
         );
+      }
+
+      const translationsToPersist: Partial<
+        Record<SupportedLocale, TranslationPayload>
+      > = {
+        ...parsedTranslations,
+        vi: {
+          ...parsedTranslations.vi,
+          name: canonicalName,
+          description: canonicalDescription,
+        },
+      };
+
+      const translationRows = Object.entries(translationsToPersist)
+        .filter((entry): entry is [SupportedLocale, TranslationPayload] =>
+          SUPPORTED_LOCALES.includes(entry[0] as SupportedLocale)
+        )
+        .map(([locale, value]) => {
+          const hasAnyData =
+            Boolean(value.name?.trim()) ||
+            value.description !== undefined ||
+            Boolean(value.metaTitle?.trim()) ||
+            Boolean(value.metaDescription?.trim());
+          if (!hasAnyData) return null;
+
+          return {
+            productId: product.id,
+            locale,
+            name: value.name?.trim() || canonicalName,
+            description:
+              value.description !== undefined
+                ? value.description
+                : canonicalDescription,
+            metaTitle: value.metaTitle?.trim() || undefined,
+            metaDescription: value.metaDescription?.trim() || undefined,
+          };
+        })
+        .filter(Boolean) as Array<{
+        productId: string;
+        locale: SupportedLocale;
+        name: string;
+        description?: string;
+        metaTitle?: string;
+        metaDescription?: string;
+      }>;
+
+      if (translationRows.length > 0) {
+        await ProductTranslation.bulkCreate(translationRows, { transaction: t });
       }
 
       return product;
@@ -572,10 +796,24 @@ export const createProduct = async (req: Request, res: Response) => {
           attributes: ["id", "url", "altText", "order"],
           order: [["order", "ASC"]],
         },
+        {
+          model: ProductTranslation,
+          as: "translations",
+          attributes: [
+            "locale",
+            "name",
+            "description",
+            "metaTitle",
+            "metaDescription",
+          ],
+          required: false,
+        },
       ],
     });
 
-    return res.status(201).json(ResponseHelper.success(createdProduct));
+    return res
+      .status(201)
+      .json(ResponseHelper.success(applyLocaleToProduct(createdProduct, "vi", true)));
   } catch (error: any) {
     console.error("Create product error:", error);
 
@@ -618,7 +856,59 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Product not found", "PRODUCT_NOT_FOUND"));
     }
 
-    const validationResult = updateProductSchema.safeParse(req.body);
+    const parsedBody = { ...(req.body as Record<string, unknown>) };
+
+    const parseJsonField = <T>(
+      value: unknown,
+      fallback: T
+    ): T => {
+      if (value === undefined || value === null || value === "") return fallback;
+      if (typeof value !== "string") return value as T;
+      try {
+        return JSON.parse(value) as T;
+      } catch {
+        return fallback;
+      }
+    };
+
+    if (Object.prototype.hasOwnProperty.call(parsedBody, "categoryIds")) {
+      parsedBody.categoryIds = parseJsonField<string[]>(
+        parsedBody.categoryIds,
+        []
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(parsedBody, "colorIds")) {
+      parsedBody.colorIds = parseJsonField<string[]>(parsedBody.colorIds, []);
+    }
+    if (Object.prototype.hasOwnProperty.call(parsedBody, "productImages")) {
+      parsedBody.productImages = parseJsonField<
+        Array<{ url: string; order: number }>
+      >(parsedBody.productImages, []);
+    }
+    if (Object.prototype.hasOwnProperty.call(parsedBody, "translations")) {
+      parsedBody.translations = parseJsonField<
+        Record<string, TranslationPayload>
+      >(parsedBody.translations, {});
+    }
+
+    if (parsedBody.stockQuantity !== undefined) {
+      parsedBody.stockQuantity = Number(parsedBody.stockQuantity);
+    }
+    if (parsedBody.unitPrice !== undefined) {
+      parsedBody.unitPrice = Number(parsedBody.unitPrice);
+    }
+    if (parsedBody.isActive !== undefined) {
+      parsedBody.isActive = parsedBody.isActive === "true" || parsedBody.isActive === true;
+    }
+    if (parsedBody.isVip !== undefined) {
+      parsedBody.isVip = parsedBody.isVip === "true" || parsedBody.isVip === true;
+    }
+    if (parsedBody.isFeatured !== undefined) {
+      parsedBody.isFeatured =
+        parsedBody.isFeatured === "true" || parsedBody.isFeatured === true;
+    }
+
+    const validationResult = updateProductSchema.safeParse(parsedBody);
     if (!validationResult.success) {
       return res
         .status(400)
@@ -632,9 +922,27 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
     }
 
     const updateData = validationResult.data;
+    const parsedTranslations = parseTranslationPayload(
+      (updateData as any).translations as Record<string, TranslationPayload>
+    );
+    const {
+      categoryIds: categoryIdsUpdate,
+      colorIds: colorIdsUpdate,
+      translations: _translationsUpdate,
+      ...baseUpdateData
+    } = updateData as any;
 
     // Update product in transaction
     const updatedProduct = await sequelize.transaction(async (t) => {
+      const viTranslation = parsedTranslations.vi;
+      const finalName = viTranslation?.name?.trim() || updateData.name?.trim() || existingProduct.name;
+      const finalDescription =
+        viTranslation?.description !== undefined
+          ? viTranslation.description
+          : updateData.description !== undefined
+          ? updateData.description.trim()
+          : existingProduct.description;
+
       // Handle file uploads if present
       if (files && files.length > 0) {
         const uploadPromises = files.map(async (file, index) => {
@@ -653,7 +961,7 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
           return {
             productId: id,
             url: uploadResult.url,
-            altText: `${existingProduct.name} - Image ${index + 1}`,
+            altText: `${finalName} - Image ${index + 1}`,
             order: index,
           };
         });
@@ -665,22 +973,21 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       // Update basic product fields
       await existingProduct.update(
         {
-          ...updateData,
-          name: updateData.name?.trim() || existingProduct.name,
-          description:
-            updateData.description?.trim() || existingProduct.description,
+          ...baseUpdateData,
+          name: finalName,
+          description: finalDescription,
         },
         { transaction: t }
       );
 
       // Update category relationships if provided
-      if (updateData.categoryIds) {
+      if (categoryIdsUpdate) {
         const categories = await Category.findAll({
-          where: { id: { [Op.in]: updateData.categoryIds }, isActive: true },
+          where: { id: { [Op.in]: categoryIdsUpdate }, isActive: true },
           transaction: t,
         });
 
-        if (categories.length !== updateData.categoryIds.length) {
+        if (categories.length !== categoryIdsUpdate.length) {
           throw new Error("One or more categories not found or inactive");
         }
 
@@ -690,7 +997,7 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
         });
 
         await ProductCategory.bulkCreate(
-          updateData.categoryIds.map((categoryId) => ({
+          categoryIdsUpdate.map((categoryId: string) => ({
             productId: id,
             categoryId,
           })),
@@ -699,13 +1006,13 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       }
 
       // Update color relationships if provided
-      if (updateData.colorIds) {
+      if (colorIdsUpdate) {
         const colors = await Color.findAll({
-          where: { id: { [Op.in]: updateData.colorIds }, isActive: true },
+          where: { id: { [Op.in]: colorIdsUpdate }, isActive: true },
           transaction: t,
         });
 
-        if (colors.length !== updateData.colorIds.length) {
+        if (colors.length !== colorIdsUpdate.length) {
           throw new Error("One or more colors not found or inactive");
         }
 
@@ -715,12 +1022,82 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
         });
 
         await ProductColor.bulkCreate(
-          updateData.colorIds.map((colorId) => ({
+          colorIdsUpdate.map((colorId: string) => ({
             productId: id,
             colorId,
           })),
           { transaction: t }
         );
+      }
+
+      const existingTranslations = await ProductTranslation.findAll({
+        where: { productId: id },
+        transaction: t,
+      });
+      const existingTranslationMap = new Map(
+        existingTranslations.map((translation) => [translation.locale, translation])
+      );
+      const translationsToPersist: Partial<
+        Record<SupportedLocale, TranslationPayload>
+      > = {
+        ...parsedTranslations,
+        vi: {
+          ...parsedTranslations.vi,
+          name: finalName,
+          description: finalDescription,
+        },
+      };
+
+      for (const locale of SUPPORTED_LOCALES) {
+        const incoming = translationsToPersist[locale];
+        if (!incoming) continue;
+
+        const hasAnyIncomingValue =
+          incoming.name !== undefined ||
+          incoming.description !== undefined ||
+          incoming.metaTitle !== undefined ||
+          incoming.metaDescription !== undefined;
+        if (!hasAnyIncomingValue) continue;
+
+        const currentTranslation = existingTranslationMap.get(locale);
+        const nextName = incoming.name?.trim() || currentTranslation?.name || finalName;
+        const nextDescription =
+          incoming.description !== undefined
+            ? incoming.description
+            : currentTranslation?.description ||
+              (locale === "vi" ? finalDescription : undefined);
+        const nextMetaTitle =
+          incoming.metaTitle !== undefined
+            ? incoming.metaTitle?.trim() || undefined
+            : currentTranslation?.metaTitle;
+        const nextMetaDescription =
+          incoming.metaDescription !== undefined
+            ? incoming.metaDescription?.trim() || undefined
+            : currentTranslation?.metaDescription;
+
+        if (currentTranslation) {
+          await currentTranslation.update(
+            {
+              name: nextName,
+              description: nextDescription,
+              metaTitle: nextMetaTitle,
+              metaDescription: nextMetaDescription,
+            },
+            { transaction: t }
+          );
+        } else {
+          await ProductTranslation.create(
+            {
+              productId: id,
+              locale,
+              name: nextName,
+              description: nextDescription,
+              metaTitle: nextMetaTitle,
+              metaDescription: nextMetaDescription,
+            },
+            { transaction: t }
+          );
+        }
       }
 
       return Product.findByPk(id, {
@@ -758,12 +1135,26 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
             attributes: ["id", "url", "altText", "order"],
             order: [["order", "ASC"]],
           },
+          {
+            model: ProductTranslation,
+            as: "translations",
+            attributes: [
+              "locale",
+              "name",
+              "description",
+              "metaTitle",
+              "metaDescription",
+            ],
+            required: false,
+          },
         ],
         transaction: t,
       });
     });
 
-    return res.status(200).json(ResponseHelper.success(updatedProduct));
+    return res
+      .status(200)
+      .json(ResponseHelper.success(applyLocaleToProduct(updatedProduct, "vi", true)));
   } catch (error: any) {
     console.error("Update product with files error:", error);
 
@@ -819,13 +1210,37 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     const updateData = validationResult.data;
+    const parsedTranslations = parseTranslationPayload(
+      (updateData as any).translations as Record<string, TranslationPayload>
+    );
+    const {
+      categoryIds: categoryIdsUpdate,
+      colorIds: colorIdsUpdate,
+      productImages: productImagesUpdate,
+      translations: _translationsUpdate,
+      ...baseUpdateData
+    } = updateData as any;
 
     // Update product in transaction
     const updatedProduct = await sequelize.transaction(async (t) => {
-      let finalSlug = existingProduct.slug;
+      const viTranslation = parsedTranslations.vi;
+      const finalName = viTranslation?.name?.trim() || updateData.name?.trim() || existingProduct.name;
+      const finalDescription =
+        viTranslation?.description !== undefined
+          ? viTranslation.description
+          : updateData.description !== undefined
+          ? updateData.description.trim()
+          : existingProduct.description;
 
-      // If name is being updated, regenerate slug
-      if (updateData.name && updateData.name !== existingProduct.name) {
+      let finalSlug = existingProduct.slug;
+      const requestedSlug = updateData.slug?.trim();
+
+      // If name or slug is being updated, regenerate slug
+      if (requestedSlug || finalName !== existingProduct.name) {
+        if (requestedSlug) {
+          finalSlug = requestedSlug;
+        }
+
         // Get current capacity and first color for slug generation
         const [capacity, firstColor] = await Promise.all([
           Capacity.findByPk(
@@ -839,49 +1254,52 @@ export const updateProduct = async (req: Request, res: Response) => {
           }),
         ]);
 
-        if (capacity && firstColor?.color) {
+        if (!requestedSlug && capacity && firstColor?.color) {
           finalSlug = generateProductSlug(
-            updateData.name,
+            finalName,
             firstColor.color.name,
             capacity.name
           );
+        }
 
-          // Check for slug conflicts
-          let slugCounter = 0;
-          let originalSlug = finalSlug;
-          while (
-            await Product.findOne({
-              where: { slug: finalSlug, id: { [Op.ne]: id } },
-              transaction: t,
-            })
-          ) {
-            slugCounter++;
-            finalSlug = `${originalSlug}-${slugCounter}`;
-          }
+        if (!finalSlug) {
+          finalSlug = `product-${Date.now()}`;
+        }
+
+        // Check for slug conflicts
+        let slugCounter = 0;
+        const originalSlug = finalSlug;
+        while (
+          await Product.findOne({
+            where: { slug: finalSlug, id: { [Op.ne]: id } },
+            transaction: t,
+          })
+        ) {
+          slugCounter++;
+          finalSlug = `${originalSlug}-${slugCounter}`;
         }
       }
 
       // Update basic product fields
       await existingProduct.update(
         {
-          ...updateData,
+          ...baseUpdateData,
           slug: finalSlug,
-          name: updateData.name?.trim() || existingProduct.name,
-          description:
-            updateData.description?.trim() || existingProduct.description,
+          name: finalName,
+          description: finalDescription,
         },
         { transaction: t }
       );
 
       // Update category relationships if provided
-      if (updateData.categoryIds) {
+      if (categoryIdsUpdate) {
         // Verify categories exist and are active
         const categories = await Category.findAll({
-          where: { id: { [Op.in]: updateData.categoryIds }, isActive: true },
+          where: { id: { [Op.in]: categoryIdsUpdate }, isActive: true },
           transaction: t,
         });
 
-        if (categories.length !== updateData.categoryIds.length) {
+        if (categories.length !== categoryIdsUpdate.length) {
           throw new Error("One or more categories not found or inactive");
         }
 
@@ -893,7 +1311,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
         // Create new category relationships
         await ProductCategory.bulkCreate(
-          updateData.categoryIds.map((categoryId) => ({
+          categoryIdsUpdate.map((categoryId: string) => ({
             productId: id,
             categoryId,
           })),
@@ -902,14 +1320,14 @@ export const updateProduct = async (req: Request, res: Response) => {
       }
 
       // Update color relationships if provided
-      if (updateData.colorIds) {
+      if (colorIdsUpdate) {
         // Verify colors exist and are active
         const colors = await Color.findAll({
-          where: { id: { [Op.in]: updateData.colorIds }, isActive: true },
+          where: { id: { [Op.in]: colorIdsUpdate }, isActive: true },
           transaction: t,
         });
 
-        if (colors.length !== updateData.colorIds.length) {
+        if (colors.length !== colorIdsUpdate.length) {
           throw new Error("One or more colors not found or inactive");
         }
 
@@ -921,7 +1339,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
         // Create new color relationships
         await ProductColor.bulkCreate(
-          updateData.colorIds.map((colorId) => ({
+          colorIdsUpdate.map((colorId: string) => ({
             productId: id,
             colorId,
           })),
@@ -930,10 +1348,12 @@ export const updateProduct = async (req: Request, res: Response) => {
       }
 
       // Handle productImages update if provided
-      const imagesToProcess = updateData.productImages
-        ? updateData.productImages
-            .sort((a, b) => a.order - b.order)
-            .map((img) => img.url)
+      const imagesToProcess = productImagesUpdate
+        ? productImagesUpdate
+            .sort(
+              (a: { order: number }, b: { order: number }) => a.order - b.order
+            )
+            .map((img: { url: string }) => img.url)
         : [];
 
       if (imagesToProcess && imagesToProcess.length > 0) {
@@ -943,16 +1363,88 @@ export const updateProduct = async (req: Request, res: Response) => {
           transaction: t,
         });
 
-        // Create new product images
-        await ProductImage.bulkCreate(
-          imagesToProcess.map((imageUrl, index) => ({
-            productId: id,
-            url: imageUrl,
-            altText: updateData.name || existingProduct.name,
-            order: index,
-          })),
-          { transaction: t }
-        );
+          // Create new product images
+          await ProductImage.bulkCreate(
+            imagesToProcess.map((imageUrl: string, index: number) => ({
+              productId: id,
+              url: imageUrl,
+              altText: finalName,
+              order: index,
+            })),
+            { transaction: t }
+          );
+      }
+
+      // Upsert product translations
+      const existingTranslations = await ProductTranslation.findAll({
+        where: { productId: id },
+        transaction: t,
+      });
+      const existingTranslationMap = new Map(
+        existingTranslations.map((translation) => [translation.locale, translation])
+      );
+
+      const translationsToPersist: Partial<
+        Record<SupportedLocale, TranslationPayload>
+      > = {
+        ...parsedTranslations,
+        vi: {
+          ...parsedTranslations.vi,
+          name: finalName,
+          description: finalDescription,
+        },
+      };
+
+      for (const locale of SUPPORTED_LOCALES) {
+        const incoming = translationsToPersist[locale];
+        if (!incoming) continue;
+
+        const hasAnyIncomingValue =
+          incoming.name !== undefined ||
+          incoming.description !== undefined ||
+          incoming.metaTitle !== undefined ||
+          incoming.metaDescription !== undefined;
+        if (!hasAnyIncomingValue) continue;
+
+        const currentTranslation = existingTranslationMap.get(locale);
+        const nextName = incoming.name?.trim() || currentTranslation?.name || finalName;
+        const nextDescription =
+          incoming.description !== undefined
+            ? incoming.description
+            : currentTranslation?.description ||
+              (locale === "vi" ? finalDescription : undefined);
+        const nextMetaTitle =
+          incoming.metaTitle !== undefined
+            ? incoming.metaTitle?.trim() || undefined
+            : currentTranslation?.metaTitle;
+        const nextMetaDescription =
+          incoming.metaDescription !== undefined
+            ? incoming.metaDescription?.trim() || undefined
+            : currentTranslation?.metaDescription;
+
+        if (currentTranslation) {
+          await currentTranslation.update(
+            {
+              name: nextName,
+              description: nextDescription,
+              metaTitle: nextMetaTitle,
+              metaDescription: nextMetaDescription,
+            },
+            { transaction: t }
+          );
+        } else {
+          await ProductTranslation.create(
+            {
+              productId: id,
+              locale,
+              name: nextName,
+              description: nextDescription,
+              metaTitle: nextMetaTitle,
+              metaDescription: nextMetaDescription,
+            },
+            { transaction: t }
+          );
+        }
       }
 
       return Product.findByPk(id, {
@@ -990,12 +1482,26 @@ export const updateProduct = async (req: Request, res: Response) => {
             attributes: ["id", "url", "altText", "order"],
             order: [["order", "ASC"]],
           },
+          {
+            model: ProductTranslation,
+            as: "translations",
+            attributes: [
+              "locale",
+              "name",
+              "description",
+              "metaTitle",
+              "metaDescription",
+            ],
+            required: false,
+          },
         ],
         transaction: t,
       });
     });
 
-    return res.status(200).json(ResponseHelper.success(updatedProduct));
+    return res
+      .status(200)
+      .json(ResponseHelper.success(applyLocaleToProduct(updatedProduct, "vi", true)));
   } catch (error: any) {
     console.error("Update product error:", error);
 
@@ -1449,9 +1955,11 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       minCapacity,
       maxCapacity,
       isFeatured = "all",
+      locale,
       sortBy = "createdAt",
       sortOrder = "desc",
     } = req.query;
+    const requestedLocale = normalizeLocale(locale as string | undefined);
 
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
@@ -1613,6 +2121,18 @@ export const getPublicProducts = async (req: Request, res: Response) => {
           as: "productImages",
           attributes: ["id", "url", "altText", "order"],
         },
+        {
+          model: ProductTranslation,
+          as: "translations",
+          attributes: [
+            "locale",
+            "name",
+            "description",
+            "metaTitle",
+            "metaDescription",
+          ],
+          required: false,
+        },
       ],
       attributes: [
         "id",
@@ -1647,8 +2167,12 @@ export const getPublicProducts = async (req: Request, res: Response) => {
 
     const totalPages = Math.ceil(totalCount / limitNum);
 
+    const localizedProducts = products.map((product) =>
+      applyLocaleToProduct(product, requestedLocale)
+    );
+
     return res.status(200).json(
-      ResponseHelper.paginated(products, {
+      ResponseHelper.paginated(localizedProducts, {
         current_page: pageNum,
         per_page: limitNum,
         total_pages: totalPages,
@@ -1676,6 +2200,7 @@ export const getPublicProducts = async (req: Request, res: Response) => {
 export const getPublicProductById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const locale = normalizeLocale(req.query.locale as string | undefined);
 
     // Check if the parameter is a valid UUID
     const isUUID =
@@ -1724,6 +2249,18 @@ export const getPublicProductById = async (req: Request, res: Response) => {
           attributes: ["id", "url", "altText", "order"],
           order: [["order", "ASC"]],
         },
+        {
+          model: ProductTranslation,
+          as: "translations",
+          attributes: [
+            "locale",
+            "name",
+            "description",
+            "metaTitle",
+            "metaDescription",
+          ],
+          required: false,
+        },
       ],
       attributes: [
         "id",
@@ -1745,7 +2282,9 @@ export const getPublicProductById = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Product not found", "PRODUCT_NOT_FOUND"));
     }
 
-    return res.status(200).json(ResponseHelper.success(product));
+    return res
+      .status(200)
+      .json(ResponseHelper.success(applyLocaleToProduct(product, locale)));
   } catch (error) {
     console.error("Get public product error:", error);
     return res

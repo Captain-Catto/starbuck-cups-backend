@@ -10,6 +10,11 @@ import { Color, ColorModel } from "./Color";
 import { Capacity, CapacityModel } from "./Capacity";
 import { Category, CategoryModel } from "./Category";
 import { Product, ProductModel } from "./Product";
+import {
+  ProductTranslation,
+  ProductTranslationModel,
+  ProductLocale,
+} from "./ProductTranslation";
 import { ProductCategory, ProductCategoryModel } from "./ProductCategory";
 import { ProductColor, ProductColorModel } from "./ProductColor";
 import { ProductImage, ProductImageModel } from "./ProductImage";
@@ -32,6 +37,7 @@ const models = {
   Capacity: CapacityModel(sequelize),
   Category: CategoryModel(sequelize),
   Product: ProductModel(sequelize),
+  ProductTranslation: ProductTranslationModel(sequelize),
   ProductCategory: ProductCategoryModel(sequelize),
   ProductColor: ProductColorModel(sequelize),
   ProductImage: ProductImageModel(sequelize),
@@ -65,6 +71,8 @@ export {
   Capacity,
   Category,
   Product,
+  ProductTranslation,
+  ProductLocale,
   ProductCategory,
   ProductColor,
   ProductImage,

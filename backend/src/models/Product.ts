@@ -53,6 +53,7 @@ export class Product
   declare productImages?: any[];
   declare productCategories?: any[];
   declare productColors?: any[];
+  declare translations?: any[];
   declare capacity?: any;
   declare deletedByAdmin?: any;
   declare createdByAdmin?: any;
@@ -81,6 +82,11 @@ export class Product
     Product.hasMany(models.ProductColor, {
       foreignKey: "productId",
       as: "productColors",
+      onDelete: "CASCADE",
+    });
+    Product.hasMany(models.ProductTranslation, {
+      foreignKey: "productId",
+      as: "translations",
       onDelete: "CASCADE",
     });
     Product.belongsTo(models.Capacity, {
