@@ -2,10 +2,13 @@ import { Router } from "express";
 import {
   getEffectSettings,
   updateEffectSettings,
+  getWatermarkSettings,
+  updateWatermarkSettings,
 } from "../controllers/settings.controller";
-// import { authenticate, authorize } from "../middleware/auth.middleware"; 
-// Assuming auth middleware exists, but for now we might keep public get and protected update if needed.
-// Based on file list, middleware dir exists.
+import {
+  authenticateWithAutoRefresh,
+  requireAdmin,
+} from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -13,7 +16,20 @@ const router = Router();
 router.get("/effect-settings", getEffectSettings);
 
 // Admin route to update settings
-// Add middleware later if needed: authenticate, authorize(["ADMIN", "SUPER_ADMIN"])
-router.put("/effect-settings", updateEffectSettings);
+router.put(
+  "/effect-settings",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  updateEffectSettings
+);
+
+// Watermark settings for product image processing
+router.get("/watermark-settings", getWatermarkSettings);
+router.put(
+  "/watermark-settings",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  updateWatermarkSettings
+);
 
 export default router;

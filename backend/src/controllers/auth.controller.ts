@@ -307,9 +307,18 @@ export const refreshToken = async (req: Request, res: Response) => {
     // Verify refresh token
     const decoded = verifyRefreshToken(token);
 
-    // Find user and verify token version
+    // Find user and verify token hash against database
     const user = await AdminUser.findOne({
       where: { id: decoded.userId },
+      attributes: [
+        "id",
+        "email",
+        "role",
+        "username",
+        "isActive",
+        "refreshTokenHash",
+        "refreshTokenExpiresAt",
+      ],
     });
 
     if (!user || !user.isActive) {
@@ -317,6 +326,31 @@ export const refreshToken = async (req: Request, res: Response) => {
         .status(401)
         .json(
           ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
+        );
+    }
+
+    // Verify refresh token hash against database
+    const currentTokenHash = hashRefreshToken(token);
+    if (
+      !user.refreshTokenHash ||
+      user.refreshTokenHash !== currentTokenHash
+    ) {
+      return res
+        .status(401)
+        .json(
+          ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
+        );
+    }
+
+    // Check if refresh token is expired in database
+    if (
+      !user.refreshTokenExpiresAt ||
+      user.refreshTokenExpiresAt < new Date()
+    ) {
+      return res
+        .status(401)
+        .json(
+          ResponseHelper.error("Refresh token expired", "REFRESH_TOKEN_EXPIRED")
         );
     }
 
@@ -362,12 +396,9 @@ export const logout = async (req: Request, res: Response) => {
     // Clear refresh token cookie
     res.clearCookie("admin_refresh_token", {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production" &&
-        process.env.COOKIE_SECURE !== "false",
+      secure: process.env.COOKIE_SECURE === "true",
       sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
-        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
       path: "/",
       domain: process.env.COOKIE_DOMAIN || undefined,
     });
@@ -751,12 +782,9 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
     // Set new refresh token as HTTP-only cookie
     res.cookie("admin_refresh_token", newRefreshToken, {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production" &&
-        process.env.COOKIE_SECURE !== "false",
+      secure: process.env.COOKIE_SECURE === "true",
       sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
-        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
       domain: process.env.COOKIE_DOMAIN || undefined,
@@ -798,20 +826,21 @@ export const adminLogout = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
     }
 
-    // In a more complex implementation, you could:
-    // 1. Invalidate the refresh token in database
-    // 2. Add token to blacklist
-    // 3. Log the logout activity
+    // Invalidate the refresh token in database
+    const adminUser = await AdminUser.findByPk(req.user.userId);
+    if (adminUser) {
+      await adminUser.update({
+        refreshTokenHash: undefined,
+        refreshTokenExpiresAt: undefined,
+      });
+    }
 
     // Clear refresh token cookie
     res.clearCookie("admin_refresh_token", {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production" &&
-        process.env.COOKIE_SECURE !== "false",
+      secure: process.env.COOKIE_SECURE === "true",
       sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
-        (process.env.NODE_ENV === "production" ? "none" : "lax"),
+        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
       path: "/",
       domain: process.env.COOKIE_DOMAIN || undefined,
     });
@@ -846,13 +875,42 @@ export const adminSessionCheck = async (req: Request, res: Response) => {
       const payload = verifyRefreshToken(refreshToken);
       const user = await AdminUser.findOne({
         where: { id: payload.userId },
-        attributes: ["id", "email", "role", "isActive", "username"],
+        attributes: [
+          "id",
+          "email",
+          "role",
+          "isActive",
+          "username",
+          "refreshTokenHash",
+          "refreshTokenExpiresAt",
+        ],
       });
 
       if (!user || !user.isActive) {
         return res
           .status(401)
           .json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
+      }
+
+      // Verify refresh token hash against database
+      const currentTokenHash = hashRefreshToken(refreshToken);
+      if (
+        !user.refreshTokenHash ||
+        user.refreshTokenHash !== currentTokenHash
+      ) {
+        return res
+          .status(401)
+          .json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
+      }
+
+      // Check if refresh token is expired in database
+      if (
+        !user.refreshTokenExpiresAt ||
+        user.refreshTokenExpiresAt < new Date()
+      ) {
+        return res
+          .status(401)
+          .json(ResponseHelper.error("Session expired", "SESSION_EXPIRED"));
       }
 
       // Generate new access token
@@ -863,21 +921,27 @@ export const adminSessionCheck = async (req: Request, res: Response) => {
         username: user.username,
       });
 
-      // Generate new refresh token and update cookie
+      // Generate new refresh token and update cookie + DB
       const newRefreshToken = generateRefreshToken({
         userId: user.id,
         tokenVersion: 0,
       });
 
+      // Save new refresh token hash to database
+      const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
+      const newRefreshTokenExpiresAt = getRefreshTokenExpiration();
+
+      await user.update({
+        refreshTokenHash: newRefreshTokenHash,
+        refreshTokenExpiresAt: newRefreshTokenExpiresAt,
+      });
+
       // Set new refresh token as HTTP-only cookie
       res.cookie("admin_refresh_token", newRefreshToken, {
         httpOnly: true,
-        secure:
-          process.env.NODE_ENV === "production" &&
-          process.env.COOKIE_SECURE !== "false",
+        secure: process.env.COOKIE_SECURE === "true",
         sameSite:
-          (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") ||
-          (process.env.NODE_ENV === "production" ? "none" : "lax"),
+          (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         path: "/",
         domain: process.env.COOKIE_DOMAIN || undefined,

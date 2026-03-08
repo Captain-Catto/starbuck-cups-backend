@@ -2,6 +2,17 @@ import { ProductAnalytics } from "../models/ProductAnalytics";
 import { Product } from "../models/Product";
 import { Op } from "sequelize";
 
+const analyticsDebugEnabled =
+  process.env.ANALYTICS_DEBUG_LOG === "true" ||
+  (process.env.ANALYTICS_DEBUG_LOG !== "false" &&
+    process.env.NODE_ENV === "development");
+
+const debugLog = (...args: unknown[]) => {
+  if (analyticsDebugEnabled) {
+    console.log(...args);
+  }
+};
+
 export interface ProductAnalyticsData {
   productId: string;
   productName?: string;
@@ -27,7 +38,7 @@ export class ProductAnalyticsService {
     productId: string
   ): Promise<ProductAnalyticsData> {
     try {
-      console.log("Incrementing product click for:", productId);
+      debugLog("Incrementing product click for:", productId);
 
       // Try to find existing record first
       let analytics = await ProductAnalytics.findOne({
@@ -36,7 +47,7 @@ export class ProductAnalyticsService {
 
       if (analytics) {
         // Record exists, increment click count
-        console.log(
+        debugLog(
           "Found existing analytics record, incrementing click count"
         );
         await analytics.increment("clickCount", { by: 1 });
@@ -44,7 +55,7 @@ export class ProductAnalyticsService {
         await analytics.reload();
       } else {
         // Create new record
-        console.log("Creating new analytics record");
+        debugLog("Creating new analytics record");
         analytics = await ProductAnalytics.create({
           productId,
           clickCount: 1,
@@ -53,7 +64,7 @@ export class ProductAnalyticsService {
         });
       }
 
-      console.log("Analytics after update:", {
+      debugLog("Analytics after update:", {
         productId: analytics.productId,
         clickCount: analytics.clickCount,
         addToCartCount: analytics.addToCartCount,
@@ -79,7 +90,7 @@ export class ProductAnalyticsService {
   // Increment add to cart count
   async incrementAddToCart(productId: string): Promise<ProductAnalyticsData> {
     try {
-      console.log("Incrementing add to cart for:", productId);
+      debugLog("Incrementing add to cart for:", productId);
 
       // Try to find existing record first
       let analytics = await ProductAnalytics.findOne({
@@ -88,7 +99,7 @@ export class ProductAnalyticsService {
 
       if (analytics) {
         // Record exists, increment add to cart count
-        console.log(
+        debugLog(
           "Found existing analytics record, incrementing add to cart count"
         );
         await analytics.increment("addToCartCount", { by: 1 });
@@ -96,7 +107,7 @@ export class ProductAnalyticsService {
         await analytics.reload();
       } else {
         // Create new record
-        console.log("Creating new analytics record");
+        debugLog("Creating new analytics record");
         analytics = await ProductAnalytics.create({
           productId,
           clickCount: 0,
@@ -105,7 +116,7 @@ export class ProductAnalyticsService {
         });
       }
 
-      console.log("Analytics after update:", {
+      debugLog("Analytics after update:", {
         productId: analytics.productId,
         clickCount: analytics.clickCount,
         addToCartCount: analytics.addToCartCount,

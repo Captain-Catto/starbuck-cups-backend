@@ -20,7 +20,7 @@ import { z } from "zod";
 // import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
 // import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace
-import { processImage, IMAGE_PRESETS } from "../services/image-processing.service";
+import { processImage } from "../services/image-processing.service";
 import { productImageService } from "../services/product-image.service";
 // import {
 //   meilisearchService,
@@ -28,7 +28,8 @@ import { productImageService } from "../services/product-image.service";
 // } from "../services/meilisearch.service"; // TEMPORARILY DISABLED
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 import { sequelize } from "../config/database";
-import { Op } from "sequelize";
+import { Op, col, where as sequelizeWhere } from "sequelize";
+import { getProductImageProcessingOptions } from "../services/watermark-settings.service";
 
 const SUPPORTED_LOCALES = ["vi", "en", "zh"] as const;
 type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
@@ -38,6 +39,20 @@ type TranslationPayload = {
   metaTitle?: string;
   metaDescription?: string;
 };
+
+const ADMIN_SORT_FIELDS = new Set([
+  "name",
+  "stockQuantity",
+  "createdAt",
+  "updatedAt",
+  "isFeatured",
+]);
+
+const PUBLIC_SORT_FIELDS = new Set([
+  "name",
+  "createdAt",
+  "isFeatured",
+]);
 
 // Helper function to generate SEO-friendly slug with Vietnamese support
 const generateProductSlug = (
@@ -55,6 +70,48 @@ const normalizeLocale = (rawLocale?: string): SupportedLocale => {
   if (normalized.startsWith("en")) return "en";
   if (normalized.startsWith("zh")) return "zh";
   return "vi";
+};
+
+const getSearchableLocales = (locale: SupportedLocale): SupportedLocale[] => {
+  if (locale === "vi") return ["vi"];
+  return [locale, "vi"];
+};
+
+const buildLocalizedSearchConditions = (
+  keyword: string,
+  includeSlug = false
+) => {
+  const likeKeyword = `%${keyword}%`;
+  const conditions: any[] = [
+    { name: { [Op.like]: likeKeyword } },
+    { description: { [Op.like]: likeKeyword } },
+    sequelizeWhere(col("translations.name"), { [Op.like]: likeKeyword }),
+    sequelizeWhere(col("translations.description"), { [Op.like]: likeKeyword }),
+  ];
+
+  if (includeSlug) {
+    conditions.push({ slug: { [Op.like]: likeKeyword } });
+  }
+
+  return conditions;
+};
+
+const normalizeSortField = (
+  rawSortBy: unknown,
+  allowedFields: Set<string>,
+  fallback: string
+): string => {
+  const sortBy = typeof rawSortBy === "string" ? rawSortBy : fallback;
+  return allowedFields.has(sortBy) ? sortBy : fallback;
+};
+
+const normalizeSortOrder = (
+  rawSortOrder: unknown,
+  fallback: "asc" | "desc" = "desc"
+): "asc" | "desc" => {
+  if (typeof rawSortOrder !== "string") return fallback;
+  const normalized = rawSortOrder.toLowerCase();
+  return normalized === "asc" || normalized === "desc" ? normalized : fallback;
 };
 
 const toTranslationMap = (translations: any[] = []) => {
@@ -95,8 +152,11 @@ const applyLocaleToProduct = (
 
   const transformed = {
     ...restProduct,
-    name: localized?.name || plainProduct.name,
-    description: localized?.description || plainProduct.description || "",
+    name: localized?.name ?? plainProduct.name,
+    description: localized?.description ?? plainProduct.description ?? "",
+    metaTitle: localized?.metaTitle ?? translationMap.vi?.metaTitle ?? "",
+    metaDescription:
+      localized?.metaDescription ?? translationMap.vi?.metaDescription ?? "",
   };
 
   if (includeTranslationsMap) {
@@ -171,7 +231,8 @@ const createProductSchema = z.object({
   name: z.string().min(1, "Product name is required").max(255),
   slug: z.string().optional(),
   description: z.string().optional(),
-  capacityId: z.string().uuid("Invalid capacity ID"),
+  capacityId: z.string().uuid("Invalid capacity ID").optional().nullable()
+    .or(z.literal("")).transform(val => val === "" ? null : val),
   stockQuantity: z.coerce
     .number()
     .int()
@@ -187,7 +248,7 @@ const createProductSchema = z.object({
   categoryIds: z
     .array(z.string().uuid())
     .min(1, "At least one category is required"),
-  colorIds: z.array(z.string().uuid()).min(1, "At least one color is required"),
+  colorIds: z.array(z.string().uuid()).optional().default([]),
   productImages: z
     .array(
       z.object({
@@ -243,6 +304,12 @@ export const getProducts = async (req: Request, res: Response) => {
       lowStockThreshold = "1",
     } = req.query;
     const requestedLocale = normalizeLocale(locale as string | undefined);
+    const normalizedSortBy = normalizeSortField(
+      sortBy,
+      ADMIN_SORT_FIELDS,
+      "createdAt"
+    );
+    const normalizedSortOrder = normalizeSortOrder(sortOrder, "desc");
 
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
@@ -268,11 +335,7 @@ export const getProducts = async (req: Request, res: Response) => {
 
     // Search functionality
     if (search) {
-      where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { slug: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-      ];
+      where[Op.or] = buildLocalizedSearchConditions(search as string, true);
     }
 
     // Low stock filter
@@ -354,43 +417,53 @@ export const getProducts = async (req: Request, res: Response) => {
       },
     ];
 
+    if (search) {
+      countInclude.push({
+        model: ProductTranslation,
+        as: "translations",
+        attributes: [],
+        required: false,
+        where: {
+          locale: { [Op.in]: getSearchableLocales(requestedLocale) },
+        },
+      } as any);
+    }
+
     // Determine sort order - featured products first when filtering
     const orderClauses: any[] = [];
     if (isFeatured === "true") {
       orderClauses.push(["isFeatured", "DESC"]);
     }
     // If sorting by isFeatured, use createdAt DESC as secondary sort instead of duplicate
-    if (sortBy === "isFeatured") {
+    if (normalizedSortBy === "isFeatured") {
       orderClauses.push(["createdAt", "DESC"]);
     } else {
-      orderClauses.push([sortBy as string, (sortOrder as string).toUpperCase()]);
+      orderClauses.push([normalizedSortBy, normalizedSortOrder.toUpperCase()]);
     }
 
-    // First, get ALL matching products with minimal data and proper ordering
-    const allMatchingProducts = await Product.findAll({
+    const totalCount = await Product.count({
+      where,
+      include: countInclude,
+      distinct: true,
+      col: "Product.id",
+    });
+
+    // Single query with GROUP BY to deduplicate JOINed rows
+    const idRows = await Product.findAll({
       where,
       include: countInclude,
       attributes: ["id"],
       order: orderClauses,
+      group: ["Product.id"],
+      offset,
+      limit: limitNum,
       raw: true,
+      subQuery: false,
     });
 
-    // Remove duplicates while preserving sort order
-    const seenIds = new Set<string>();
-    const orderedUniqueProductIds: string[] = [];
-
-    for (const product of allMatchingProducts) {
-      const id = (product as any).id;
-      if (!seenIds.has(id)) {
-        seenIds.add(id);
-        orderedUniqueProductIds.push(id);
-      }
-    }
-
-    const totalCount = orderedUniqueProductIds.length;
-
-    // Apply pagination on the ordered unique product IDs
-    const paginatedProductIds = orderedUniqueProductIds.slice(offset, offset + limitNum);
+    const paginatedProductIds = (idRows as Array<{ id: string }>).map(
+      (row) => row.id
+    );
 
     // Now fetch the full product details for these specific IDs
     const productsUnsorted = await Product.findAll({
@@ -615,24 +688,24 @@ export const createProduct = async (req: Request, res: Response) => {
     const result = await sequelize.transaction(async (t) => {
       // Verify references exist and are active
       const [capacity, colors, categories] = await Promise.all([
-        Capacity.findOne({
+        capacityId ? Capacity.findOne({
           where: { id: capacityId, isActive: true },
           transaction: t,
-        }),
-        Color.findAll({
+        }) : Promise.resolve(null),
+        colorIds?.length ? Color.findAll({
           where: { id: { [Op.in]: colorIds }, isActive: true },
           transaction: t,
-        }),
+        }) : Promise.resolve([]),
         Category.findAll({
           where: { id: { [Op.in]: categoryIds }, isActive: true },
           transaction: t,
         }),
       ]);
 
-      if (!capacity) {
+      if (capacityId && !capacity) {
         throw new Error("Capacity not found or inactive");
       }
-      if (colors.length !== colorIds.length) {
+      if (colorIds && colors.length !== colorIds.length) {
         throw new Error("One or more colors not found or inactive");
       }
       if (categories.length !== categoryIds.length) {
@@ -642,7 +715,7 @@ export const createProduct = async (req: Request, res: Response) => {
       // Generate slug if not provided
       let finalSlug =
         slug?.trim() ||
-        generateProductSlug(canonicalName, colors[0].name, capacity.name);
+        generateProductSlug(canonicalName, colors.length > 0 ? colors[0].name : "", capacity ? capacity.name : "");
 
       if (!finalSlug) {
         finalSlug = `product-${Date.now()}`;
@@ -907,6 +980,11 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       parsedBody.isFeatured =
         parsedBody.isFeatured === "true" || parsedBody.isFeatured === true;
     }
+    const keepExistingImages =
+      parsedBody.keepExistingImages === undefined
+        ? true
+        : parsedBody.keepExistingImages === true ||
+          parsedBody.keepExistingImages === "true";
 
     const validationResult = updateProductSchema.safeParse(parsedBody);
     if (!validationResult.success) {
@@ -928,6 +1006,7 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
     const {
       categoryIds: categoryIdsUpdate,
       colorIds: colorIdsUpdate,
+      productImages: productImagesUpdate,
       translations: _translationsUpdate,
       ...baseUpdateData
     } = updateData as any;
@@ -942,15 +1021,33 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
           : updateData.description !== undefined
           ? updateData.description.trim()
           : existingProduct.description;
+      const imagePreset = await getProductImageProcessingOptions();
 
       // Handle file uploads if present
       if (files && files.length > 0) {
+        let startingOrder = 0;
+        if (keepExistingImages) {
+          const maxExistingOrder = await ProductImage.max("order", {
+            where: { productId: id },
+            transaction: t,
+          });
+          const parsedMaxOrder = Number(maxExistingOrder);
+          startingOrder = Number.isFinite(parsedMaxOrder)
+            ? parsedMaxOrder + 1
+            : 0;
+        } else {
+          await ProductImage.destroy({
+            where: { productId: id },
+            transaction: t,
+          });
+        }
+
         const uploadPromises = files.map(async (file, index) => {
-          // Resize & convert to WebP before uploading
+          // Resize & convert to AVIF before uploading
           const processed = await processImage(
             file.buffer,
             file.originalname,
-            IMAGE_PRESETS.product
+            imagePreset
           );
 
           const uploadResult = await googleDriveService.uploadFile(
@@ -962,12 +1059,42 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
             productId: id,
             url: uploadResult.url,
             altText: `${finalName} - Image ${index + 1}`,
-            order: index,
+            order: startingOrder + index,
           };
         });
 
         const imageData = await Promise.all(uploadPromises);
         await ProductImage.bulkCreate(imageData, { transaction: t });
+      }
+
+      // Handle explicit productImages update if provided from client payload
+      const imagesToProcess = productImagesUpdate
+        ? productImagesUpdate
+            .sort(
+              (a: { order: number }, b: { order: number }) => a.order - b.order
+            )
+            .map((img: { url: string }) => img.url)
+        : [];
+
+      if (
+        imagesToProcess &&
+        imagesToProcess.length > 0 &&
+        (!files || files.length === 0)
+      ) {
+        await ProductImage.destroy({
+          where: { productId: id },
+          transaction: t,
+        });
+
+        await ProductImage.bulkCreate(
+          imagesToProcess.map((imageUrl: string, index: number) => ({
+            productId: id,
+            url: imageUrl,
+            altText: finalName,
+            order: index,
+          })),
+          { transaction: t }
+        );
       }
 
       // Update basic product fields
@@ -1242,11 +1369,12 @@ export const updateProduct = async (req: Request, res: Response) => {
         }
 
         // Get current capacity and first color for slug generation
+        const targetCapacityId = updateData.capacityId !== undefined ? updateData.capacityId : existingProduct.capacityId;
         const [capacity, firstColor] = await Promise.all([
-          Capacity.findByPk(
-            updateData.capacityId || existingProduct.capacityId,
+          targetCapacityId ? Capacity.findByPk(
+            targetCapacityId,
             { transaction: t }
-          ),
+          ) : Promise.resolve(null),
           ProductColor.findOne({
             where: { productId: id },
             include: [{ model: Color, as: "color" }],
@@ -1254,11 +1382,11 @@ export const updateProduct = async (req: Request, res: Response) => {
           }),
         ]);
 
-        if (!requestedSlug && capacity && firstColor?.color) {
+        if (!requestedSlug) {
           finalSlug = generateProductSlug(
             finalName,
-            firstColor.color.name,
-            capacity.name
+            firstColor?.color ? firstColor.color.name : "",
+            capacity ? capacity.name : ""
           );
         }
 
@@ -1960,6 +2088,12 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       sortOrder = "desc",
     } = req.query;
     const requestedLocale = normalizeLocale(locale as string | undefined);
+    const normalizedSortBy = normalizeSortField(
+      sortBy,
+      PUBLIC_SORT_FIELDS,
+      "createdAt"
+    );
+    const normalizedSortOrder = normalizeSortOrder(sortOrder, "desc");
 
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
@@ -1972,10 +2106,7 @@ export const getPublicProducts = async (req: Request, res: Response) => {
     };
 
     if (search) {
-      where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-      ];
+      where[Op.or] = buildLocalizedSearchConditions(search as string);
     }
 
     if (isFeatured !== "all") {
@@ -2063,20 +2194,57 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       },
     ];
 
-    // Get accurate count by finding all matching product IDs first
-    const matchingProductIds = await Product.findAll({
+    if (search) {
+      countInclude.push({
+        model: ProductTranslation,
+        as: "translations",
+        attributes: [],
+        required: false,
+        where: {
+          locale: { [Op.in]: getSearchableLocales(requestedLocale) },
+        },
+      } as any);
+    }
+
+    const totalCount = await Product.count({
+      where,
+      include: countInclude,
+      distinct: true,
+      col: "Product.id",
+    });
+
+    const sortOrderClauses: any[] = [
+      ...(normalizedSortBy === "isFeatured" && isFeatured !== "true"
+        ? [["isFeatured", normalizedSortOrder.toUpperCase()] as any]
+        : isFeatured === "true"
+        ? [["isFeatured", "DESC"] as any]
+        : []),
+      ...(normalizedSortBy === "isFeatured"
+        ? [["createdAt", "DESC"] as any]
+        : [[normalizedSortBy, normalizedSortOrder.toUpperCase()] as any]),
+    ];
+
+    // Single query with GROUP BY to deduplicate JOINed rows
+    const idRows = await Product.findAll({
       where,
       include: countInclude,
       attributes: ["id"],
+      order: sortOrderClauses,
       group: ["Product.id"],
+      offset,
+      limit: limitNum,
       raw: true,
+      subQuery: false,
     });
 
-    const totalCount = matchingProductIds.length;
+    const paginatedProductIds = (idRows as Array<{ id: string }>).map(
+      (row) => row.id
+    );
 
-    // Now fetch the paginated products with full details
-    const products = await Product.findAll({
-      where,
+    const productsUnsorted = await Product.findAll({
+      where: {
+        id: { [Op.in]: paginatedProductIds },
+      },
       include: [
         {
           model: Capacity,
@@ -2132,6 +2300,13 @@ export const getPublicProducts = async (req: Request, res: Response) => {
             "metaDescription",
           ],
           required: false,
+          ...(search
+            ? {
+                where: {
+                  locale: { [Op.in]: getSearchableLocales(requestedLocale) },
+                },
+              }
+            : {}),
         },
       ],
       attributes: [
@@ -2146,24 +2321,13 @@ export const getPublicProducts = async (req: Request, res: Response) => {
         "isFeatured",
         "createdAt",
       ],
-      order: [
-        // Primary sort
-        ...(sortBy === "isFeatured" && isFeatured !== "true"
-          ? [["isFeatured", (sortOrder as string).toUpperCase()] as any]
-          : isFeatured === "true"
-          ? [["isFeatured", "DESC"] as any]
-          : []),
-        // Secondary sort
-        ...(sortBy === "isFeatured"
-          ? [["createdAt", "DESC"] as any]
-          : [[sortBy as string, (sortOrder as string).toUpperCase()] as any]),
-        // Image order
-        [{ model: ProductImage, as: "productImages" }, "order", "ASC"],
-      ],
-      offset,
-      limit: limitNum,
-      subQuery: true,
+      order: [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]],
     });
+
+    const productsMap = new Map(productsUnsorted.map((product) => [product.id, product]));
+    const products = paginatedProductIds
+      .map((id) => productsMap.get(id))
+      .filter(Boolean) as typeof productsUnsorted;
 
     const totalPages = Math.ceil(totalCount / limitNum);
 

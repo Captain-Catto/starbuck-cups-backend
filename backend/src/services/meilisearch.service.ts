@@ -25,7 +25,7 @@ export interface SearchableProduct {
     slug: string;
     hexCode: string;
   }>;
-  capacity: {
+  capacity?: {
     id: string;
     name: string;
     slug: string;

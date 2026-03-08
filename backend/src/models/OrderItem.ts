@@ -86,6 +86,20 @@ export const OrderItemModel = (sequelize: Sequelize) => {
       timestamps: true,
       createdAt: 'createdAt',
       updatedAt: 'updatedAt',
+      indexes: [
+        {
+          name: "idx_order_items_order_id",
+          fields: ["order_id"],
+        },
+        {
+          name: "idx_order_items_product_id",
+          fields: ["product_id"],
+        },
+        {
+          name: "idx_order_items_order_product",
+          fields: ["order_id", "product_id"],
+        },
+      ],
     }
   );
 

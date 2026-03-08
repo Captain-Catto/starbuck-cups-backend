@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { Setting } from "../models";
 import { socketService } from "../services/socket.service";
+import {
+  getProductWatermarkSettings,
+  updateProductWatermarkSettings,
+} from "../services/watermark-settings.service";
 
 export interface EffectSettingsDto {
   enabled: boolean;
@@ -139,6 +143,49 @@ export const updateEffectSettings = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update effect settings",
+    });
+  }
+};
+
+export const getWatermarkSettings = async (req: Request, res: Response) => {
+  try {
+    const settings = await getProductWatermarkSettings();
+    return res.status(200).json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error("Error fetching watermark settings:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch watermark settings",
+    });
+  }
+};
+
+export const updateWatermarkSettings = async (req: Request, res: Response) => {
+  try {
+    const payload = req.body as {
+      enabled?: boolean;
+      text?: string;
+      opacity?: number;
+      backgroundOpacity?: number;
+      fontSize?: number;
+      margin?: number;
+    };
+
+    const updated = await updateProductWatermarkSettings(payload);
+
+    return res.status(200).json({
+      success: true,
+      data: updated,
+      message: "Watermark settings updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating watermark settings:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update watermark settings",
     });
   }
 };

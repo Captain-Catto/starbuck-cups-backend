@@ -233,6 +233,7 @@ export class GoogleDriveSAService {
       ".png": "image/png",
       ".gif": "image/gif",
       ".webp": "image/webp",
+      ".avif": "image/avif",
       ".svg": "image/svg+xml",
       ".pdf": "application/pdf",
       ".doc": "application/msword",
@@ -247,7 +248,7 @@ export class GoogleDriveSAService {
    * Validate file type for images
    */
   isValidImageType(filename: string): boolean {
-    const validExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+    const validExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"];
     const extension = path.extname(filename).toLowerCase();
     return validExtensions.includes(extension);
   }

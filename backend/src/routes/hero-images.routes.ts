@@ -9,7 +9,10 @@ import {
   reorderHeroImages,
   uploadMiddleware,
 } from "../controllers/hero-images.controller";
-import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
+import {
+  authenticateWithAutoRefresh,
+  requireAdmin,
+} from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -21,9 +24,9 @@ router.use(authenticateWithAutoRefresh);
 
 router.get("/", getAdminHeroImages);
 router.get("/:id", getHeroImageById);
-router.post("/", uploadMiddleware, createHeroImage);
-router.put("/:id", uploadMiddleware, updateHeroImage);
-router.delete("/:id", deleteHeroImage);
-router.post("/reorder", reorderHeroImages);
+router.post("/", requireAdmin, uploadMiddleware, createHeroImage);
+router.put("/:id", requireAdmin, uploadMiddleware, updateHeroImage);
+router.delete("/:id", requireAdmin, deleteHeroImage);
+router.post("/reorder", requireAdmin, reorderHeroImages);
 
 export default router;

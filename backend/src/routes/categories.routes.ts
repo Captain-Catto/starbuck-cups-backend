@@ -17,6 +17,7 @@ import {
 } from "../controllers/categories.controller";
 import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
 import { syncCategory } from "../middleware/auto-sync.middleware";
+import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
 
 const router = Router();
 
@@ -31,7 +32,8 @@ const router = Router();
  *       200:
  *         description: Categories retrieved successfully
  */
-router.get("/public", getPublicCategories);
+// Cache categories for 15 minutes as they rarely change
+router.get("/public", redisCacheMiddleware(900), getPublicCategories);
 
 /**
  * @swagger
@@ -43,7 +45,8 @@ router.get("/public", getPublicCategories);
  *       200:
  *         description: Category tree retrieved successfully
  */
-router.get("/public/tree", getPublicCategoryTree);
+// Cache category tree for 15 minutes as they rarely change
+router.get("/public/tree", redisCacheMiddleware(900), getPublicCategoryTree);
 
 /**
  * @swagger
@@ -64,7 +67,8 @@ router.get("/public/tree", getPublicCategoryTree);
  *       404:
  *         description: Category not found
  */
-router.get("/public/:id", getPublicCategoryById);
+// Cache individual category for 15 minutes
+router.get("/public/:id", redisCacheMiddleware(900), getPublicCategoryById);
 
 /**
  * @swagger

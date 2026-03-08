@@ -30,6 +30,7 @@ import {
   handleMulterError,
 } from "../middleware/upload.middleware";
 import { syncProduct } from "../middleware/auto-sync.middleware";
+import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
 
 const router = Router();
 
@@ -83,9 +84,9 @@ const router = Router();
  *       200:
  *         description: Products retrieved successfully
  */
-// Public route (no auth required)
-router.get("/", getPublicProducts);
-router.get("/public", getPublicProducts);
+// Public route (no auth required) - cached for 5 minutes (300s)
+router.get("/", redisCacheMiddleware(300), getPublicProducts);
+router.get("/public", redisCacheMiddleware(300), getPublicProducts);
 
 /**
  * @swagger
@@ -106,8 +107,8 @@ router.get("/public", getPublicProducts);
  *       404:
  *         description: Product not found
  */
-// Public product by ID/slug route
-router.get("/public/:id", getPublicProductById);
+// Public product by ID/slug route - cached for 10 minutes (600s)
+router.get("/public/:id", redisCacheMiddleware(600), getPublicProductById);
 
 /**
  * @swagger
@@ -128,8 +129,8 @@ router.get("/public/:id", getPublicProductById);
  *       404:
  *         description: Product not found
  */
-// Public product routes (must be at the end to avoid conflicts)
-router.get("/:id", getPublicProductById);
+// Public product routes (must be at the end to avoid conflicts) - cached for 10 minutes (600s)
+router.get("/:id", redisCacheMiddleware(600), getPublicProductById);
 
 /**
  * @swagger

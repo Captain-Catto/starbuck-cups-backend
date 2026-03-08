@@ -7,7 +7,10 @@ import {
   updatePromotionalBanner,
   deletePromotionalBanner,
 } from "../controllers/promotional-banners.controller";
-import { authenticate } from "../middleware/auth.middleware";
+import {
+  authenticateWithAutoRefresh,
+  requireAdmin,
+} from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -23,18 +26,43 @@ router.get("/", getActivePromotionalBanner);
  */
 
 // GET /api/admin/promotional-banners - Get all promotional banners
-router.get("/admin", authenticate, getAdminPromotionalBanners);
+router.get(
+  "/admin",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  getAdminPromotionalBanners
+);
 
 // GET /api/admin/promotional-banners/:id - Get promotional banner by ID
-router.get("/admin/:id", authenticate, getPromotionalBannerById);
+router.get(
+  "/admin/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  getPromotionalBannerById
+);
 
 // POST /api/admin/promotional-banners - Create promotional banner
-router.post("/admin", authenticate, createPromotionalBanner);
+router.post(
+  "/admin",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  createPromotionalBanner
+);
 
 // PUT /api/admin/promotional-banners/:id - Update promotional banner
-router.put("/admin/:id", authenticate, updatePromotionalBanner);
+router.put(
+  "/admin/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  updatePromotionalBanner
+);
 
 // DELETE /api/admin/promotional-banners/:id - Delete promotional banner
-router.delete("/admin/:id", authenticate, deletePromotionalBanner);
+router.delete(
+  "/admin/:id",
+  authenticateWithAutoRefresh,
+  requireAdmin,
+  deletePromotionalBanner
+);
 
 export default router;

@@ -7,12 +7,12 @@ import {
   deleteConsultation,
   getPendingConsultationsCount,
 } from "../controllers/consultation.controller";
-import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, rateLimitPublicSubmit } from "../middleware/auth.middleware";
 
 const router = Router();
 
-// POST /api/consultations - Create new consultation
-router.post("/", createConsultation);
+// POST /api/consultations - Create new consultation (rate limited)
+router.post("/", rateLimitPublicSubmit, createConsultation);
 
 // GET /api/consultations - Get all consultations with optional filters
 router.get("/", authenticateWithAutoRefresh, getConsultations);

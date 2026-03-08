@@ -2,9 +2,9 @@ import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
 import session from "express-session";
-import SequelizeStoreInit from "connect-session-sequelize";
+const RedisStore = require("connect-redis");
+import { createClient } from "redis";
 import { createServer } from "http";
-
 // Import custom middleware
 import {
   securityHeaders,
@@ -43,7 +43,6 @@ import { socketService } from "./services/socket.service";
 import sequelize from "./config/database";
 import {
   initializeDatabase,
-  initializeSessionStore,
 } from "./config/database-init";
 import { validateRequiredEnv } from "./config/env";
 
@@ -100,18 +99,22 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser()); // Add cookie parser middleware
 
-// Session middleware (Sequelize store)
-const SequelizeStore = SequelizeStoreInit(session.Store);
-const sessionStore = new SequelizeStore({
-  db: sequelize,
-  tableName: 'sessions',
-  checkExpirationInterval: 15 * 60 * 1000, // 15 minutes
-  expiration: 24 * 60 * 60 * 1000 // 24 hours
+// Initialize Redis client for sessions
+const redisClient = createClient({
+  url: process.env.REDIS_URL || "redis://localhost:6379",
+});
+redisClient.connect().catch(console.error);
+
+// Session middleware (Redis store)
+const sessionStore = new RedisStore({
+  client: redisClient,
+  prefix: "shop_session:",
+  ttl: 24 * 60 * 60, // 24 hours
 });
 
 app.use(
   session({
-    secret: process.env.JWT_SECRET as string,
+    secret: (process.env.SESSION_SECRET || process.env.JWT_SECRET) as string,
     proxy: shouldUseSecureCookie,
     store: sessionStore,
     resave: false,
@@ -209,9 +212,10 @@ const startServer = async () => {
   try {
     // Initialize database connection and sync models
     await initializeDatabase();
-
-    // Initialize session store
-    await initializeSessionStore(sessionStore);
+    
+    // sessionStore doesn't need explicit init like sequelize store does,
+    // but we log it for consistency
+    console.log("✅ Redis Session store ready.");
 
     // Start server
     server.listen(PORT, () => {

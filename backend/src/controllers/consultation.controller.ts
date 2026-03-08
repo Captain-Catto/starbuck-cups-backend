@@ -66,10 +66,6 @@ export const createConsultation = async (req: Request, res: Response) => {
 
     // Emit Socket.IO notification for new consultation
     try {
-      console.log(
-        "📋 Consultation object structure:",
-        JSON.stringify(consultation, null, 2)
-      );
       socketService.emitConsultationCreated({
         id: consultation.id,
         customerName: consultation.customerName || "Unknown Customer",
@@ -88,20 +84,22 @@ export const createConsultation = async (req: Request, res: Response) => {
     };
 
     res.status(201).json(response);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating consultation:", error);
 
+    // Return validation errors with 400 status
+    const isValidationError = error.message?.startsWith("Products not found");
     const response: ApiResponse = {
       success: false,
       data: null,
       meta: { timestamp: new Date().toISOString() },
       error: {
-        message: "Failed to create consultation order",
-        code: "CONSULTATION_CREATE_ERROR",
+        message: isValidationError ? error.message : "Failed to create consultation order",
+        code: isValidationError ? "INVALID_PRODUCTS" : "CONSULTATION_CREATE_ERROR",
       },
     };
 
-    res.status(500).json(response);
+    res.status(isValidationError ? 400 : 500).json(response);
   }
 };
 
@@ -193,6 +191,22 @@ export const updateConsultationStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status, notes } = req.body;
+
+    // Validate status value
+    const validStatuses = Object.values(ConsultationStatus);
+    if (!status || !validStatuses.includes(status)) {
+      const response: ApiResponse = {
+        success: false,
+        data: null,
+        meta: { timestamp: new Date().toISOString() },
+        error: {
+          message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+          code: "INVALID_STATUS",
+        },
+      };
+      res.status(400).json(response);
+      return;
+    }
 
     const consultation = await consultationService.updateConsultationStatus(
       id,

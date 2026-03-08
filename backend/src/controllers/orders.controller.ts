@@ -136,15 +136,15 @@ const updateOrderSchema = z.object({
 });
 
 /**
- * Generate unique order number
+ * Generate unique order number (must be called inside a transaction)
  */
-async function generateOrderNumber(): Promise<string> {
+async function generateOrderNumber(transaction?: any): Promise<string> {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const day = date.getDate().toString().padStart(2, "0");
 
-  // Count orders created today
+  // Count orders created today within the transaction to prevent race conditions
   const startOfDay = new Date(
     date.getFullYear(),
     date.getMonth(),
@@ -159,6 +159,7 @@ async function generateOrderNumber(): Promise<string> {
         [Op.lt]: endOfDay,
       },
     },
+    ...(transaction ? { transaction, lock: true } : {}),
   });
 
   const sequence = (todayOrderCount + 1).toString().padStart(4, "0");
@@ -383,128 +384,94 @@ export const createOrder = async (req: Request, res: Response) => {
     // Calculate shipping cost
     const shippingCost = Math.max(0, originalShippingCost - shippingDiscount);
 
-    let calculatedTotalAmount = totalAmount || 0;
-    let orderItems: any[] = [];
-
-    if (orderType === "product" && items && items.length > 0) {
-      // Validate products and calculate total for product orders
-      for (const item of items) {
-        // Get product with separate queries for reliable data loading
-        const product = await Product.findByPk(item.productId);
-
-        if (!product) {
-          return res
-            .status(400)
-            .json(
-              ResponseHelper.error(
-                `Product with ID ${item.productId} not found`,
-                "PRODUCT_NOT_FOUND"
-              )
-            );
-        }
-
-        if (product.stockQuantity < item.quantity) {
-          return res
-            .status(400)
-            .json(
-              ResponseHelper.error(
-                `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
-                "INSUFFICIENT_STOCK"
-              )
-            );
-        }
-
-        // Load associations separately for reliability
-        const [capacity, productCategories, productColors, productImages] =
-          await Promise.all([
-            // Load capacity
-            product.capacityId ? Capacity.findByPk(product.capacityId) : null,
-            // Load categories with category details
-            ProductCategory.findAll({
-              where: { productId: item.productId },
-              include: [{ model: Category, as: "category" }],
-            }),
-            // Load colors with color details
-            ProductColor.findAll({
-              where: { productId: item.productId },
-              include: [{ model: Color, as: "color" }],
-            }),
-            // Load images
-            ProductImage.findAll({
-              where: { productId: item.productId },
-              limit: 1,
-              order: [["createdAt", "ASC"]], // Get the first image
-            }),
-          ]);
-
-        const unitPrice = item.unitPrice || product.unitPrice;
-        const itemTotal = unitPrice * item.quantity;
-        calculatedTotalAmount += itemTotal;
-
-        // Create complete product snapshot for historical record
-        const productSnapshot = {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          description: product.description,
-          basePrice: product.unitPrice,
-          unitPrice,
-          requestedColor: item.requestedColor,
-          // Capture capacity information
-          capacity: capacity
-            ? {
-                id: capacity.id,
-                name: capacity.name,
-                slug: capacity.slug,
-                volumeMl: capacity.volumeMl,
-              }
-            : null,
-          // Capture categories information
-          categories: productCategories
-            .filter((pc) => pc.category) // Filter out any undefined categories
-            .map((pc) => ({
-              id: pc.category.id,
-              name: pc.category.name,
-              slug: pc.category.slug,
-            })),
-          // Capture colors information
-          colors: productColors
-            .filter((pc) => pc.color) // Filter out any undefined colors
-            .map((pc) => ({
-              id: pc.color.id,
-              name: pc.color.name,
-              slug: pc.color.slug,
-              hexCode: pc.color.hexCode,
-            })),
-          // Capture first image
-          image:
-            productImages.length > 0
-              ? {
-                  id: productImages[0].id,
-                  url: productImages[0].url,
-                  altText: productImages[0].altText,
-                }
-              : null,
-          // Timestamp when this snapshot was created
-          snapshotCreatedAt: new Date().toISOString(),
-        };
-
-        orderItems.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          productSnapshot,
-        });
-      }
-    }
-
-    // Add shipping cost to total
-    calculatedTotalAmount += shippingCost;
-
-    // Generate order number
-    const orderNumber = await generateOrderNumber();
-
-    // Create order with items in a transaction
+    // Create order with items in a transaction (stock check + snapshot inside transaction)
     const order = await sequelize.transaction(async (t) => {
+      let calculatedTotalAmount = totalAmount || 0;
+      const orderItems: any[] = [];
+
+      if (orderType === "product" && items && items.length > 0) {
+        // Validate products and calculate total inside transaction with row lock
+        for (const item of items) {
+          // Lock the product row to prevent concurrent stock modifications
+          const product = await Product.findByPk(item.productId, {
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          });
+
+          if (!product) {
+            throw { status: 400, code: "PRODUCT_NOT_FOUND", message: `Product with ID ${item.productId} not found` };
+          }
+
+          if (product.stockQuantity < item.quantity) {
+            throw { status: 400, code: "INSUFFICIENT_STOCK", message: `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}` };
+          }
+
+          // Load associations inside transaction
+          const [capacity, productCategories, productColors, productImages] =
+            await Promise.all([
+              product.capacityId ? Capacity.findByPk(product.capacityId, { transaction: t }) : null,
+              ProductCategory.findAll({
+                where: { productId: item.productId },
+                include: [{ model: Category, as: "category" }],
+                transaction: t,
+              }),
+              ProductColor.findAll({
+                where: { productId: item.productId },
+                include: [{ model: Color, as: "color" }],
+                transaction: t,
+              }),
+              ProductImage.findAll({
+                where: { productId: item.productId },
+                limit: 1,
+                order: [["createdAt", "ASC"]],
+                transaction: t,
+              }),
+            ]);
+
+          const unitPrice = item.unitPrice || product.unitPrice;
+          const itemTotal = unitPrice * item.quantity;
+          calculatedTotalAmount += itemTotal;
+
+          // Create complete product snapshot for historical record
+          const productSnapshot = {
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            description: product.description,
+            basePrice: product.unitPrice,
+            unitPrice,
+            requestedColor: item.requestedColor,
+            capacity: capacity
+              ? { id: capacity.id, name: capacity.name, slug: capacity.slug, volumeMl: capacity.volumeMl }
+              : null,
+            categories: productCategories
+              .filter((pc) => pc.category)
+              .map((pc) => ({ id: pc.category.id, name: pc.category.name, slug: pc.category.slug })),
+            colors: productColors
+              .filter((pc) => pc.color)
+              .map((pc) => ({ id: pc.color.id, name: pc.color.name, slug: pc.color.slug, hexCode: pc.color.hexCode })),
+            image: productImages.length > 0
+              ? { id: productImages[0].id, url: productImages[0].url, altText: productImages[0].altText }
+              : null,
+            snapshotCreatedAt: new Date().toISOString(),
+          };
+
+          orderItems.push({ productId: item.productId, quantity: item.quantity, productSnapshot });
+
+          // Update stock immediately (row is already locked)
+          await product.update(
+            { stockQuantity: product.stockQuantity - item.quantity },
+            { transaction: t }
+          );
+        }
+      }
+
+      // Add shipping cost to total
+      calculatedTotalAmount += shippingCost;
+
+      // Generate order number inside transaction to prevent race conditions
+      const orderNumber = await generateOrderNumber(t);
+
       // Convert orderType to proper enum
       const orderTypeEnum =
         orderType === "product" ? OrderType.PRODUCT : OrderType.CUSTOM;
@@ -537,23 +504,6 @@ export const createOrder = async (req: Request, res: Response) => {
           })),
           { transaction: t }
         );
-      }
-
-      // Update product stock for product orders
-      if (orderType === "product" && items && items.length > 0) {
-        for (const item of items) {
-          const product = await Product.findByPk(item.productId, {
-            transaction: t,
-          });
-          if (product) {
-            await product.update(
-              {
-                stockQuantity: product.stockQuantity - item.quantity,
-              },
-              { transaction: t }
-            );
-          }
-        }
       }
 
       return newOrder;
@@ -591,6 +541,14 @@ export const createOrder = async (req: Request, res: Response) => {
     return res.status(201).json(ResponseHelper.success(createdOrder));
   } catch (error: any) {
     console.error("Create order error:", error);
+
+    // Handle custom validation errors thrown from inside transaction
+    if (error.status && error.code) {
+      return res
+        .status(error.status)
+        .json(ResponseHelper.error(error.message, error.code));
+    }
+
     return res
       .status(500)
       .json(
@@ -815,68 +773,66 @@ export const getOrderStats = async (req: Request, res: Response) => {
     const previousPeriodStartDate = new Date(startDate);
     previousPeriodStartDate.setDate(previousPeriodStartDate.getDate() - days);
 
-    // Get current period stats
-    const currentPeriodOrders = await Order.findAll({
-      where: {
-        createdAt: { [Op.gte]: startDate },
+    const currentPeriodWhere = {
+      createdAt: { [Op.gte]: startDate },
+    };
+    const previousPeriodWhere = {
+      createdAt: {
+        [Op.gte]: previousPeriodStartDate,
+        [Op.lt]: startDate,
       },
-      include: [
-        {
-          model: OrderItem,
-          as: "items",
-        },
-      ],
-    });
+    };
 
-    // Get previous period stats for comparison
-    const previousPeriodOrders = await Order.findAll({
-      where: {
-        createdAt: {
-          [Op.gte]: previousPeriodStartDate,
-          [Op.lt]: startDate,
-        },
-      },
-      include: [
-        {
-          model: OrderItem,
-          as: "items",
-        },
-      ],
-    });
+    // Aggregate directly in SQL instead of loading full order rows into Node memory
+    const [
+      currentTotalOrders,
+      currentTotalRevenueRaw,
+      previousTotalOrders,
+      previousTotalRevenueRaw,
+      currentStatusRows,
+    ] = await Promise.all([
+      Order.count({ where: currentPeriodWhere }),
+      Order.sum("totalAmount", { where: currentPeriodWhere }),
+      Order.count({ where: previousPeriodWhere }),
+      Order.sum("totalAmount", { where: previousPeriodWhere }),
+      Order.findAll({
+        where: currentPeriodWhere,
+        attributes: [
+          "status",
+          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+        ],
+        group: ["status"],
+        raw: true,
+      }),
+    ]);
+
+    const currentTotalRevenue = Number(currentTotalRevenueRaw || 0);
+    const previousTotalRevenue = Number(previousTotalRevenueRaw || 0);
+
+    const statusCounts = (currentStatusRows as unknown as Array<{ status: string; count: number | string }>)
+      .reduce((counts: Record<string, number>, row) => {
+        counts[row.status] = Number(row.count || 0);
+        return counts;
+      }, {});
 
     // Calculate current period stats
     const currentStats = {
-      totalOrders: currentPeriodOrders.length,
-      totalRevenue: currentPeriodOrders.reduce(
-        (sum, order) => sum + parseFloat(order.totalAmount.toString()),
-        0
-      ),
-      statusCounts: currentPeriodOrders.reduce((counts: any, order) => {
-        counts[order.status] = (counts[order.status] || 0) + 1;
-        return counts;
-      }, {}),
+      totalOrders: currentTotalOrders,
+      totalRevenue: currentTotalRevenue,
+      statusCounts,
       averageOrderValue:
-        currentPeriodOrders.length > 0
-          ? currentPeriodOrders.reduce(
-              (sum, order) => sum + parseFloat(order.totalAmount.toString()),
-              0
-            ) / currentPeriodOrders.length
+        currentTotalOrders > 0
+          ? currentTotalRevenue / currentTotalOrders
           : 0,
     };
 
     // Calculate previous period stats
     const previousStats = {
-      totalOrders: previousPeriodOrders.length,
-      totalRevenue: previousPeriodOrders.reduce(
-        (sum, order) => sum + parseFloat(order.totalAmount.toString()),
-        0
-      ),
+      totalOrders: previousTotalOrders,
+      totalRevenue: previousTotalRevenue,
       averageOrderValue:
-        previousPeriodOrders.length > 0
-          ? previousPeriodOrders.reduce(
-              (sum, order) => sum + parseFloat(order.totalAmount.toString()),
-              0
-            ) / previousPeriodOrders.length
+        previousTotalOrders > 0
+          ? previousTotalRevenue / previousTotalOrders
           : 0,
     };
 
@@ -991,6 +947,22 @@ export const updateOrder = async (req: Request, res: Response) => {
 
       // Update order items if provided
       if (updateData.orderItems) {
+        // Restore stock for old items before removing them (only if order is not cancelled)
+        if (
+          existingOrder.status !== "CANCELLED" &&
+          existingOrder.items &&
+          existingOrder.items.length > 0
+        ) {
+          for (const oldItem of existingOrder.items) {
+            if (oldItem.product) {
+              await oldItem.product.update(
+                { stockQuantity: oldItem.product.stockQuantity + oldItem.quantity },
+                { transaction: t }
+              );
+            }
+          }
+        }
+
         // Remove existing order items
         await OrderItem.destroy({
           where: { orderId: id },
@@ -1002,9 +974,14 @@ export const updateOrder = async (req: Request, res: Response) => {
         for (const item of updateData.orderItems) {
           const product = await Product.findByPk(item.productId, {
             transaction: t,
+            lock: t.LOCK.UPDATE,
           });
           if (!product) {
             throw new Error(`Product not found: ${item.productId}`);
+          }
+
+          if (product.stockQuantity < item.quantity) {
+            throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`);
           }
 
           const itemTotal =
@@ -1024,6 +1001,14 @@ export const updateOrder = async (req: Request, res: Response) => {
             },
             { transaction: t }
           );
+
+          // Deduct stock for new items (only if order is not cancelled)
+          if (existingOrder.status !== "CANCELLED") {
+            await product.update(
+              { stockQuantity: product.stockQuantity - item.quantity },
+              { transaction: t }
+            );
+          }
         }
 
         // Update order totals

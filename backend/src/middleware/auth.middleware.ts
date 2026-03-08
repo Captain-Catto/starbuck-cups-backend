@@ -254,6 +254,58 @@ export const rateLimitAuth = rateLimit({
 });
 
 /**
+ * Rate limiting for public form submission endpoints (consultations, etc.)
+ * More permissive than auth rate limit but still prevents abuse
+ */
+export const rateLimitPublicSubmit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 submissions per 15 minutes per IP
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  passOnStoreError: true,
+  store: authRateLimitStore,
+  keyGenerator: (req: Request): string =>
+    req.ip || req.socket.remoteAddress || "unknown",
+  handler: (_req, res) => {
+    return res
+      .status(429)
+      .json(
+        ResponseHelper.error(
+          "Too many requests. Please try again later.",
+          "RATE_LIMIT_EXCEEDED",
+          { retryAfter: 900 }
+        )
+      );
+  },
+});
+
+/**
+ * Rate limiting for public analytics tracking endpoints
+ * Higher limit since these are fired on user interactions
+ */
+export const rateLimitAnalytics = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute per IP
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  passOnStoreError: true,
+  store: authRateLimitStore,
+  keyGenerator: (req: Request): string =>
+    req.ip || req.socket.remoteAddress || "unknown",
+  handler: (_req, res) => {
+    return res
+      .status(429)
+      .json(
+        ResponseHelper.error(
+          "Too many requests. Please try again later.",
+          "RATE_LIMIT_EXCEEDED",
+          { retryAfter: 60 }
+        )
+      );
+  },
+});
+
+/**
  * Admin session middleware - tracks admin activity
  */
 export const trackAdminActivity = async (

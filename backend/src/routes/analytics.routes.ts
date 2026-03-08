@@ -1,14 +1,14 @@
 import express from "express";
 import { analyticsController } from "../controllers/analytics.controller";
-import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requireAdmin, rateLimitAnalytics } from "../middleware/auth.middleware";
 
 const router = express.Router();
 
-// Public endpoints for tracking (no authentication required)
-router.post("/product-click", (req, res) =>
+// Public endpoints for tracking (no authentication required, rate limited)
+router.post("/product-click", rateLimitAnalytics, (req, res) =>
   analyticsController.trackProductClick(req, res)
 );
-router.post("/add-to-cart-click", (req, res) =>
+router.post("/add-to-cart-click", rateLimitAnalytics, (req, res) =>
   analyticsController.trackAddToCartClick(req, res)
 );
 

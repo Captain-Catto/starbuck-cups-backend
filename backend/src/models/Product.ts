@@ -5,7 +5,7 @@ export interface ProductAttributes {
   slug: string;
   name: string;
   description?: string;
-  capacityId: string;
+  capacityId?: string | null;
   stockQuantity: number;
   productUrl?: string;
   isActive: boolean;
@@ -33,7 +33,7 @@ export class Product
   declare slug: string;
   declare name: string;
   declare description?: string;
-  declare capacityId: string;
+  declare capacityId?: string | null;
   declare stockQuantity: number;
   declare productUrl?: string;
   declare isActive: boolean;
@@ -127,7 +127,7 @@ export const ProductModel = (sequelize: Sequelize) => {
       },
       capacityId: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
         field: "capacity_id",
       },
       stockQuantity: {

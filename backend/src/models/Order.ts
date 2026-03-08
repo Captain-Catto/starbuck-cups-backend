@@ -174,6 +174,24 @@ export const OrderModel = (sequelize: Sequelize) => {
       timestamps: true,
       createdAt: 'createdAt',
       updatedAt: 'updatedAt',
+      indexes: [
+        {
+          name: "idx_orders_created_at",
+          fields: ["created_at"],
+        },
+        {
+          name: "idx_orders_status_created_at",
+          fields: ["status", "created_at"],
+        },
+        {
+          name: "idx_orders_customer_created_at",
+          fields: ["customer_id", "created_at"],
+        },
+        {
+          name: "idx_orders_type_created_at",
+          fields: ["order_type", "created_at"],
+        },
+      ],
     }
   );
 

@@ -159,7 +159,7 @@ export const createHeroImage = async (req: Request, res: Response) => {
       });
     }
 
-    // Resize & convert to WebP before uploading (hero preset: max 1920px)
+    // Resize & convert to AVIF before uploading (hero preset: max 1920px)
     const processed = await processImage(
       file.buffer,
       file.originalname,
@@ -264,7 +264,7 @@ export const updateHeroImage = async (req: Request, res: Response) => {
     // Handle image upload if new file provided
     const file = req.file as Express.Multer.File;
     if (file) {
-      // Resize & convert to WebP before uploading
+      // Resize & convert to AVIF before uploading
       const processed = await processImage(
         file.buffer,
         file.originalname,

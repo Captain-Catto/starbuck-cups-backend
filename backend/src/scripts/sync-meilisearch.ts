@@ -92,10 +92,6 @@ async function syncMeilisearch(): Promise<void> {
 
   const productDocuments: SearchableProduct[] = [];
   for (const product of products as any[]) {
-    if (!product.capacity) {
-      continue;
-    }
-
     productDocuments.push({
       id: product.id,
       name: product.name,
@@ -118,12 +114,14 @@ async function syncMeilisearch(): Promise<void> {
           slug: pc.color.slug,
           hexCode: pc.color.hexCode,
         })),
-      capacity: {
-        id: product.capacity.id,
-        name: product.capacity.name,
-        slug: product.capacity.slug,
-        volumeMl: product.capacity.volumeMl,
-      },
+      capacity: product.capacity
+        ? {
+            id: product.capacity.id,
+            name: product.capacity.name,
+            slug: product.capacity.slug,
+            volumeMl: product.capacity.volumeMl,
+          }
+        : undefined,
       images: (product.productImages || []).map((image: any) => image.url),
       productUrl: product.productUrl || "",
       createdAt: product.createdAt.toISOString(),

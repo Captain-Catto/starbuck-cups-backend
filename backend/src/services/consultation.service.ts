@@ -93,8 +93,12 @@ export class ConsultationService {
       );
 
       return consultation;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Database error creating consultation:", error);
+      // Preserve original error message for validation errors
+      if (error.message?.startsWith("Products not found")) {
+        throw error;
+      }
       throw new Error("Failed to create consultation in database");
     }
   }

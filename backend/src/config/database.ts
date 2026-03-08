@@ -8,14 +8,24 @@ const shouldUseSSL =
   process.env.DB_SSL === "1" ||
   (process.env.DATABASE_URL || "").includes("sslmode=require");
 
+const parsePoolNumber = (rawValue: string | undefined, fallback: number): number => {
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
+const dbPoolMax = parsePoolNumber(process.env.DB_POOL_MAX, 20);
+const dbPoolMin = parsePoolNumber(process.env.DB_POOL_MIN, 0);
+const dbPoolAcquire = parsePoolNumber(process.env.DB_POOL_ACQUIRE_MS, 30000);
+const dbPoolIdle = parsePoolNumber(process.env.DB_POOL_IDLE_MS, 10000);
+
 const baseConfig: Options = {
   dialect: "postgres",
   logging: process.env.NODE_ENV === "development" ? console.log : false,
   pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000,
+    max: dbPoolMax,
+    min: dbPoolMin,
+    acquire: dbPoolAcquire,
+    idle: dbPoolIdle,
   },
   define: {
     timestamps: true,

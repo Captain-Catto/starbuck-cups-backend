@@ -13,6 +13,7 @@ import {
   processImages,
   IMAGE_PRESETS,
 } from "../services/image-processing.service";
+import { getProductImageProcessingOptions } from "../services/watermark-settings.service";
 
 const router = express.Router();
 
@@ -53,12 +54,12 @@ router.post(
       // Determine processing preset based on folder
       const preset =
         folder === "products"
-          ? IMAGE_PRESETS.product
+          ? await getProductImageProcessingOptions()
           : folder === "avatars" || folder === "categories"
             ? IMAGE_PRESETS.thumbnail
             : IMAGE_PRESETS.product;
 
-      // Resize & convert to WebP before uploading
+      // Resize & convert to AVIF before uploading
       const processed = await processImage(
         req.file.buffer,
         req.file.originalname,
@@ -130,12 +131,12 @@ router.post(
       // Determine processing preset based on folder
       const preset =
         folder === "products"
-          ? IMAGE_PRESETS.product
+          ? await getProductImageProcessingOptions()
           : folder === "avatars" || folder === "categories"
             ? IMAGE_PRESETS.thumbnail
             : IMAGE_PRESETS.product;
 
-      // Resize & convert all images to WebP before uploading
+      // Resize & convert all images to AVIF before uploading
       const originalFiles = req.files.map((file: any) => ({
         buffer: file.buffer,
         filename: file.originalname,
