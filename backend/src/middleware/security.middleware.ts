@@ -62,6 +62,9 @@ export const securityHeaders = helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "https:", "data:"],
       frameSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
     },
   },
   crossOriginEmbedderPolicy: false, // Disable for development
@@ -71,6 +74,21 @@ export const securityHeaders = helmet({
     preload: true,
   },
 });
+
+/**
+ * Permissions-Policy header (not supported by Helmet natively)
+ */
+export const permissionsPolicy = (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+  );
+  next();
+};
 
 /**
  * CORS middleware

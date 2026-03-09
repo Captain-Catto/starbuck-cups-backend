@@ -8,6 +8,7 @@ import { createServer } from "http";
 // Import custom middleware
 import {
   securityHeaders,
+  permissionsPolicy,
   corsMiddleware,
   requestLogger,
   requestSizeLimit,
@@ -89,6 +90,7 @@ app.set("trust proxy", parseTrustProxy());
 
 // Security and middleware setup
 app.use(securityHeaders);
+app.use(permissionsPolicy);
 app.use(corsMiddleware);
 app.use(requestLogger);
 app.use(requestSizeLimit);
