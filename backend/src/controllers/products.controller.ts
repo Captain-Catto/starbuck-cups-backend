@@ -445,7 +445,7 @@ export const getProducts = async (req: Request, res: Response) => {
       where,
       include: countInclude,
       distinct: true,
-      col: "Product.id",
+      col: "id",
     });
 
     // Single query with GROUP BY to deduplicate JOINed rows
@@ -2210,7 +2210,7 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       where,
       include: countInclude,
       distinct: true,
-      col: "Product.id",
+      col: "id",
     });
 
     const sortOrderClauses: any[] = [
