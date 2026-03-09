@@ -8,6 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "start:low-memory": "node --max-old-space-size=512 --optimize-for-size dist/index.js",
+    "db:migrate": "npx --yes sequelize-cli db:migrate --env production",
+    "db:migrate:undo": "npx --yes sequelize-cli db:migrate:undo --env production",
+    "db:migrate:status": "npx --yes sequelize-cli db:migrate:status --env production",
     "sync-meilisearch": "ts-node src/scripts/sync-meilisearch.ts",
     "test-meilisearch": "ts-node src/test-meilisearch.ts"
   },
@@ -60,6 +63,7 @@
     "@types/node": "^20.9.0",
     "@types/sharp": "^0.31.1",
     "@types/uuid": "^10.0.0",
+    "sequelize-cli": "^6.6.5",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
