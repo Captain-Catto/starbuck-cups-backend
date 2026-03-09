@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
 import session from "express-session";
-const RedisStore = require("connect-redis");
+import { RedisStore } from "connect-redis";
 import { createClient } from "redis";
 import { createServer } from "http";
 // Import custom middleware

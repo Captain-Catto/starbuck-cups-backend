@@ -197,7 +197,7 @@ const AUTH_RATE_LIMIT_STORE =
   process.env.AUTH_RATE_LIMIT_STORE ||
   (process.env.NODE_ENV === "production" ? "redis" : "memory");
 
-let authRateLimitStore: RedisStore | undefined;
+let rateLimitRedisClient: ReturnType<typeof createClient> | undefined;
 if (AUTH_RATE_LIMIT_STORE === "redis") {
   if (!process.env.REDIS_URL) {
     throw new Error(
@@ -205,21 +205,16 @@ if (AUTH_RATE_LIMIT_STORE === "redis") {
     );
   }
 
-  const redisClient = createClient({
+  rateLimitRedisClient = createClient({
     url: process.env.REDIS_URL,
   });
 
-  redisClient.on("error", (error) => {
+  rateLimitRedisClient.on("error", (error) => {
     console.error("Redis rate limit client error:", error);
   });
 
-  redisClient.connect().catch((error) => {
+  rateLimitRedisClient.connect().catch((error) => {
     console.error("Failed to connect Redis rate limit client:", error);
-  });
-
-  authRateLimitStore = new RedisStore({
-    sendCommand: (...args: string[]) => redisClient.sendCommand(args),
-    prefix: "auth_rate_limit:",
   });
 } else if (
   process.env.NODE_ENV === "production" &&
@@ -230,6 +225,14 @@ if (AUTH_RATE_LIMIT_STORE === "redis") {
   );
 }
 
+const createRateLimitStore = (prefix: string): RedisStore | undefined => {
+  if (!rateLimitRedisClient) return undefined;
+  return new RedisStore({
+    sendCommand: (...args: string[]) => rateLimitRedisClient!.sendCommand(args),
+    prefix,
+  });
+};
+
 export const rateLimitAuth = rateLimit({
   windowMs: BLOCK_DURATION,
   max: MAX_LOGIN_ATTEMPTS,
@@ -237,7 +240,7 @@ export const rateLimitAuth = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   passOnStoreError: true,
-  store: authRateLimitStore,
+  store: createRateLimitStore("auth_rate_limit:"),
   keyGenerator: (req: Request): string =>
     req.ip || req.socket.remoteAddress || "unknown",
   handler: (_req, res) => {
@@ -263,7 +266,7 @@ export const rateLimitPublicSubmit = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   passOnStoreError: true,
-  store: authRateLimitStore,
+  store: createRateLimitStore("public_submit_rate_limit:"),
   keyGenerator: (req: Request): string =>
     req.ip || req.socket.remoteAddress || "unknown",
   handler: (_req, res) => {
@@ -289,7 +292,7 @@ export const rateLimitAnalytics = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   passOnStoreError: true,
-  store: authRateLimitStore,
+  store: createRateLimitStore("analytics_rate_limit:"),
   keyGenerator: (req: Request): string =>
     req.ip || req.socket.remoteAddress || "unknown",
   handler: (_req, res) => {
