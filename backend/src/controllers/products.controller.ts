@@ -30,6 +30,30 @@ import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 import { sequelize } from "../config/database";
 import { Op, col, where as sequelizeWhere } from "sequelize";
 import { getProductImageProcessingOptions } from "../services/watermark-settings.service";
+import { clearCachePrefix } from "../middleware/redis-cache.middleware";
+
+/**
+ * Clear all product-related caches (Redis) and trigger frontend revalidation
+ */
+const invalidateProductCaches = async (): Promise<void> => {
+  try {
+    await Promise.all([
+      clearCachePrefix("/api/products"),
+      clearCachePrefix("/api/admin/products"),
+    ]);
+
+    // Trigger Next.js on-demand revalidation
+    const frontendUrl = process.env.FRONTEND_URL;
+    const revalidateSecret = process.env.REVALIDATE_SECRET;
+    if (frontendUrl && revalidateSecret) {
+      fetch(`${frontendUrl}/api/revalidate?secret=${revalidateSecret}&tag=products`).catch((err) => {
+        console.error("Failed to trigger frontend revalidation:", err);
+      });
+    }
+  } catch (error) {
+    console.error("Failed to invalidate product caches:", error);
+  }
+};
 
 const SUPPORTED_LOCALES = ["vi", "en", "zh"] as const;
 type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
@@ -884,6 +908,9 @@ export const createProduct = async (req: Request, res: Response) => {
       ],
     });
 
+    // Invalidate caches so customers see the new product immediately
+    invalidateProductCaches();
+
     return res
       .status(201)
       .json(ResponseHelper.success(applyLocaleToProduct(createdProduct, "vi", true)));
@@ -1279,6 +1306,9 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       });
     });
 
+    // Invalidate caches so customers see the update immediately
+    invalidateProductCaches();
+
     return res
       .status(200)
       .json(ResponseHelper.success(applyLocaleToProduct(updatedProduct, "vi", true)));
@@ -1627,6 +1657,9 @@ export const updateProduct = async (req: Request, res: Response) => {
       });
     });
 
+    // Invalidate caches so customers see the update immediately
+    invalidateProductCaches();
+
     return res
       .status(200)
       .json(ResponseHelper.success(applyLocaleToProduct(updatedProduct, "vi", true)));
@@ -1676,6 +1709,9 @@ export const deleteProduct = async (req: Request, res: Response) => {
       deletedAt: new Date(),
       deletedByAdminId: req.user.userId,
     });
+
+    // Invalidate caches so customers no longer see the deleted product
+    invalidateProductCaches();
 
     return res
       .status(200)
@@ -1727,6 +1763,9 @@ export const reactivateProduct = async (req: Request, res: Response) => {
       deletedByAdminId: undefined,
       isActive: true,
     });
+
+    // Invalidate caches so customers see the reactivated product
+    invalidateProductCaches();
 
     return res.status(200).json(
       ResponseHelper.success({
@@ -1785,6 +1824,9 @@ export const updateProductStock = async (req: Request, res: Response) => {
     // Update stock quantity
     await product.update({ stockQuantity });
 
+    // Invalidate caches so stock changes reflect immediately
+    invalidateProductCaches();
+
     return res.status(200).json(
       ResponseHelper.success({
         message: "Product stock updated successfully",
@@ -1829,6 +1871,9 @@ export const toggleProductStatus = async (req: Request, res: Response) => {
     await product.update({
       isActive: !product.isActive,
     });
+
+    // Invalidate caches so status change reflects immediately
+    invalidateProductCaches();
 
     return res.status(200).json(
       ResponseHelper.success({
