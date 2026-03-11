@@ -90,7 +90,7 @@ const buildWatermarkSvg = (watermark: WatermarkOptions): Buffer | null => {
         x="${boxWidth - 10}"
         y="${boxHeight - 11}"
         text-anchor="end"
-        font-family="Arial, Helvetica, sans-serif"
+        font-family="Arial, 'Helvetica Neue', Helvetica, Tahoma, 'Segoe UI', sans-serif"
         font-size="${fontSize}"
         font-weight="700"
         fill="white"
