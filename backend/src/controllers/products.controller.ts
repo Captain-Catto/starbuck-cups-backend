@@ -79,13 +79,9 @@ const PUBLIC_SORT_FIELDS = new Set([
 ]);
 
 // Helper function to generate SEO-friendly slug with Vietnamese support
-const generateProductSlug = (
-  name: string,
-  colorName: string,
-  capacityName: string
-): string => {
-  const combined = `${name} ${colorName} ${capacityName}`;
-  return generateVietnameseSlug(combined);
+// Only uses product name — short, clean URLs better for SEO
+const generateProductSlug = (name: string): string => {
+  return generateVietnameseSlug(name);
 };
 
 const normalizeLocale = (rawLocale?: string): SupportedLocale => {
@@ -736,24 +732,17 @@ export const createProduct = async (req: Request, res: Response) => {
         throw new Error("One or more categories not found or inactive");
       }
 
-      // Generate slug if not provided
-      let finalSlug =
-        slug?.trim() ||
-        generateProductSlug(canonicalName, colors.length > 0 ? colors[0].name : "", capacity ? capacity.name : "");
+      // Generate slug from product name only (short, SEO-friendly)
+      const finalSlug = slug?.trim() || generateProductSlug(canonicalName);
 
       if (!finalSlug) {
-        finalSlug = `product-${Date.now()}`;
+        throw new Error("Cannot generate slug from product name");
       }
 
-      // Check for duplicate slug and resolve conflicts
-      let slugCounter = 0;
-      let originalSlug = finalSlug;
-
-      while (
-        await Product.findOne({ where: { slug: finalSlug }, transaction: t })
-      ) {
-        slugCounter++;
-        finalSlug = `${originalSlug}-${slugCounter}`;
+      // Check for duplicate slug — throw error so admin can choose a different name
+      const existingWithSlug = await Product.findOne({ where: { slug: finalSlug }, transaction: t });
+      if (existingWithSlug) {
+        throw new Error(`DUPLICATE_SLUG:${finalSlug}`);
       }
 
       // Create product
@@ -924,6 +913,16 @@ export const createProduct = async (req: Request, res: Response) => {
       return res
         .status(400)
         .json(ResponseHelper.error(error.message, "VALIDATION_ERROR"));
+    }
+
+    if (error.message.startsWith("DUPLICATE_SLUG:")) {
+      const slug = error.message.replace("DUPLICATE_SLUG:", "");
+      return res.status(409).json(
+        ResponseHelper.error(
+          `Sản phẩm với tên này đã tồn tại (slug: "${slug}"). Vui lòng đổi tên sản phẩm.`,
+          "DUPLICATE_SLUG"
+        )
+      );
     }
 
     return res
@@ -1398,43 +1397,21 @@ export const updateProduct = async (req: Request, res: Response) => {
           finalSlug = requestedSlug;
         }
 
-        // Get current capacity and first color for slug generation
-        const targetCapacityId = updateData.capacityId !== undefined ? updateData.capacityId : existingProduct.capacityId;
-        const [capacity, firstColor] = await Promise.all([
-          targetCapacityId ? Capacity.findByPk(
-            targetCapacityId,
-            { transaction: t }
-          ) : Promise.resolve(null),
-          ProductColor.findOne({
-            where: { productId: id },
-            include: [{ model: Color, as: "color" }],
-            transaction: t,
-          }),
-        ]);
-
         if (!requestedSlug) {
-          finalSlug = generateProductSlug(
-            finalName,
-            firstColor?.color ? firstColor.color.name : "",
-            capacity ? capacity.name : ""
-          );
+          finalSlug = generateProductSlug(finalName);
         }
 
         if (!finalSlug) {
-          finalSlug = `product-${Date.now()}`;
+          finalSlug = existingProduct.slug;
         }
 
-        // Check for slug conflicts
-        let slugCounter = 0;
-        const originalSlug = finalSlug;
-        while (
-          await Product.findOne({
-            where: { slug: finalSlug, id: { [Op.ne]: id } },
-            transaction: t,
-          })
-        ) {
-          slugCounter++;
-          finalSlug = `${originalSlug}-${slugCounter}`;
+        // Check for slug conflicts — notify admin instead of silently auto-incrementing
+        const conflicting = await Product.findOne({
+          where: { slug: finalSlug, id: { [Op.ne]: id } },
+          transaction: t,
+        });
+        if (conflicting) {
+          throw new Error(`DUPLICATE_SLUG:${finalSlug}`);
         }
       }
 
