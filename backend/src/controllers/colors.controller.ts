@@ -770,7 +770,7 @@ export const getPublicColors = async (req: Request, res: Response) => {
       sortBy = "name",
       sortOrder = "asc",
     } = validation.data;
-    const offset = (page - 1) * limit;
+    const offset = (page - 1) * (limit === -1 ? 0 : limit);
 
     // Build where clause for public colors (only active)
     const where: any = {
@@ -787,7 +787,7 @@ export const getPublicColors = async (req: Request, res: Response) => {
     const orderField = sortBy === "createdAt" ? "createdAt" : "name";
     const orderDirection = sortOrder.toUpperCase() as "ASC" | "DESC";
 
-    const { count: totalItems, rows: items } = await Color.findAndCountAll({
+    const queryOptions: any = {
       where,
       attributes: [
         "id",
@@ -816,11 +816,17 @@ export const getPublicColors = async (req: Request, res: Response) => {
         },
       ],
       order: [[orderField, orderDirection]],
-      offset,
-      limit,
-    });
+      distinct: true,
+    };
 
-    const totalPages = Math.ceil(totalItems / limit);
+    if (limit !== -1) {
+      queryOptions.offset = offset;
+      queryOptions.limit = limit;
+    }
+
+    const { count: totalItems, rows: items } = await Color.findAndCountAll(queryOptions);
+
+    const totalPages = limit !== -1 ? Math.ceil(totalItems / limit) : 1;
 
     return res.status(200).json(
       ResponseHelper.paginated(items, {

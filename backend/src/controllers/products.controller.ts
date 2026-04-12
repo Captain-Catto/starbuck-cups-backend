@@ -103,14 +103,18 @@ const buildLocalizedSearchConditions = (
 ) => {
   const likeKeyword = `%${keyword}%`;
   const conditions: any[] = [
-    { name: { [Op.like]: likeKeyword } },
-    { description: { [Op.like]: likeKeyword } },
-    sequelizeWhere(col("translations.name"), { [Op.like]: likeKeyword }),
-    sequelizeWhere(col("translations.description"), { [Op.like]: likeKeyword }),
+    sequelizeWhere(
+      sequelize.fn("unaccent", col("Product.name")),
+      { [Op.iLike]: sequelize.fn("unaccent", likeKeyword) as any }
+    ),
+    sequelizeWhere(
+      sequelize.fn("unaccent", col("translations.name")),
+      { [Op.iLike]: sequelize.fn("unaccent", likeKeyword) as any }
+    ),
   ];
 
   if (includeSlug) {
-    conditions.push({ slug: { [Op.like]: likeKeyword } });
+    conditions.push({ slug: { [Op.iLike]: likeKeyword } });
   }
 
   return conditions;
@@ -1899,9 +1903,11 @@ export const searchProducts = async (req: Request, res: Response) => {
 
     if (q) {
       where[Op.or] = [
-        { name: { [Op.like]: `%${q}%` } },
-        { description: { [Op.like]: `%${q}%` } },
-        { slug: { [Op.like]: `%${q}%` } },
+        sequelizeWhere(
+          sequelize.fn("unaccent", col("Product.name")),
+          { [Op.iLike]: sequelize.fn("unaccent", `%${q}%`) as any }
+        ),
+        { slug: { [Op.iLike]: `%${q}%` } },
       ];
     }
 
