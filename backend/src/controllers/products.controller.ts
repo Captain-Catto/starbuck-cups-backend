@@ -102,15 +102,19 @@ const buildLocalizedSearchConditions = (
   includeSlug = false
 ) => {
   const likeKeyword = `%${keyword}%`;
+  const escapedLike = sequelize.escape(likeKeyword);
   const conditions: any[] = [
     sequelizeWhere(
       sequelize.fn("unaccent", col("Product.name")),
       { [Op.iLike]: sequelize.fn("unaccent", likeKeyword) as any }
     ),
-    sequelizeWhere(
-      sequelize.fn("unaccent", col("translations.name")),
-      { [Op.iLike]: sequelize.fn("unaccent", likeKeyword) as any }
-    ),
+    // Use a correlated subquery instead of a JOIN column reference to avoid
+    // GROUP BY / LEFT JOIN conflicts in the paginated id-fetch query.
+    sequelize.literal(`EXISTS (
+      SELECT 1 FROM product_translations AS "pt_search"
+      WHERE "pt_search"."product_id" = "Product"."id"
+      AND unaccent("pt_search"."name") ILIKE unaccent(${escapedLike})
+    )`),
   ];
 
   if (includeSlug) {
@@ -441,17 +445,8 @@ export const getProducts = async (req: Request, res: Response) => {
       },
     ];
 
-    if (search) {
-      countInclude.push({
-        model: ProductTranslation,
-        as: "translations",
-        attributes: [],
-        required: false,
-        where: {
-          locale: { [Op.in]: getSearchableLocales(requestedLocale) },
-        },
-      } as any);
-    }
+    // translations join no longer needed for search filtering —
+    // correlated subquery in buildLocalizedSearchConditions handles it.
 
     // Determine sort order - featured products first when filtering
     const orderClauses: any[] = [];
@@ -2222,17 +2217,8 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       },
     ];
 
-    if (search) {
-      countInclude.push({
-        model: ProductTranslation,
-        as: "translations",
-        attributes: [],
-        required: false,
-        where: {
-          locale: { [Op.in]: getSearchableLocales(requestedLocale) },
-        },
-      } as any);
-    }
+    // translations join no longer needed for search filtering —
+    // correlated subquery in buildLocalizedSearchConditions handles it.
 
     const totalCount = await Product.count({
       where,
