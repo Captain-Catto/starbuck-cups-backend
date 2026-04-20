@@ -3,22 +3,15 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    const tableDescription = await queryInterface.describeTable("products");
-
-    if (!tableDescription.unit_price) {
-      await queryInterface.addColumn("products", "unit_price", {
-        type: Sequelize.DECIMAL(10, 2),
-        allowNull: false,
-        defaultValue: 0,
-      });
-    }
+    // Use raw SQL with IF NOT EXISTS to safely add column if missing
+    await queryInterface.sequelize.query(
+      `ALTER TABLE products ADD COLUMN IF NOT EXISTS unit_price DECIMAL(10,2) NOT NULL DEFAULT 0`
+    );
   },
 
   async down(queryInterface, Sequelize) {
-    const tableDescription = await queryInterface.describeTable("products");
-
-    if (tableDescription.unit_price) {
-      await queryInterface.removeColumn("products", "unit_price");
-    }
+    await queryInterface.sequelize.query(
+      `ALTER TABLE products DROP COLUMN IF EXISTS unit_price`
+    );
   },
 };
