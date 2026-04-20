@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { productAnalyticsService } from "../services/productAnalytics.service";
 
@@ -22,7 +23,7 @@ export class AnalyticsController {
         message: "Product click tracked successfully",
       });
     } catch (error) {
-      console.error("Product click tracking error:", error);
+      logger.error("Product click tracking error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to track product click",
@@ -51,7 +52,7 @@ export class AnalyticsController {
         message: "Add to cart click tracked successfully",
       });
     } catch (error) {
-      console.error("Add to cart tracking error:", error);
+      logger.error("Add to cart tracking error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to track add to cart click",
@@ -79,7 +80,7 @@ export class AnalyticsController {
         data: analytics,
       });
     } catch (error) {
-      console.error("Get product analytics error:", error);
+      logger.error("Get product analytics error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to get product analytics",
@@ -107,7 +108,7 @@ export class AnalyticsController {
         },
       });
     } catch (error) {
-      console.error("Get top clicked products error:", error);
+      logger.error("Get top clicked products error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to get top clicked products",
@@ -135,7 +136,7 @@ export class AnalyticsController {
         },
       });
     } catch (error) {
-      console.error("Get top added to cart products error:", error);
+      logger.error("Get top added to cart products error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to get top added to cart products",
@@ -163,7 +164,7 @@ export class AnalyticsController {
         },
       });
     } catch (error) {
-      console.error("Get top conversion products error:", error);
+      logger.error("Get top conversion products error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to get top conversion products",
@@ -182,7 +183,7 @@ export class AnalyticsController {
         data: summary,
       });
     } catch (error) {
-      console.error("Get analytics summary error:", error);
+      logger.error("Get analytics summary error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to get analytics summary",
@@ -213,7 +214,7 @@ export class AnalyticsController {
         data: analyticsObject,
       });
     } catch (error) {
-      console.error("Get bulk product analytics error:", error);
+      logger.error("Get bulk product analytics error:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to get bulk product analytics",

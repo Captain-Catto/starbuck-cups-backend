@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Categories management controller
  * Handles CRUD operations for category entities with hierarchical support
@@ -161,7 +162,7 @@ export const getCategories = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get categories error:", error);
+    logger.error("Get categories error:", error);
     return res
       .status(500)
       .json(
@@ -211,7 +212,7 @@ export const getCategoryTree = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(tree));
   } catch (error) {
-    console.error("Get category tree error:", error);
+    logger.error("Get category tree error:", error);
     return res
       .status(500)
       .json(
@@ -259,7 +260,7 @@ export const getCategoryById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(category));
   } catch (error) {
-    console.error("Get category error:", error);
+    logger.error("Get category error:", error);
     return res
       .status(500)
       .json(
@@ -384,7 +385,7 @@ export const createCategory = async (req: Request, res: Response) => {
 
     return res.status(201).json(ResponseHelper.success(createdCategory));
   } catch (error) {
-    console.error("Create category error:", error);
+    logger.error("Create category error:", error);
     return res
       .status(500)
       .json(
@@ -602,7 +603,7 @@ export const updateCategory = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedCategory));
   } catch (error) {
-    console.error("Update category error:", error);
+    logger.error("Update category error:", error);
     return res
       .status(500)
       .json(
@@ -677,7 +678,7 @@ export const toggleCategoryStatus = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedCategory));
   } catch (error) {
-    console.error("Toggle category status error:", error);
+    logger.error("Toggle category status error:", error);
     return res
       .status(500)
       .json(
@@ -740,7 +741,7 @@ export const deleteCategory = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Delete category error:", error);
+    logger.error("Delete category error:", error);
     return res
       .status(500)
       .json(
@@ -790,7 +791,7 @@ export const searchCategories = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(categories));
   } catch (error) {
-    console.error("Search categories error:", error);
+    logger.error("Search categories error:", error);
     return res
       .status(500)
       .json(
@@ -898,7 +899,7 @@ export const getPublicCategories = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get public categories error:", error);
+    logger.error("Get public categories error:", error);
     return res
       .status(500)
       .json(
@@ -971,7 +972,7 @@ export const getPublicCategoryTree = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(categories));
   } catch (error) {
-    console.error("Get public category tree error:", error);
+    logger.error("Get public category tree error:", error);
     return res
       .status(500)
       .json(
@@ -1044,7 +1045,7 @@ export const getPublicCategoryById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(category));
   } catch (error) {
-    console.error("Get public category by ID error:", error);
+    logger.error("Get public category by ID error:", error);
     return res
       .status(500)
       .json(

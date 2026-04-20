@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models } from "../models";
 
@@ -206,7 +207,7 @@ export const getCustomers = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get customers error:", error);
+    logger.error("Get customers error:", error);
     return res
       .status(500)
       .json(
@@ -272,7 +273,7 @@ export const getCustomerById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(customer));
   } catch (error) {
-    console.error("Get customer error:", error);
+    logger.error("Get customer error:", error);
     return res
       .status(500)
       .json(
@@ -384,7 +385,7 @@ export const createCustomer = async (req: Request, res: Response) => {
 
     return res.status(201).json(ResponseHelper.success(result));
   } catch (error) {
-    console.error("Create customer error:", error);
+    logger.error("Create customer error:", error);
     return res
       .status(500)
       .json(
@@ -503,7 +504,7 @@ export const updateCustomer = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedCustomer));
   } catch (error) {
-    console.error("Update customer error:", error);
+    logger.error("Update customer error:", error);
     return res
       .status(500)
       .json(
@@ -545,7 +546,7 @@ export const deleteCustomer = async (req: Request, res: Response) => {
         ResponseHelper.success({ message: "Customer deleted successfully" })
       );
   } catch (error) {
-    console.error("Delete customer error:", error);
+    logger.error("Delete customer error:", error);
     return res
       .status(500)
       .json(
@@ -615,7 +616,7 @@ export const addCustomerAddress = async (req: Request, res: Response) => {
 
     return res.status(201).json(ResponseHelper.success(address));
   } catch (error) {
-    console.error("Add customer address error:", error);
+    logger.error("Add customer address error:", error);
     return res
       .status(500)
       .json(
@@ -677,7 +678,7 @@ export const updateCustomerAddress = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(existingAddress));
   } catch (error) {
-    console.error("Update customer address error:", error);
+    logger.error("Update customer address error:", error);
     return res
       .status(500)
       .json(
@@ -738,7 +739,7 @@ export const deleteCustomerAddress = async (req: Request, res: Response) => {
         ResponseHelper.success({ message: "Address deleted successfully" })
       );
   } catch (error) {
-    console.error("Delete customer address error:", error);
+    logger.error("Delete customer address error:", error);
     return res
       .status(500)
       .json(
@@ -808,7 +809,7 @@ export const getCustomerOrders = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get customer orders error:", error);
+    logger.error("Get customer orders error:", error);
     return res
       .status(500)
       .json(
@@ -851,7 +852,7 @@ export const setDefaultAddress = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(existingAddress));
   } catch (error) {
-    console.error("Set default address error:", error);
+    logger.error("Set default address error:", error);
     return res
       .status(500)
       .json(
@@ -904,7 +905,7 @@ export const getCustomersForSelect = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(customers));
   } catch (error) {
-    console.error("Get customers for select error:", error);
+    logger.error("Get customers for select error:", error);
     return res
       .status(500)
       .json(
@@ -958,7 +959,7 @@ export const searchCustomers = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(customers));
   } catch (error) {
-    console.error("Search customers error:", error);
+    logger.error("Search customers error:", error);
     return res
       .status(500)
       .json(

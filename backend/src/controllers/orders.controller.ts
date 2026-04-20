@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models, OrderType, OrderStatus } from "../models";
 
@@ -277,7 +278,7 @@ export const getOrders = async (req: Request, res: Response) => {
       })
     );
   } catch (error: any) {
-    console.error("Get orders error:", error);
+    logger.error("Get orders error:", error);
     return res
       .status(500)
       .json(
@@ -341,7 +342,7 @@ export const getOrderById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(order));
   } catch (error: any) {
-    console.error("Get order error:", error);
+    logger.error("Get order error:", error);
     return res
       .status(500)
       .json(
@@ -540,7 +541,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     return res.status(201).json(ResponseHelper.success(createdOrder));
   } catch (error: any) {
-    console.error("Create order error:", error);
+    logger.error("Create order error:", error);
 
     // Handle custom validation errors thrown from inside transaction
     if (error.status && error.code) {
@@ -678,7 +679,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedOrder));
   } catch (error: any) {
-    console.error("Update order status error:", error);
+    logger.error("Update order status error:", error);
     return res
       .status(500)
       .json(
@@ -750,7 +751,7 @@ export const deleteOrder = async (req: Request, res: Response) => {
       .status(200)
       .json(ResponseHelper.success({ message: "Order deleted successfully" }));
   } catch (error: any) {
-    console.error("Delete order error:", error);
+    logger.error("Delete order error:", error);
     return res
       .status(500)
       .json(
@@ -868,7 +869,7 @@ export const getOrderStats = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get order stats error:", error);
+    logger.error("Get order stats error:", error);
     return res
       .status(500)
       .json(
@@ -1048,7 +1049,7 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedOrder));
   } catch (error: any) {
-    console.error("Update order error:", error);
+    logger.error("Update order error:", error);
 
     if (error.message.includes("not found")) {
       return res
@@ -1140,7 +1141,7 @@ export const getRecentOrders = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(transformedOrders));
   } catch (error) {
-    console.error("Get recent orders error:", error);
+    logger.error("Get recent orders error:", error);
     return res
       .status(500)
       .json(

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 // /**
 //  * Image Handler Service
 //  * Provides high-level image management with automatic rollback capabilities
@@ -52,7 +53,7 @@
 //         success: true,
 //       };
 //     } catch (error) {
-//       console.error("Image upload error:", error);
+//       logger.error("Image upload error:", error);
 //       return {
 //         urls: [],
 //         keys: [],
@@ -76,7 +77,7 @@
 
 //     try {
 //       await s3Service.deleteFiles(keys);
-//       console.log(`Successfully cleaned up ${keys.length} images from S3`);
+//       logger.info(`Successfully cleaned up ${keys.length} images from S3`);
 
 //       return {
 //         deletedCount: keys.length,
@@ -84,7 +85,7 @@
 //         errors: [],
 //       };
 //     } catch (error) {
-//       console.error("Image cleanup error:", error);
+//       logger.error("Image cleanup error:", error);
 
 //       return {
 //         deletedCount: 0,
@@ -120,13 +121,13 @@
 //         if (oldKeys.length > 0) {
 //           await s3Service.deleteFiles(oldKeys);
 //           oldImagesDeleted = true;
-//           console.log(
+//           logger.info(
 //             `Successfully replaced ${oldKeys.length} old images with ${uploadResult.urls.length} new images`
 //           );
 //         }
 //       } catch (deleteError) {
 //         // Log error but don't fail the operation since new images are uploaded
-//         console.error(
+//         logger.error(
 //           "Error deleting old images during replacement:",
 //           deleteError
 //         );

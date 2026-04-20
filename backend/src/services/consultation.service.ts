@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Consultation, ConsultationStatus } from "../models/Consultation";
 import { ConsultationItem } from "../models/ConsultationItem";
 import { Product } from "../models/Product";
@@ -94,7 +95,7 @@ export class ConsultationService {
 
       return consultation;
     } catch (error: any) {
-      console.error("Database error creating consultation:", error);
+      logger.error("Database error creating consultation:", error);
       // Preserve original error message for validation errors
       if (error.message?.startsWith("Products not found")) {
         throw error;
@@ -177,7 +178,7 @@ export class ConsultationService {
         },
       };
     } catch (error) {
-      console.error("Database error fetching consultations:", error);
+      logger.error("Database error fetching consultations:", error);
       throw new Error("Failed to fetch consultations from database");
     }
   }
@@ -202,7 +203,7 @@ export class ConsultationService {
 
       return consultation;
     } catch (error) {
-      console.error("Database error fetching consultation:", error);
+      logger.error("Database error fetching consultation:", error);
       throw new Error("Failed to fetch consultation from database");
     }
   }
@@ -243,7 +244,7 @@ export class ConsultationService {
 
       return consultation;
     } catch (error) {
-      console.error("Database error updating consultation:", error);
+      logger.error("Database error updating consultation:", error);
       throw new Error("Failed to update consultation in database");
     }
   }
@@ -261,7 +262,7 @@ export class ConsultationService {
 
       return { success: true };
     } catch (error) {
-      console.error("Database error deleting consultation:", error);
+      logger.error("Database error deleting consultation:", error);
       throw new Error("Failed to delete consultation from database");
     }
   }
@@ -274,7 +275,7 @@ export class ConsultationService {
 
       return count;
     } catch (error) {
-      console.error("Database error counting pending consultations:", error);
+      logger.error("Database error counting pending consultations:", error);
       throw new Error("Failed to count pending consultations from database");
     }
   }

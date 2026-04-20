@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models, ConsultationStatus } from "../models";
 import { ConsultationService } from "../services/consultation.service";
@@ -72,7 +73,7 @@ export const createConsultation = async (req: Request, res: Response) => {
         items: consultation.consultationItems?.length || 0,
       });
     } catch (socketError) {
-      console.error("Error emitting consultation notification:", socketError);
+      logger.error("Error emitting consultation notification:", socketError);
       // Don't fail the request if socket emission fails
     }
 
@@ -85,7 +86,7 @@ export const createConsultation = async (req: Request, res: Response) => {
 
     res.status(201).json(response);
   } catch (error: any) {
-    console.error("Error creating consultation:", error);
+    logger.error("Error creating consultation:", error);
 
     // Return validation errors with 400 status
     const isValidationError = error.message?.startsWith("Products not found");
@@ -124,7 +125,7 @@ export const getConsultations = async (req: Request, res: Response) => {
         ResponseHelper.paginated(consultations.data, consultations.pagination)
       );
   } catch (error) {
-    console.error("Error fetching consultations:", error);
+    logger.error("Error fetching consultations:", error);
     return res
       .status(500)
       .json(
@@ -168,7 +169,7 @@ export const getConsultationById = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error) {
-    console.error("Error fetching consultation:", error);
+    logger.error("Error fetching consultation:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -223,7 +224,7 @@ export const updateConsultationStatus = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error) {
-    console.error("Error updating consultation:", error);
+    logger.error("Error updating consultation:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -271,7 +272,7 @@ export const deleteConsultation = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error) {
-    console.error("Error deleting consultation:", error);
+    logger.error("Error deleting consultation:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -306,7 +307,7 @@ export const getPendingConsultationsCount = async (
 
     res.json(response);
   } catch (error) {
-    console.error("Error fetching pending consultations count:", error);
+    logger.error("Error fetching pending consultations count:", error);
 
     const response: ApiResponse = {
       success: false,

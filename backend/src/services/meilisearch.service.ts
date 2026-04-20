@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Meilisearch service for fast and relevant search functionality
  * Handles indexing, searching, and data synchronization
@@ -131,7 +132,7 @@ class MeilisearchService {
    * Initialize all indexes with proper settings
    */
   async initializeIndexes(): Promise<void> {
-    console.log("🔍 Initializing Meilisearch indexes...");
+    logger.info("🔍 Initializing Meilisearch indexes...");
 
     try {
       // Create indexes first (they will be created if they don't exist)
@@ -146,17 +147,17 @@ class MeilisearchService {
       for (const indexName of indexNames) {
         try {
           await this.client.createIndex(indexName, { primaryKey: "id" });
-          console.log(`✅ Index '${indexName}' created`);
+          logger.info(`✅ Index '${indexName}' created`);
         } catch (error: any) {
           if (error.cause?.code === "index_already_exists") {
-            console.log(`ℹ️  Index '${indexName}' already exists`);
+            logger.info(`ℹ️  Index '${indexName}' already exists`);
           } else {
             throw error;
           }
         }
       }
 
-      console.log("✅ All indexes ensured to exist");
+      logger.info("✅ All indexes ensured to exist");
 
       // Wait a bit for indexes to be fully created
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -240,9 +241,9 @@ class MeilisearchService {
         sortableAttributes: ["fullName"],
       });
 
-      console.log("✅ Meilisearch indexes initialized successfully");
+      logger.info("✅ Meilisearch indexes initialized successfully");
     } catch (error) {
-      console.error("❌ Error initializing Meilisearch indexes:", error);
+      logger.error("❌ Error initializing Meilisearch indexes:", error);
       throw error;
     }
   }
@@ -255,7 +256,7 @@ class MeilisearchService {
       const health = await this.client.health();
       return health.status === "available";
     } catch (error) {
-      console.error("❌ Meilisearch health check failed:", error);
+      logger.error("❌ Meilisearch health check failed:", error);
       return false;
     }
   }
@@ -267,11 +268,11 @@ class MeilisearchService {
     if (products.length === 0) return;
 
     try {
-      console.log(`🔍 Indexing ${products.length} products...`);
+      logger.info(`🔍 Indexing ${products.length} products...`);
       const task = await this.indexes.products.addDocuments(products);
-      console.log(`✅ Products indexing task created: ${task.taskUid}`);
+      logger.info(`✅ Products indexing task created: ${task.taskUid}`);
     } catch (error) {
-      console.error("❌ Error indexing products:", error);
+      logger.error("❌ Error indexing products:", error);
       throw error;
     }
   }
@@ -283,11 +284,11 @@ class MeilisearchService {
     if (categories.length === 0) return;
 
     try {
-      console.log(`🔍 Indexing ${categories.length} categories...`);
+      logger.info(`🔍 Indexing ${categories.length} categories...`);
       const task = await this.indexes.categories.addDocuments(categories);
-      console.log(`✅ Categories indexing task created: ${task.taskUid}`);
+      logger.info(`✅ Categories indexing task created: ${task.taskUid}`);
     } catch (error) {
-      console.error("❌ Error indexing categories:", error);
+      logger.error("❌ Error indexing categories:", error);
       throw error;
     }
   }
@@ -299,11 +300,11 @@ class MeilisearchService {
     if (colors.length === 0) return;
 
     try {
-      console.log(`🔍 Indexing ${colors.length} colors...`);
+      logger.info(`🔍 Indexing ${colors.length} colors...`);
       const task = await this.indexes.colors.addDocuments(colors);
-      console.log(`✅ Colors indexing task created: ${task.taskUid}`);
+      logger.info(`✅ Colors indexing task created: ${task.taskUid}`);
     } catch (error) {
-      console.error("❌ Error indexing colors:", error);
+      logger.error("❌ Error indexing colors:", error);
       throw error;
     }
   }
@@ -315,11 +316,11 @@ class MeilisearchService {
     if (capacities.length === 0) return;
 
     try {
-      console.log(`🔍 Indexing ${capacities.length} capacities...`);
+      logger.info(`🔍 Indexing ${capacities.length} capacities...`);
       const task = await this.indexes.capacities.addDocuments(capacities);
-      console.log(`✅ Capacities indexing task created: ${task.taskUid}`);
+      logger.info(`✅ Capacities indexing task created: ${task.taskUid}`);
     } catch (error) {
-      console.error("❌ Error indexing capacities:", error);
+      logger.error("❌ Error indexing capacities:", error);
       throw error;
     }
   }
@@ -331,11 +332,11 @@ class MeilisearchService {
     if (customers.length === 0) return;
 
     try {
-      console.log(`🔍 Indexing ${customers.length} customers...`);
+      logger.info(`🔍 Indexing ${customers.length} customers...`);
       const task = await this.indexes.customers.addDocuments(customers);
-      console.log(`✅ Customers indexing task created: ${task.taskUid}`);
+      logger.info(`✅ Customers indexing task created: ${task.taskUid}`);
     } catch (error) {
-      console.error("❌ Error indexing customers:", error);
+      logger.error("❌ Error indexing customers:", error);
       throw error;
     }
   }
@@ -381,7 +382,7 @@ class MeilisearchService {
         facetDistribution: result.facetDistribution,
       };
     } catch (error) {
-      console.error("❌ Error searching products:", error);
+      logger.error("❌ Error searching products:", error);
       throw error;
     }
   }
@@ -414,7 +415,7 @@ class MeilisearchService {
         estimatedTotalHits: result.estimatedTotalHits || 0,
       };
     } catch (error) {
-      console.error("❌ Error searching categories:", error);
+      logger.error("❌ Error searching categories:", error);
       throw error;
     }
   }
@@ -447,7 +448,7 @@ class MeilisearchService {
         estimatedTotalHits: result.estimatedTotalHits || 0,
       };
     } catch (error) {
-      console.error("❌ Error searching colors:", error);
+      logger.error("❌ Error searching colors:", error);
       throw error;
     }
   }
@@ -480,7 +481,7 @@ class MeilisearchService {
         estimatedTotalHits: result.estimatedTotalHits || 0,
       };
     } catch (error) {
-      console.error("❌ Error searching capacities:", error);
+      logger.error("❌ Error searching capacities:", error);
       throw error;
     }
   }
@@ -513,7 +514,7 @@ class MeilisearchService {
         estimatedTotalHits: result.estimatedTotalHits || 0,
       };
     } catch (error) {
-      console.error("❌ Error searching customers:", error);
+      logger.error("❌ Error searching customers:", error);
       throw error;
     }
   }
@@ -533,7 +534,7 @@ class MeilisearchService {
 
       return result.hits.map((hit: any) => hit.name);
     } catch (error) {
-      console.error("❌ Error getting product suggestions:", error);
+      logger.error("❌ Error getting product suggestions:", error);
       throw error;
     }
   }
@@ -544,9 +545,9 @@ class MeilisearchService {
   async deleteProduct(productId: string): Promise<void> {
     try {
       await this.indexes.products.deleteDocument(productId);
-      console.log(`✅ Product ${productId} deleted from search index`);
+      logger.info(`✅ Product ${productId} deleted from search index`);
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Error deleting product ${productId} from index:`,
         error
       );
@@ -560,9 +561,9 @@ class MeilisearchService {
   async deleteCategory(categoryId: string): Promise<void> {
     try {
       await this.indexes.categories.deleteDocument(categoryId);
-      console.log(`✅ Category ${categoryId} deleted from search index`);
+      logger.info(`✅ Category ${categoryId} deleted from search index`);
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Error deleting category ${categoryId} from index:`,
         error
       );
@@ -576,9 +577,9 @@ class MeilisearchService {
   async deleteColor(colorId: string): Promise<void> {
     try {
       await this.indexes.colors.deleteDocument(colorId);
-      console.log(`✅ Color ${colorId} deleted from search index`);
+      logger.info(`✅ Color ${colorId} deleted from search index`);
     } catch (error) {
-      console.error(`❌ Error deleting color ${colorId} from index:`, error);
+      logger.error(`❌ Error deleting color ${colorId} from index:`, error);
       throw error;
     }
   }
@@ -589,9 +590,9 @@ class MeilisearchService {
   async deleteCapacity(capacityId: string): Promise<void> {
     try {
       await this.indexes.capacities.deleteDocument(capacityId);
-      console.log(`✅ Capacity ${capacityId} deleted from search index`);
+      logger.info(`✅ Capacity ${capacityId} deleted from search index`);
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Error deleting capacity ${capacityId} from index:`,
         error
       );
@@ -605,9 +606,9 @@ class MeilisearchService {
   async deleteCustomer(customerId: string): Promise<void> {
     try {
       await this.indexes.customers.deleteDocument(customerId);
-      console.log(`✅ Customer ${customerId} deleted from search index`);
+      logger.info(`✅ Customer ${customerId} deleted from search index`);
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Error deleting customer ${customerId} from index:`,
         error
       );
@@ -620,7 +621,7 @@ class MeilisearchService {
    */
   async clearAllIndexes(): Promise<void> {
     try {
-      console.log("🧹 Clearing all Meilisearch indexes...");
+      logger.info("🧹 Clearing all Meilisearch indexes...");
 
       await Promise.all([
         this.indexes.products.deleteAllDocuments(),
@@ -630,9 +631,9 @@ class MeilisearchService {
         this.indexes.customers.deleteAllDocuments(),
       ]);
 
-      console.log("✅ All indexes cleared successfully");
+      logger.info("✅ All indexes cleared successfully");
     } catch (error) {
-      console.error("❌ Error clearing indexes:", error);
+      logger.error("❌ Error clearing indexes:", error);
       throw error;
     }
   }
@@ -664,7 +665,7 @@ class MeilisearchService {
         customers: customersStats,
       };
     } catch (error) {
-      console.error("❌ Error getting index stats:", error);
+      logger.error("❌ Error getting index stats:", error);
       throw error;
     }
   }

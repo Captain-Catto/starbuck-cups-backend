@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Middleware helper để sync data với MeiliSearch sau khi CRUD operations
  */
@@ -77,7 +78,7 @@ async function syncData(options: SyncOptions, req: Request, responseBody: any) {
   try {
     const entityId = resolveEntityId(options.entity, req, responseBody);
     if (!entityId) {
-      console.warn(
+      logger.warn(
         `⚠️ MeiliSearch sync skipped: missing id for ${options.entity}:${options.operation}`
       );
       return;
@@ -121,7 +122,7 @@ async function syncData(options: SyncOptions, req: Request, responseBody: any) {
         break;
     }
   } catch (error) {
-    console.error("🔍 MeiliSearch sync error:", error);
+    logger.error("🔍 MeiliSearch sync error:", error);
   }
 }
 

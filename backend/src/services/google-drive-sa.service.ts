@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { google, drive_v3 } from "googleapis";
 import { JWT } from "google-auth-library";
 import { v4 as uuidv4 } from "uuid";
@@ -115,7 +116,7 @@ export class GoogleDriveSAService {
         bucket: folder,
       };
     } catch (error: any) {
-      console.error("Google Drive upload error:", error);
+      logger.error("Google Drive upload error:", error);
       throw new Error(
         `Failed to upload file to Google Drive: ${error?.message || "Unknown error"}`
       );
@@ -145,7 +146,7 @@ export class GoogleDriveSAService {
         fileId: fileId,
       });
     } catch (error: any) {
-      console.error("Google Drive delete error:", error);
+      logger.error("Google Drive delete error:", error);
       throw new Error(
         `Failed to delete file from Google Drive: ${error?.message || "Unknown error"}`
       );
@@ -162,7 +163,7 @@ export class GoogleDriveSAService {
       const deletePromises = fileIds.map((fileId) => this.deleteFile(fileId));
       await Promise.all(deletePromises);
     } catch (error: any) {
-      console.error("Google Drive bulk delete error:", error);
+      logger.error("Google Drive bulk delete error:", error);
       throw new Error(
         `Failed to delete files from Google Drive: ${error?.message || "Unknown error"}`
       );
@@ -216,7 +217,7 @@ export class GoogleDriveSAService {
 
       return folder.data.id!;
     } catch (error: any) {
-      console.error("Error getting/creating folder:", error);
+      logger.error("Error getting/creating folder:", error);
       throw new Error(
         `Failed to get or create folder: ${error?.message || "Unknown error"}`
       );
@@ -280,7 +281,7 @@ export class GoogleDriveSAService {
 
       return null;
     } catch (error) {
-      console.error("Error extracting file ID from URL:", error);
+      logger.error("Error extracting file ID from URL:", error);
       return null;
     }
   }

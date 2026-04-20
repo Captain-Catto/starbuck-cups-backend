@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response, NextFunction } from "express";
 import { createClient } from "redis";
 import { ResponseHelper } from "../types/api";
@@ -6,8 +7,8 @@ const redisClient = createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
 });
 
-redisClient.on("error", (err) => console.error("Redis Cache Client Error", err));
-redisClient.connect().catch(console.error);
+redisClient.on("error", (err) => logger.error("Redis Cache Client Error", err));
+redisClient.connect().catch(logger.error);
 
 /**
  * Middleware to cache API responses in Redis
@@ -58,7 +59,7 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
             };
             // Keep stale cache in Redis for 10x the duration
             redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch(err => {
-              console.error("Redis Cache SWR Set Error:", err);
+              logger.error("Redis Cache SWR Set Error:", err);
             });
           }
           return res as any;
@@ -80,7 +81,7 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
             data: body
           };
           redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch(err => {
-            console.error("Redis Cache Set Error:", err);
+            logger.error("Redis Cache Set Error:", err);
           });
         }
         return originalJson(body);
@@ -88,7 +89,7 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
 
       next();
     } catch (error) {
-      console.error("Redis Cache Middleware Error:", error);
+      logger.error("Redis Cache Middleware Error:", error);
       next(); // Continue without caching if Redis fails
     }
   };
@@ -104,6 +105,6 @@ export const clearCachePrefix = async (prefix: string): Promise<void> => {
       await redisClient.del(keys);
     }
   } catch (error) {
-    console.error("Failed to clear cache prefix:", error);
+    logger.error("Failed to clear cache prefix:", error);
   }
 };

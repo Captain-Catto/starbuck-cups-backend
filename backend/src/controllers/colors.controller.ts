@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Colors management controller
  * Handles CRUD operations for color entities
@@ -137,7 +138,7 @@ export const getColors = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get colors error:", error);
+    logger.error("Get colors error:", error);
     return res
       .status(500)
       .json(
@@ -227,7 +228,7 @@ export const getColorsForAdmin = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get colors for admin error:", error);
+    logger.error("Get colors for admin error:", error);
     return res
       .status(500)
       .json(
@@ -277,7 +278,7 @@ export const getColorById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(transformedColor));
   } catch (error) {
-    console.error("Get color error:", error);
+    logger.error("Get color error:", error);
     return res
       .status(500)
       .json(
@@ -369,7 +370,7 @@ export const createColor = async (req: Request, res: Response) => {
 
     return res.status(201).json(ResponseHelper.success(createdColor));
   } catch (error) {
-    console.error("Create color error:", error);
+    logger.error("Create color error:", error);
     return res
       .status(500)
       .json(
@@ -477,7 +478,7 @@ export const updateColor = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedColor));
   } catch (error) {
-    console.error("Update color error:", error);
+    logger.error("Update color error:", error);
     return res
       .status(500)
       .json(
@@ -511,7 +512,7 @@ export const deleteColor = async (req: Request, res: Response) => {
       where: { colorId: id },
     });
 
-    console.log(`Color ${id} is used by ${productColorCount} products`);
+    logger.info(`Color ${id} is used by ${productColorCount} products`);
 
     // Also check with raw query to be sure
     const [rawCount] =
@@ -521,7 +522,7 @@ export const deleteColor = async (req: Request, res: Response) => {
           bind: [id],
         }
       )) || [];
-    console.log(`Raw count for color ${id}:`, rawCount);
+    logger.info(`Raw count for color ${id}:`, rawCount);
 
     if (productColorCount > 0) {
       return res
@@ -535,15 +536,15 @@ export const deleteColor = async (req: Request, res: Response) => {
     }
 
     // Hard delete if no products are using this color
-    console.log(`Deleting color ${id}...`);
+    logger.info(`Deleting color ${id}...`);
     await color.destroy();
-    console.log(`Color ${id} deleted successfully`);
+    logger.info(`Color ${id} deleted successfully`);
 
     return res
       .status(200)
       .json(ResponseHelper.success({ message: "Color deleted successfully" }));
   } catch (error) {
-    console.error("Delete color error:", error);
+    logger.error("Delete color error:", error);
     return res
       .status(500)
       .json(
@@ -590,7 +591,7 @@ export const toggleColorStatus = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedColor));
   } catch (error) {
-    console.error("Toggle color status error:", error);
+    logger.error("Toggle color status error:", error);
     return res
       .status(500)
       .json(
@@ -617,7 +618,7 @@ export const getActiveColors = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(colors));
   } catch (error) {
-    console.error("Get active colors error:", error);
+    logger.error("Get active colors error:", error);
     return res
       .status(500)
       .json(
@@ -657,7 +658,7 @@ export const searchColors = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(colors));
   } catch (error) {
-    console.error("Search colors error:", error);
+    logger.error("Search colors error:", error);
     return res
       .status(500)
       .json(
@@ -732,7 +733,7 @@ export const getPublicColorById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(color));
   } catch (error) {
-    console.error("Get public color by id error:", error);
+    logger.error("Get public color by id error:", error);
     return res
       .status(500)
       .json(
@@ -839,7 +840,7 @@ export const getPublicColors = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get public colors error:", error);
+    logger.error("Get public colors error:", error);
     return res
       .status(500)
       .json(

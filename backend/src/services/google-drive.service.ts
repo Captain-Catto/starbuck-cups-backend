@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { google, drive_v3 } from "googleapis";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
@@ -91,7 +92,7 @@ export class GoogleDriveService {
         bucket: folder,
       };
     } catch (error: any) {
-      console.error("Google Drive upload error:", error);
+      logger.error("Google Drive upload error:", error);
       throw new Error(
         `Failed to upload file to Google Drive: ${error?.message || "Unknown error"}`
       );
@@ -121,7 +122,7 @@ export class GoogleDriveService {
         fileId: fileId,
       });
     } catch (error: any) {
-      console.error("Google Drive delete error:", error);
+      logger.error("Google Drive delete error:", error);
       throw new Error(
         `Failed to delete file from Google Drive: ${error?.message || "Unknown error"}`
       );
@@ -138,7 +139,7 @@ export class GoogleDriveService {
       const deletePromises = fileIds.map((fileId) => this.deleteFile(fileId));
       await Promise.all(deletePromises);
     } catch (error: any) {
-      console.error("Google Drive bulk delete error:", error);
+      logger.error("Google Drive bulk delete error:", error);
       throw new Error(
         `Failed to delete files from Google Drive: ${error?.message || "Unknown error"}`
       );
@@ -221,7 +222,7 @@ export class GoogleDriveService {
 
       return null;
     } catch (error) {
-      console.error("Error extracting file ID from URL:", error);
+      logger.error("Error extracting file ID from URL:", error);
       return null;
     }
   }

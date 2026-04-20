@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { CustomerPhone } from "../models/CustomerPhone";
 import { Customer } from "../models/Customer";
 import { Op, Transaction } from "sequelize";
@@ -32,7 +33,7 @@ export class CustomerPhoneService {
 
       return phones;
     } catch (error) {
-      console.error("Database error fetching customer phones:", error);
+      logger.error("Database error fetching customer phones:", error);
       throw new Error("Failed to fetch customer phones from database");
     }
   }
@@ -97,7 +98,7 @@ export class CustomerPhoneService {
 
       return phone;
     } catch (error) {
-      console.error("Database error creating customer phone:", error);
+      logger.error("Database error creating customer phone:", error);
       throw error;
     }
   }
@@ -190,7 +191,7 @@ export class CustomerPhoneService {
       return phone;
     } catch (error) {
       await transaction.rollback();
-      console.error("Database error updating customer phone:", error);
+      logger.error("Database error updating customer phone:", error);
       throw error;
     }
   }
@@ -230,7 +231,7 @@ export class CustomerPhoneService {
       await phone.destroy();
       return { success: true, customerId };
     } catch (error) {
-      console.error("Database error deleting customer phone:", error);
+      logger.error("Database error deleting customer phone:", error);
       throw error;
     }
   }
@@ -263,7 +264,7 @@ export class CustomerPhoneService {
       return { success: true, customerId: phone.customerId };
     } catch (error) {
       await transaction.rollback();
-      console.error("Database error setting main phone:", error);
+      logger.error("Database error setting main phone:", error);
       throw error;
     }
   }
@@ -279,7 +280,7 @@ export class CustomerPhoneService {
 
       return mainPhone ? mainPhone.phoneNumber : null;
     } catch (error) {
-      console.error("Database error getting customer main phone:", error);
+      logger.error("Database error getting customer main phone:", error);
       return null;
     }
   }

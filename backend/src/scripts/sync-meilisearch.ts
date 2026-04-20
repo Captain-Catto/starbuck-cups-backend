@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import dotenv from "dotenv";
 import { initializeDatabase, cleanupDatabase } from "../config/database-init";
 import {
@@ -23,7 +24,7 @@ import {
 dotenv.config();
 
 async function syncMeilisearch(): Promise<void> {
-  console.log("🔄 Starting MeiliSearch sync...");
+  logger.info("🔄 Starting MeiliSearch sync...");
 
   await initializeDatabase();
   await meilisearchService.initializeIndexes();
@@ -191,11 +192,11 @@ async function syncMeilisearch(): Promise<void> {
   ]);
 
   const stats = await meilisearchService.getIndexStats();
-  console.log("✅ MeiliSearch sync completed");
-  console.log(
+  logger.info("✅ MeiliSearch sync completed");
+  logger.info(
     `📊 Synced counts: products=${productDocuments.length}, categories=${categoryDocuments.length}, colors=${colorDocuments.length}, capacities=${capacityDocuments.length}, customers=${customerDocuments.length}`
   );
-  console.log("📈 Index stats:", stats);
+  logger.info("📈 Index stats:", stats);
 }
 
 syncMeilisearch()
@@ -204,7 +205,7 @@ syncMeilisearch()
     process.exit(0);
   })
   .catch(async (error) => {
-    console.error("❌ Sync failed:", error);
+    logger.error("❌ Sync failed:", error);
     await cleanupDatabase();
     process.exit(1);
   });

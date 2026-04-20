@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models, AdminRole } from "../models";
 
@@ -167,7 +168,7 @@ export const adminLogin = async (req: Request, res: Response) => {
       ResponseHelper.success(responseData)
     );
   } catch (error) {
-    console.error("Admin login error:", error);
+    logger.error("Admin login error:", error);
     return res
       .status(500)
       .json(ResponseHelper.error("Internal server error", "INTERNAL_ERROR"));
@@ -276,7 +277,7 @@ export const login = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(responseData));
   } catch (error) {
-    console.error("Login error:", error);
+    logger.error("Login error:", error);
     return res
       .status(500)
       .json(ResponseHelper.error("Login failed", "LOGIN_ERROR"));
@@ -364,7 +365,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success({ accessToken }));
   } catch (error) {
-    console.error("Refresh token error:", error);
+    logger.error("Refresh token error:", error);
     return res
       .status(401)
       .json(
@@ -409,7 +410,7 @@ export const logout = async (req: Request, res: Response) => {
         ResponseHelper.success(null, { message: "Logged out successfully" })
       );
   } catch (error) {
-    console.error("Logout error:", error);
+    logger.error("Logout error:", error);
     return res
       .status(500)
       .json(ResponseHelper.error("Logout failed", "LOGOUT_ERROR"));
@@ -502,7 +503,7 @@ export const changePassword = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Change password error:", error);
+    logger.error("Change password error:", error);
     return res
       .status(500)
       .json(
@@ -564,7 +565,7 @@ export const verifyToken = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Verify token error:", error);
+    logger.error("Verify token error:", error);
     return res
       .status(500)
       .json(
@@ -607,7 +608,7 @@ export const getProfile = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(user));
   } catch (error) {
-    console.error("Get profile error:", error);
+    logger.error("Get profile error:", error);
     return res
       .status(500)
       .json(ResponseHelper.error("Failed to get profile", "GET_PROFILE_ERROR"));
@@ -659,7 +660,7 @@ export const adminVerifyToken = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Admin verify token error:", error);
+    logger.error("Admin verify token error:", error);
     return res
       .status(500)
       .json(
@@ -806,7 +807,7 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(responseData));
   } catch (error) {
-    console.error("Admin refresh token error:", error);
+    logger.error("Admin refresh token error:", error);
     return res
       .status(500)
       .json(
@@ -851,7 +852,7 @@ export const adminLogout = async (req: Request, res: Response) => {
         ResponseHelper.success({ message: "Admin logged out successfully" })
       );
   } catch (error) {
-    console.error("Admin logout error:", error);
+    logger.error("Admin logout error:", error);
     return res
       .status(500)
       .json(ResponseHelper.error("Failed to logout", "LOGOUT_ERROR"));
@@ -965,7 +966,7 @@ export const adminSessionCheck = async (req: Request, res: Response) => {
         .json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
     }
   } catch (error) {
-    console.error("Admin session check error:", error);
+    logger.error("Admin session check error:", error);
     return res
       .status(500)
       .json(

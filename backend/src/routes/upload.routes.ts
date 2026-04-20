@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import express, { Request, Response } from "express";
 // import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
@@ -85,7 +86,7 @@ router.post(
         message: "File uploaded successfully",
       });
     } catch (error: any) {
-      console.error("Upload error:", error);
+      logger.error("Upload error:", error);
       res.status(500).json({
         success: false,
         message: error?.message || "Upload failed",
@@ -162,7 +163,7 @@ router.post(
         message: `${results.length} files uploaded successfully`,
       });
     } catch (error: any) {
-      console.error("Multiple upload error:", error);
+      logger.error("Multiple upload error:", error);
       res.status(500).json({
         success: false,
         message: error?.message || "Upload failed",
@@ -205,7 +206,7 @@ router.delete(
         message: "File deleted successfully",
       });
     } catch (error: any) {
-      console.error("Delete error:", error);
+      logger.error("Delete error:", error);
       res.status(500).json({
         success: false,
         message: error?.message || "Delete failed",
@@ -252,7 +253,7 @@ router.get(
         message: "Public URL retrieved successfully",
       });
     } catch (error: any) {
-      console.error("Public URL error:", error);
+      logger.error("Public URL error:", error);
       res.status(500).json({
         success: false,
         message: error?.message || "Failed to get public URL",

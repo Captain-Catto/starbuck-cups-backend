@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { SocketData, SocketUser } from '../types/socket.types';
@@ -19,7 +20,7 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: Error) => void
 
     const jwtSecret = process.env.JWT_ACCESS_SECRET;
     if (!jwtSecret) {
-      console.error('JWT_ACCESS_SECRET is not defined');
+      logger.error('JWT_ACCESS_SECRET is not defined');
       return next(new Error('Authentication error: Server configuration error'));
     }
 
@@ -42,7 +43,7 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: Error) => void
 
     next();
   } catch (error) {
-    console.error('Socket authentication error:', error);
+    logger.error('Socket authentication error:', error);
     next(new Error('Authentication error: Invalid token'));
   }
 };

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Sequelize, Options } from "sequelize";
 import dotenv from "dotenv";
 
@@ -20,7 +21,7 @@ const dbPoolIdle = parsePoolNumber(process.env.DB_POOL_IDLE_MS, 10000);
 
 const baseConfig: Options = {
   dialect: "postgres",
-  logging: process.env.NODE_ENV === "development" ? console.log : false,
+  logging: process.env.NODE_ENV === "development" ? logger.info : false,
   pool: {
     max: dbPoolMax,
     min: dbPoolMin,

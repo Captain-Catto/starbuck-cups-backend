@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 'use strict';
 
 const { v4: uuidv4 } = require('uuid');
@@ -81,7 +82,7 @@ module.exports = {
     );
 
     if (adminUsers.length === 0) {
-      console.log('⚠️  No admin users found. Skipping promotional banner seed data.');
+      logger.info('⚠️  No admin users found. Skipping promotional banner seed data.');
       return;
     }
 
@@ -106,11 +107,11 @@ module.exports = {
       },
     ]);
 
-    console.log('✅ Promotional banners table created and seeded successfully!');
+    logger.info('✅ Promotional banners table created and seeded successfully!');
   },
 
   down: async (queryInterface, Sequelize) => {
     await queryInterface.dropTable('promotional_banners');
-    console.log('✅ Promotional banners table dropped successfully!');
+    logger.info('✅ Promotional banners table dropped successfully!');
   },
 };

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Authentication and authorization middleware
  */
@@ -89,7 +90,7 @@ export const authenticate = async (
 
     next();
   } catch (error: any) {
-    console.error("Authentication middleware error:", error);
+    logger.error("Authentication middleware error:", error);
 
     // Handle specific JWT errors
     if (error.message.includes("expired")) {
@@ -210,11 +211,11 @@ if (AUTH_RATE_LIMIT_STORE === "redis") {
   });
 
   rateLimitRedisClient.on("error", (error) => {
-    console.error("Redis rate limit client error:", error);
+    logger.error("Redis rate limit client error:", error);
   });
 
   rateLimitRedisClient.connect().catch((error) => {
-    console.error("Failed to connect Redis rate limit client:", error);
+    logger.error("Failed to connect Redis rate limit client:", error);
   });
 } else if (
   process.env.NODE_ENV === "production" &&
@@ -324,7 +325,7 @@ export const trackAdminActivity = async (
         { where: { id: req.user.userId } }
       );
     } catch (error) {
-      console.error("Failed to update admin activity:", error);
+      logger.error("Failed to update admin activity:", error);
       // Don't fail the request for this
     }
   }
@@ -409,7 +410,7 @@ export const authenticateWithAutoRefresh = async (
 
       next();
     } catch (refreshError) {
-      console.error("Refresh token verification failed");
+      logger.error("Refresh token verification failed");
       return res
         .status(401)
         .json(
@@ -420,7 +421,7 @@ export const authenticateWithAutoRefresh = async (
         );
     }
   } catch (error) {
-    console.error("Authentication middleware error:", error);
+    logger.error("Authentication middleware error:", error);
     return res
       .status(500)
       .json(

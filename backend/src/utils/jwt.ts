@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * JWT utilities for token generation and verification
  */
@@ -52,7 +53,7 @@ export function generateAccessToken(payload: AccessTokenPayload): string {
       audience: "cups-shop-admin",
     } as jwt.SignOptions);
   } catch (error) {
-    console.error("Access token generation error:", error);
+    logger.error("Access token generation error:", error);
     throw new Error("Failed to generate access token");
   }
 }
@@ -68,7 +69,7 @@ export function generateRefreshToken(payload: RefreshTokenPayload): string {
       audience: "cups-shop-admin",
     } as jwt.SignOptions);
   } catch (error) {
-    console.error("Refresh token generation error:", error);
+    logger.error("Refresh token generation error:", error);
     throw new Error("Failed to generate refresh token");
   }
 }
@@ -88,7 +89,7 @@ export function verifyAccessToken(token: string): DecodedAccessToken {
     } else if (error instanceof jwt.JsonWebTokenError) {
       throw new Error("Invalid access token");
     } else {
-      console.error("Access token verification error:", error);
+      logger.error("Access token verification error:", error);
       throw new Error("Token verification failed");
     }
   }
@@ -109,7 +110,7 @@ export function verifyRefreshToken(token: string): DecodedRefreshToken {
     } else if (error instanceof jwt.JsonWebTokenError) {
       throw new Error("Invalid refresh token");
     } else {
-      console.error("Refresh token verification error:", error);
+      logger.error("Refresh token verification error:", error);
       throw new Error("Token verification failed");
     }
   }
@@ -142,7 +143,7 @@ export function getTokenExpiration(token: string): Date | null {
     }
     return null;
   } catch (error) {
-    console.error("Token expiration extraction error:", error);
+    logger.error("Token expiration extraction error:", error);
     return null;
   }
 }

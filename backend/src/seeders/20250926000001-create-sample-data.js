@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 'use strict';
 
 const bcrypt = require('bcryptjs');
@@ -122,9 +123,9 @@ module.exports = {
       }
     ]);
 
-    console.log('✅ Sample data created successfully!');
-    console.log('🔑 Admin credentials: admin / admin123');
-    console.log(`🆔 Admin ID: ${adminUserId}`);
+    logger.info('✅ Sample data created successfully!');
+    logger.info('🔑 Admin credentials: admin / admin123');
+    logger.info(`🆔 Admin ID: ${adminUserId}`);
   },
 
   down: async (queryInterface, Sequelize) => {

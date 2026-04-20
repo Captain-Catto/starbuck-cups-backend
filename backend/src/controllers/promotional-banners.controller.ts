@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { PromotionalBanner, AdminUser } from "../models";
 import { z } from "zod";
@@ -86,7 +87,7 @@ export const getActivePromotionalBanner = async (
       data: banner,
     });
   } catch (error: any) {
-    console.error("Error fetching active promotional banner:", error);
+    logger.error("Error fetching active promotional banner:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch promotional banner",
@@ -122,7 +123,7 @@ export const getAdminPromotionalBanners = async (
       data: banners,
     });
   } catch (error: any) {
-    console.error("Error fetching admin promotional banners:", error);
+    logger.error("Error fetching admin promotional banners:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch promotional banners",
@@ -160,7 +161,7 @@ export const getPromotionalBannerById = async (req: Request, res: Response) => {
       data: banner,
     });
   } catch (error: any) {
-    console.error("Error fetching promotional banner:", error);
+    logger.error("Error fetching promotional banner:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch promotional banner",
@@ -221,7 +222,7 @@ export const createPromotionalBanner = async (req: Request, res: Response) => {
       data: createdBanner,
     });
   } catch (error: any) {
-    console.error("Error creating promotional banner:", error);
+    logger.error("Error creating promotional banner:", error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -294,7 +295,7 @@ export const updatePromotionalBanner = async (req: Request, res: Response) => {
       data: updatedBanner,
     });
   } catch (error: any) {
-    console.error("Error updating promotional banner:", error);
+    logger.error("Error updating promotional banner:", error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -337,7 +338,7 @@ export const deletePromotionalBanner = async (req: Request, res: Response) => {
       message: "Promotional banner deleted successfully",
     });
   } catch (error: any) {
-    console.error("Error deleting promotional banner:", error);
+    logger.error("Error deleting promotional banner:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete promotional banner",

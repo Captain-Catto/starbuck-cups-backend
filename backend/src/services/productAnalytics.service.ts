@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { ProductAnalytics } from "../models/ProductAnalytics";
 import { Product } from "../models/Product";
 import { Op } from "sequelize";
@@ -8,8 +9,8 @@ const analyticsDebugEnabled =
     process.env.NODE_ENV === "development");
 
 const debugLog = (...args: unknown[]) => {
-  if (analyticsDebugEnabled) {
-    console.log(...args);
+  if (analyticsDebugEnabled && args.length > 0) {
+    logger.info(args[0] as string, ...args.slice(1));
   }
 };
 
@@ -82,7 +83,7 @@ export class ProductAnalyticsService {
             : 0,
       };
     } catch (error) {
-      console.error("Error incrementing product click:", error);
+      logger.error("Error incrementing product click:", error);
       throw new Error("Failed to track product click");
     }
   }
@@ -134,7 +135,7 @@ export class ProductAnalyticsService {
             : 0,
       };
     } catch (error) {
-      console.error("Error incrementing add to cart:", error);
+      logger.error("Error incrementing add to cart:", error);
       throw new Error("Failed to track add to cart");
     }
   }
@@ -172,7 +173,7 @@ export class ProductAnalyticsService {
             : 0,
       };
     } catch (error) {
-      console.error("Error getting product analytics:", error);
+      logger.error("Error getting product analytics:", error);
       throw new Error("Failed to get product analytics");
     }
   }
@@ -209,7 +210,7 @@ export class ProductAnalyticsService {
             : 0,
       }));
     } catch (error) {
-      console.error("Error getting top clicked products:", error);
+      logger.error("Error getting top clicked products:", error);
       throw new Error("Failed to get top clicked products");
     }
   }
@@ -246,7 +247,7 @@ export class ProductAnalyticsService {
             : 0,
       }));
     } catch (error) {
-      console.error("Error getting top added to cart products:", error);
+      logger.error("Error getting top added to cart products:", error);
       throw new Error("Failed to get top added to cart products");
     }
   }
@@ -286,7 +287,7 @@ export class ProductAnalyticsService {
 
       return productsWithConversion;
     } catch (error) {
-      console.error("Error getting top conversion products:", error);
+      logger.error("Error getting top conversion products:", error);
       throw new Error("Failed to get top conversion products");
     }
   }
@@ -329,7 +330,7 @@ export class ProductAnalyticsService {
         })),
       };
     } catch (error) {
-      console.error("Error getting analytics summary:", error);
+      logger.error("Error getting analytics summary:", error);
       throw new Error("Failed to get analytics summary");
     }
   }
@@ -363,7 +364,7 @@ export class ProductAnalyticsService {
 
       return analyticsMap;
     } catch (error) {
-      console.error("Error getting bulk product analytics:", error);
+      logger.error("Error getting bulk product analytics:", error);
       throw new Error("Failed to get bulk product analytics");
     }
   }

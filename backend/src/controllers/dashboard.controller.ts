@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models } from "../models";
 
@@ -44,7 +45,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(stats));
   } catch (error) {
-    console.error("Get dashboard stats error:", error);
+    logger.error("Get dashboard stats error:", error);
     return res
       .status(500)
       .json(
@@ -120,7 +121,7 @@ export const getRevenueData = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(revenueData));
   } catch (error) {
-    console.error("Get revenue data error:", error);
+    logger.error("Get revenue data error:", error);
     return res
       .status(500)
       .json(
@@ -474,7 +475,7 @@ export const getStatistics = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(statistics));
   } catch (error) {
-    console.error("Get statistics error:", error);
+    logger.error("Get statistics error:", error);
     return res
       .status(500)
       .json(
@@ -548,7 +549,7 @@ export const getTopSellingProducts = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error("Get top selling products error:", error);
+    logger.error("Get top selling products error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to get top selling products",

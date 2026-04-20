@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Khởi tạo MeiliSearch service khi app startup
  */
@@ -5,29 +6,29 @@ import { meilisearchService } from "../services/meilisearch.service";
 
 export async function initializeMeiliSearch(): Promise<boolean> {
   try {
-    console.log("🔍 Initializing MeiliSearch...");
+    logger.info("🔍 Initializing MeiliSearch...");
 
     // Khởi tạo MeiliSearch service
     await meilisearchService.initializeIndexes();
 
-    console.log("✅ MeiliSearch initialized successfully");
+    logger.info("✅ MeiliSearch initialized successfully");
 
     // Check health
     const isHealthy = await meilisearchService.isHealthy();
-    console.log(
+    logger.info(
       `🏥 MeiliSearch Health: ${isHealthy ? "✅ Healthy" : "❌ Unhealthy"}`
     );
 
     // Log stats
     const stats = await meilisearchService.getIndexStats();
-    console.log("📊 MeiliSearch Index Stats:", stats);
+    logger.info("📊 MeiliSearch Index Stats:", stats);
     return true;
   } catch (error) {
-    console.error("❌ Failed to initialize MeiliSearch:", error);
+    logger.error("❌ Failed to initialize MeiliSearch:", error);
 
     // Don't crash the app if MeiliSearch fails
     // Just log the error and continue
-    console.warn("⚠️ App will continue without search functionality");
+    logger.warn("⚠️ App will continue without search functionality");
     return false;
   }
 }
@@ -37,19 +38,19 @@ export async function initializeMeiliSearch(): Promise<boolean> {
  */
 export async function syncInitialData(): Promise<void> {
   try {
-    console.log("🔄 Checking if initial data sync is needed...");
+    logger.info("🔄 Checking if initial data sync is needed...");
 
     // Get stats to see if we have data
     const stats = await meilisearchService.getIndexStats();
 
-    console.log("📊 Current index stats:", stats);
+    logger.info("📊 Current index stats:", stats);
 
     // If databases are empty, you can uncomment and run the sync script manually:
-    console.log("💡 To sync data to MeiliSearch, run:");
-    console.log("   npm run sync-meilisearch");
+    logger.info("💡 To sync data to MeiliSearch, run:");
+    logger.info("   npm run sync-meilisearch");
 
-    console.log("ℹ️ MeiliSearch is ready for data sync");
+    logger.info("ℹ️ MeiliSearch is ready for data sync");
   } catch (error) {
-    console.error("❌ Error checking MeiliSearch sync status:", error);
+    logger.error("❌ Error checking MeiliSearch sync status:", error);
   }
 }

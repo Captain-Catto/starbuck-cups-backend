@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { Setting } from "../models";
 import { socketService } from "../services/socket.service";
@@ -65,7 +66,7 @@ export const getEffectSettings = async (req: Request, res: Response) => {
       try {
         storedValue = JSON.parse(storedValue);
       } catch (e) {
-        console.error("Error parsing settings value:", e);
+        logger.error("Error parsing settings value:", e);
         storedValue = {};
       }
     }
@@ -88,7 +89,7 @@ export const getEffectSettings = async (req: Request, res: Response) => {
       data: mergedSettings,
     });
   } catch (error) {
-    console.error("Error fetching effect settings:", error);
+    logger.error("Error fetching effect settings:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch effect settings",
@@ -139,7 +140,7 @@ export const updateEffectSettings = async (req: Request, res: Response) => {
       message: "Effect settings updated successfully",
     });
   } catch (error) {
-    console.error("Error updating effect settings:", error);
+    logger.error("Error updating effect settings:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update effect settings",
@@ -155,7 +156,7 @@ export const getWatermarkSettings = async (req: Request, res: Response) => {
       data: settings,
     });
   } catch (error) {
-    console.error("Error fetching watermark settings:", error);
+    logger.error("Error fetching watermark settings:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch watermark settings",
@@ -182,7 +183,7 @@ export const updateWatermarkSettings = async (req: Request, res: Response) => {
       message: "Watermark settings updated successfully",
     });
   } catch (error) {
-    console.error("Error updating watermark settings:", error);
+    logger.error("Error updating watermark settings:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update watermark settings",

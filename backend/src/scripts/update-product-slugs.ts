@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * One-time migration script: update all product slugs to name-only format.
  *
@@ -29,7 +30,7 @@ interface RedirectEntry {
 }
 
 async function updateProductSlugs(): Promise<void> {
-  console.log("🔄 Starting product slug migration...\n");
+  logger.info("🔄 Starting product slug migration...\n");
 
   await initializeDatabase();
 
@@ -39,7 +40,7 @@ async function updateProductSlugs(): Promise<void> {
     order: [["createdAt", "ASC"]],
   });
 
-  console.log(`📦 Found ${products.length} products\n`);
+  logger.info(`📦 Found ${products.length} products\n`);
 
   // Build new slugs and detect conflicts before writing anything
   const slugMap = new Map<string, string>(); // newSlug → productId (first seen wins)
@@ -82,30 +83,30 @@ async function updateProductSlugs(): Promise<void> {
   const unchanged = plan.filter((p) => p.oldSlug === p.finalSlug);
   const conflicts = plan.filter((p) => p.conflict);
 
-  console.log(`✅ No change needed: ${unchanged.length} products`);
-  console.log(`📝 Will update: ${changes.length} products`);
+  logger.info(`✅ No change needed: ${unchanged.length} products`);
+  logger.info(`📝 Will update: ${changes.length} products`);
   if (conflicts.length > 0) {
-    console.log(`⚠️  Conflicts resolved with suffix: ${conflicts.length} products`);
+    logger.info(`⚠️  Conflicts resolved with suffix: ${conflicts.length} products`);
   }
-  console.log("");
+  logger.info("");
 
   if (changes.length === 0) {
-    console.log("Nothing to do. All slugs are already in the new format.");
+    logger.info("Nothing to do. All slugs are already in the new format.");
     return;
   }
 
   // Print each change
-  console.log("Changes:");
+  logger.info("Changes:");
   for (const entry of changes) {
     const marker = entry.conflict ? " ⚠️  (conflict → suffix added)" : "";
-    console.log(`  [${entry.id}] "${entry.name}"`);
-    console.log(`    OLD: ${entry.oldSlug}`);
-    console.log(`    NEW: ${entry.finalSlug}${marker}`);
-    console.log("");
+    logger.info(`  [${entry.id}] "${entry.name}"`);
+    logger.info(`    OLD: ${entry.oldSlug}`);
+    logger.info(`    NEW: ${entry.finalSlug}${marker}`);
+    logger.info("");
   }
 
   // Apply updates
-  console.log("💾 Applying updates to database...");
+  logger.info("💾 Applying updates to database...");
   let updated = 0;
   let failed = 0;
 
@@ -117,12 +118,12 @@ async function updateProductSlugs(): Promise<void> {
       );
       updated++;
     } catch (err: any) {
-      console.error(`  ❌ Failed to update [${entry.id}] ${entry.name}: ${err.message}`);
+      logger.error(`  ❌ Failed to update [${entry.id}] ${entry.name}: ${err.message}`);
       failed++;
     }
   }
 
-  console.log(`\n✅ Updated: ${updated} | ❌ Failed: ${failed}\n`);
+  logger.info(`\n✅ Updated: ${updated} | ❌ Failed: ${failed}\n`);
 
   // Write redirect mapping JSON for Next.js
   const redirects: RedirectEntry[] = changes
@@ -145,10 +146,10 @@ async function updateProductSlugs(): Promise<void> {
   const outputPath = path.resolve(__dirname, "../../../../slug-redirects.json");
   fs.writeFileSync(outputPath, JSON.stringify(allRedirects, null, 2), "utf-8");
 
-  console.log(`📄 Redirect mapping saved to: ${outputPath}`);
-  console.log(`   ${allRedirects.length} redirect rules (${redirects.length} vi + ${localeRedirects.length} en/zh)\n`);
-  console.log("Next step: paste the contents of slug-redirects.json into");
-  console.log("  next.config.ts → async redirects() { return [...] }");
+  logger.info(`📄 Redirect mapping saved to: ${outputPath}`);
+  logger.info(`   ${allRedirects.length} redirect rules (${redirects.length} vi + ${localeRedirects.length} en/zh)\n`);
+  logger.info("Next step: paste the contents of slug-redirects.json into");
+  logger.info("  next.config.ts → async redirects() { return [...] }");
 }
 
 updateProductSlugs()
@@ -157,7 +158,7 @@ updateProductSlugs()
     process.exit(0);
   })
   .catch(async (error) => {
-    console.error("❌ Migration failed:", error);
+    logger.error("❌ Migration failed:", error);
     await cleanupDatabase();
     process.exit(1);
   });

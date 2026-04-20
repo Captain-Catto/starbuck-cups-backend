@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models } from "../models";
 import { ConsultationStatus } from "../models/Consultation";
@@ -90,7 +91,7 @@ export const getNotifications = async (req: Request, res: Response) => {
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error("Get notifications error:", error);
+    logger.error("Get notifications error:", error);
     return res
       .status(500)
       .json(
@@ -133,7 +134,7 @@ export const markNotificationAsRead = async (req: Request, res: Response) => {
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error("Mark notification as read error:", error);
+    logger.error("Mark notification as read error:", error);
     return res
       .status(500)
       .json(
@@ -166,7 +167,7 @@ export const getUnreadCount = async (req: Request, res: Response) => {
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error("Get unread count error:", error);
+    logger.error("Get unread count error:", error);
     return res
       .status(500)
       .json(
@@ -202,7 +203,7 @@ export const markAllNotificationsAsRead = async (req: Request, res: Response) =>
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error("Mark all notifications as read error:", error);
+    logger.error("Mark all notifications as read error:", error);
     return res
       .status(500)
       .json(

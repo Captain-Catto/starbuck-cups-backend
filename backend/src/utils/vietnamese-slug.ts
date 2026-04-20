@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Vietnamese Slug Utility
  * Utilities for generating SEO-friendly slugs from Vietnamese text
@@ -60,10 +61,10 @@ export const testSlugGeneration = () => {
     { input: "Xám Bạc", expected: "xam-bac" },
   ];
 
-  console.log("Vietnamese Slug Generation Test:");
+  logger.info("Vietnamese Slug Generation Test:");
   testCases.forEach(({ input, expected }) => {
     const result = generateVietnameseSlug(input);
     const passed = result === expected;
-    console.log(`${passed ? "✅" : "❌"} "${input}" → "${result}" (expected: "${expected}")`);
+    logger.info(`${passed ? "✅" : "❌"} "${input}" → "${result}" (expected: "${expected}")`);
   });
 };

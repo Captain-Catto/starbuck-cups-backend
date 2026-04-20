@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { CustomerPhoneService } from "../services/customerPhone.service";
 import { ApiResponse, ResponseHelper } from "../types/api";
@@ -37,7 +38,7 @@ export const getCustomerPhones = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error) {
-    console.error("Error fetching customer phones:", error);
+    logger.error("Error fetching customer phones:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -105,7 +106,7 @@ export const createCustomerPhone = async (req: Request, res: Response) => {
 
     res.status(201).json(response);
   } catch (error: any) {
-    console.error("Error creating customer phone:", error);
+    logger.error("Error creating customer phone:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -158,7 +159,7 @@ export const updateCustomerPhone = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error: any) {
-    console.error("Error updating customer phone:", error);
+    logger.error("Error updating customer phone:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -209,7 +210,7 @@ export const deleteCustomerPhone = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error: any) {
-    console.error("Error deleting customer phone:", error);
+    logger.error("Error deleting customer phone:", error);
 
     const response: ApiResponse = {
       success: false,
@@ -257,7 +258,7 @@ export const setMainPhone = async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error: any) {
-    console.error("Error setting main phone:", error);
+    logger.error("Error setting main phone:", error);
 
     const response: ApiResponse = {
       success: false,

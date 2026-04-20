@@ -1,4 +1,18 @@
+import { logger } from "@/utils/logger";
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
+
+// Ensure to call this before importing any other modules!
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",
+  integrations: [
+    nodeProfilingIntegration(),
+  ],
+  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+  profilesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+});
+
 import express from "express";
 import cookieParser from "cookie-parser";
 import session from "express-session";
@@ -105,7 +119,7 @@ app.use(cookieParser()); // Add cookie parser middleware
 const redisClient = createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
 });
-redisClient.connect().catch(console.error);
+redisClient.connect().catch(logger.error);
 
 // Session middleware (Redis store)
 const sessionStore = new RedisStore({
@@ -196,6 +210,9 @@ app.get("/api/v1", (req, res) => {
   });
 });
 
+// Sentry error handler must be registered before custom error handlers
+Sentry.setupExpressErrorHandler(app);
+
 // Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -217,18 +234,18 @@ const startServer = async () => {
     
     // sessionStore doesn't need explicit init like sequelize store does,
     // but we log it for consistency
-    console.log("✅ Redis Session store ready.");
+    logger.info("✅ Redis Session store ready.");
 
     // Start server
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📚 Environment: ${process.env.NODE_ENV}`);
-      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-      console.log(`📖 API docs: http://localhost:${PORT}/docs`);
-      console.log(`🔌 Socket.IO ready for connections`);
+      logger.info(`🚀 Server running on port ${PORT}`);
+      logger.info(`📚 Environment: ${process.env.NODE_ENV}`);
+      logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
+      logger.info(`📖 API docs: http://localhost:${PORT}/docs`);
+      logger.info(`🔌 Socket.IO ready for connections`);
     });
   } catch (error) {
-    console.error("❌ Failed to start server:", error);
+    logger.error("❌ Failed to start server:", error);
     process.exit(1);
   }
 };
@@ -238,9 +255,9 @@ startServer();
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully");
+  logger.info("SIGTERM received, shutting down gracefully");
   server.close(() => {
-    console.log("Process terminated");
+    logger.info("Process terminated");
   });
 });
 

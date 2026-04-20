@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import sharp from "sharp";
 
 export interface WatermarkOptions {
@@ -172,7 +173,7 @@ export async function processImage(
     100
   ).toFixed(1);
 
-  console.log(
+  logger.info(
     `[ImageProcessing] ${filename}: ${originalKB}KB → ${processedKB}KB (${savings}% smaller, ${metadata.width}px → ${Math.min(metadata.width || maxWidth, maxWidth)}px, ${format})`
   );
 

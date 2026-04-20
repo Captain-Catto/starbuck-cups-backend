@@ -4,8 +4,10 @@
 import { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import cors from "cors";
+import crypto from "crypto";
 import { ResponseHelper } from "../types/api";
 import { getAllowedOrigins, isAllowedOrigin } from "../config/cors";
+import { logger, loggerContext } from "../utils/logger";
 
 const requestLoggingEnabled =
   process.env.REQUEST_LOG_ENABLED === "true" ||
@@ -20,7 +22,7 @@ const corsOptions: cors.CorsOptions = {
     if (isAllowedOrigin(origin, allowedOrigins)) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}`);
+      logger.warn(`CORS blocked origin: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -103,27 +105,31 @@ export const requestLogger = (
   res: Response,
   next: NextFunction
 ) => {
-  if (!requestLoggingEnabled) {
+  const requestId = crypto.randomUUID();
+  (req as any).id = requestId;
+
+  loggerContext.run({ requestId }, () => {
+    if (!requestLoggingEnabled) {
+      return next();
+    }
+
+    const start = Date.now();
+
+    // Log request
+    logger.info(`${req.method} ${req.url} - IP: ${req.ip}`);
+
+    // Log response when finished
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      if (res.statusCode >= 400) {
+        logger.error(`${res.statusCode} ${req.method} ${req.url} - ${duration}ms`);
+      } else {
+        logger.info(`${res.statusCode} ${req.method} ${req.url} - ${duration}ms`);
+      }
+    });
+
     next();
-    return;
-  }
-
-  const start = Date.now();
-  const timestamp = new Date().toISOString();
-
-  // Log request
-  console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${req.ip}`);
-
-  // Log response when finished
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    const statusColor = res.statusCode >= 400 ? "\x1b[31m" : "\x1b[32m"; // Red for errors, green for success
-    console.log(
-      `[${new Date().toISOString()}] ${statusColor}${res.statusCode}\x1b[0m ${req.method} ${req.url} - ${duration}ms`
-    );
   });
-
-  next();
 };
 
 /**
@@ -210,7 +216,7 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  console.error("Error occurred:", error);
+  logger.error("Error occurred:", error);
 
   // Handle CORS errors
   if (error.message === "Not allowed by CORS") {

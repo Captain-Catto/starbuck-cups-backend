@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { HeroImage, AdminUser } from "../models";
 // import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
@@ -61,7 +62,7 @@ export const getHeroImages = async (req: Request, res: Response) => {
       data: heroImages,
     });
   } catch (error: any) {
-    console.error("Error fetching hero images:", error);
+    logger.error("Error fetching hero images:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch hero images",
@@ -91,7 +92,7 @@ export const getAdminHeroImages = async (req: Request, res: Response) => {
       data: heroImages,
     });
   } catch (error: any) {
-    console.error("Error fetching admin hero images:", error);
+    logger.error("Error fetching admin hero images:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch hero images",
@@ -129,7 +130,7 @@ export const getHeroImageById = async (req: Request, res: Response) => {
       data: heroImage,
     });
   } catch (error: any) {
-    console.error("Error fetching hero image:", error);
+    logger.error("Error fetching hero image:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch hero image",
@@ -213,7 +214,7 @@ export const createHeroImage = async (req: Request, res: Response) => {
       data: createdHeroImage,
     });
   } catch (error: any) {
-    console.error("Error creating hero image:", error);
+    logger.error("Error creating hero image:", error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -310,7 +311,7 @@ export const updateHeroImage = async (req: Request, res: Response) => {
       data: updatedHeroImage,
     });
   } catch (error: any) {
-    console.error("Error updating hero image:", error);
+    logger.error("Error updating hero image:", error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -359,7 +360,7 @@ export const deleteHeroImage = async (req: Request, res: Response) => {
       message: "Hero image deleted successfully",
     });
   } catch (error: any) {
-    console.error("Error deleting hero image:", error);
+    logger.error("Error deleting hero image:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete hero image",
@@ -408,7 +409,7 @@ export const reorderHeroImages = async (req: Request, res: Response) => {
       message: "Hero images reordered successfully",
     });
   } catch (error: any) {
-    console.error("Error reordering hero images:", error);
+    logger.error("Error reordering hero images:", error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({

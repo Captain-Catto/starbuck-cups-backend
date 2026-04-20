@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import sequelize from './database';
 
 const shouldSyncDatabaseOnStart = (): boolean => {
@@ -17,23 +18,23 @@ const shouldSyncDatabaseOnStart = (): boolean => {
  */
 export const initializeDatabase = async (): Promise<boolean> => {
   try {
-    console.log('🔄 Initializing database connection...');
+    logger.info('🔄 Initializing database connection...');
 
     // Test connection
     await sequelize.authenticate();
-    console.log('✅ Database connection established successfully.');
+    logger.info('✅ Database connection established successfully.');
 
     if (shouldSyncDatabaseOnStart()) {
-      console.log('🔄 Syncing database models...');
+      logger.info('🔄 Syncing database models...');
       await sequelize.sync({ alter: false });
-      console.log('✅ Database models synced successfully.');
+      logger.info('✅ Database models synced successfully.');
     } else {
-      console.log('ℹ️ Skipping model sync (DB_SYNC_ON_START=false)');
+      logger.info('ℹ️ Skipping model sync (DB_SYNC_ON_START=false)');
     }
 
     return true;
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
+    logger.error('❌ Database initialization failed:', error);
     throw error;
   }
 };
@@ -44,7 +45,7 @@ export const initializeDatabase = async (): Promise<boolean> => {
  */
 export const initializeSessionStore = async (sessionStore?: any): Promise<void> => {
   try {
-    console.log('🔄 Initializing session store...');
+    logger.info('🔄 Initializing session store...');
 
     const shouldSyncSessionStore =
       process.env.SESSION_STORE_SYNC_ON_START === "true" ||
@@ -53,12 +54,12 @@ export const initializeSessionStore = async (sessionStore?: any): Promise<void> 
 
     if (shouldSyncSessionStore && sessionStore?.sync) {
       await sessionStore.sync();
-      console.log("✅ Session store table synced.");
+      logger.info("✅ Session store table synced.");
     }
 
-    console.log('✅ Session store initialized.');
+    logger.info('✅ Session store initialized.');
   } catch (error) {
-    console.error('⚠️  Session store initialization warning:', error);
+    logger.error('⚠️  Session store initialization warning:', error);
     // Don't throw error as this is not critical
   }
 };
@@ -69,8 +70,8 @@ export const initializeSessionStore = async (sessionStore?: any): Promise<void> 
 export const cleanupDatabase = async (): Promise<void> => {
   try {
     await sequelize.close();
-    console.log('✅ Database connections closed.');
+    logger.info('✅ Database connections closed.');
   } catch (error) {
-    console.error('❌ Error during database cleanup:', error);
+    logger.error('❌ Error during database cleanup:', error);
   }
 };

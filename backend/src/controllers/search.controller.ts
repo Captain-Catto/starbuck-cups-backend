@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Controller xử lý các request search sử dụng MeiliSearch
  */
@@ -107,7 +108,7 @@ export class SearchController {
         },
       });
     } catch (error) {
-      console.error("❌ Error searching products:", error);
+      logger.error("❌ Error searching products:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm kiếm sản phẩm",
@@ -140,7 +141,7 @@ export class SearchController {
         })),
       });
     } catch (error) {
-      console.error("❌ Error in products autocomplete:", error);
+      logger.error("❌ Error in products autocomplete:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tự động hoàn thành sản phẩm",
@@ -165,7 +166,7 @@ export class SearchController {
         data: results.facetDistribution || {},
       });
     } catch (error) {
-      console.error("❌ Error getting product facets:", error);
+      logger.error("❌ Error getting product facets:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy facets sản phẩm",
@@ -202,7 +203,7 @@ export class SearchController {
         data: results,
       });
     } catch (error) {
-      console.error("❌ Error searching categories:", error);
+      logger.error("❌ Error searching categories:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm kiếm danh mục",
@@ -231,7 +232,7 @@ export class SearchController {
         })),
       });
     } catch (error) {
-      console.error("❌ Error in categories autocomplete:", error);
+      logger.error("❌ Error in categories autocomplete:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tự động hoàn thành danh mục",
@@ -265,7 +266,7 @@ export class SearchController {
         data: results,
       });
     } catch (error) {
-      console.error("❌ Error searching colors:", error);
+      logger.error("❌ Error searching colors:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm kiếm màu sắc",
@@ -295,7 +296,7 @@ export class SearchController {
         })),
       });
     } catch (error) {
-      console.error("❌ Error in colors autocomplete:", error);
+      logger.error("❌ Error in colors autocomplete:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tự động hoàn thành màu sắc",
@@ -332,7 +333,7 @@ export class SearchController {
         data: results,
       });
     } catch (error) {
-      console.error("❌ Error searching capacities:", error);
+      logger.error("❌ Error searching capacities:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm kiếm dung tích",
@@ -362,7 +363,7 @@ export class SearchController {
         })),
       });
     } catch (error) {
-      console.error("❌ Error in capacities autocomplete:", error);
+      logger.error("❌ Error in capacities autocomplete:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tự động hoàn thành dung tích",
@@ -395,7 +396,7 @@ export class SearchController {
         data: results,
       });
     } catch (error) {
-      console.error("❌ Error searching customers:", error);
+      logger.error("❌ Error searching customers:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm kiếm khách hàng",
@@ -424,7 +425,7 @@ export class SearchController {
         })),
       });
     } catch (error) {
-      console.error("❌ Error in customers autocomplete:", error);
+      logger.error("❌ Error in customers autocomplete:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tự động hoàn thành khách hàng",
@@ -472,7 +473,7 @@ export class SearchController {
         },
       });
     } catch (error) {
-      console.error("❌ Error in global search:", error);
+      logger.error("❌ Error in global search:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm kiếm toàn bộ",

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 'use strict';
 
 const { v4: uuidv4 } = require('uuid');
@@ -9,7 +10,7 @@ module.exports = {
     ))[0][0]?.id;
 
     if (!adminUserId) {
-      console.log('❌ No admin user found, skipping seeder');
+      logger.info('❌ No admin user found, skipping seeder');
       return;
     }
 
@@ -82,7 +83,7 @@ module.exports = {
       }
     ]);
 
-    console.log('✅ Categories and hero images created successfully!');
+    logger.info('✅ Categories and hero images created successfully!');
   },
 
   down: async (queryInterface, Sequelize) => {

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import {
   Capacity,
   Category,
@@ -92,12 +93,12 @@ export class MeiliSearchSyncMiddleware {
     };
 
     await meilisearchService.indexProducts([searchableProduct]);
-    console.log(`✅ Product ${productId} synced to MeiliSearch`);
+    logger.info(`✅ Product ${productId} synced to MeiliSearch`);
   }
 
   static async deleteProduct(productId: string): Promise<void> {
     await meilisearchService.deleteProduct(productId);
-    console.log(`✅ Product ${productId} deleted from MeiliSearch`);
+    logger.info(`✅ Product ${productId} deleted from MeiliSearch`);
   }
 
   static async syncCategoryById(categoryId: string): Promise<void> {
@@ -127,12 +128,12 @@ export class MeiliSearchSyncMiddleware {
     };
 
     await meilisearchService.indexCategories([searchableCategory]);
-    console.log(`✅ Category ${categoryId} synced to MeiliSearch`);
+    logger.info(`✅ Category ${categoryId} synced to MeiliSearch`);
   }
 
   static async deleteCategory(categoryId: string): Promise<void> {
     await meilisearchService.deleteCategory(categoryId);
-    console.log(`✅ Category ${categoryId} deleted from MeiliSearch`);
+    logger.info(`✅ Category ${categoryId} deleted from MeiliSearch`);
   }
 
   static async syncColorById(colorId: string): Promise<void> {
@@ -152,12 +153,12 @@ export class MeiliSearchSyncMiddleware {
     };
 
     await meilisearchService.indexColors([searchableColor]);
-    console.log(`✅ Color ${colorId} synced to MeiliSearch`);
+    logger.info(`✅ Color ${colorId} synced to MeiliSearch`);
   }
 
   static async deleteColor(colorId: string): Promise<void> {
     await meilisearchService.deleteColor(colorId);
-    console.log(`✅ Color ${colorId} deleted from MeiliSearch`);
+    logger.info(`✅ Color ${colorId} deleted from MeiliSearch`);
   }
 
   static async syncCapacityById(capacityId: string): Promise<void> {
@@ -177,12 +178,12 @@ export class MeiliSearchSyncMiddleware {
     };
 
     await meilisearchService.indexCapacities([searchableCapacity]);
-    console.log(`✅ Capacity ${capacityId} synced to MeiliSearch`);
+    logger.info(`✅ Capacity ${capacityId} synced to MeiliSearch`);
   }
 
   static async deleteCapacity(capacityId: string): Promise<void> {
     await meilisearchService.deleteCapacity(capacityId);
-    console.log(`✅ Capacity ${capacityId} deleted from MeiliSearch`);
+    logger.info(`✅ Capacity ${capacityId} deleted from MeiliSearch`);
   }
 
   static async syncCustomerById(customerId: string): Promise<void> {
@@ -217,11 +218,11 @@ export class MeiliSearchSyncMiddleware {
     };
 
     await meilisearchService.indexCustomers([searchableCustomer]);
-    console.log(`✅ Customer ${customerId} synced to MeiliSearch`);
+    logger.info(`✅ Customer ${customerId} synced to MeiliSearch`);
   }
 
   static async deleteCustomer(customerId: string): Promise<void> {
     await meilisearchService.deleteCustomer(customerId);
-    console.log(`✅ Customer ${customerId} deleted from MeiliSearch`);
+    logger.info(`✅ Customer ${customerId} deleted from MeiliSearch`);
   }
 }

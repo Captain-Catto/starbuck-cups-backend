@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Password utilities for hashing, comparing, and validating passwords
  */
@@ -18,7 +19,7 @@ export async function hashPassword(password: string): Promise<string> {
     const salt = await bcrypt.genSalt(SALT_ROUNDS);
     return await bcrypt.hash(password, salt);
   } catch (error) {
-    console.error('Password hashing error:', error);
+    logger.error('Password hashing error:', error);
     throw new Error('Failed to hash password');
   }
 }
@@ -30,7 +31,7 @@ export async function comparePassword(plainPassword: string, hashedPassword: str
   try {
     return await bcrypt.compare(plainPassword, hashedPassword);
   } catch (error) {
-    console.error('Password comparison error:', error);
+    logger.error('Password comparison error:', error);
     return false;
   }
 }

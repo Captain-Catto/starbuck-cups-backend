@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HTTPServer } from "http";
 import {
@@ -43,11 +44,11 @@ class SocketService {
     }
 
     if (args.length > 0) {
-      console.log(message, ...args);
+      logger.info(message, ...args);
       return;
     }
 
-    console.log(message);
+    logger.info(message);
   }
   
   public initialize(server: HTTPServer): void {
@@ -61,7 +62,7 @@ class SocketService {
             return;
           }
 
-          console.warn(`Socket CORS blocked origin: ${origin}`);
+          logger.warn(`Socket CORS blocked origin: ${origin}`);
           callback(new Error("Not allowed by CORS"));
         },
         methods: ["GET", "POST"],
@@ -85,7 +86,7 @@ class SocketService {
     const user = (socket as any).data?.user;
 
     if (!user) {
-      console.error("Socket connection without user data");
+      logger.error("Socket connection without user data");
       socket.disconnect();
       return;
     }
@@ -150,7 +151,7 @@ class SocketService {
     items: number;
   }): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 
@@ -183,7 +184,7 @@ class SocketService {
     totalAmount: number;
   }): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 
@@ -220,7 +221,7 @@ class SocketService {
 
       this.io.to("admin-room").emit("notification:count_update", count);
     } catch (error) {
-      console.error("Error sending notification count:", error);
+      logger.error("Error sending notification count:", error);
     }
   }
 
@@ -240,7 +241,7 @@ class SocketService {
       this.info(`📊 Socket unreadCount: ${unreadCount}`);
       return unreadCount;
     } catch (error) {
-      console.error("Error calculating unread notification count:", error);
+      logger.error("Error calculating unread notification count:", error);
       return 0; // Return 0 on error instead of random number
     }
   }
@@ -267,7 +268,7 @@ class SocketService {
     action: "registered" | "updated" | "deleted";
   }): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 
@@ -297,7 +298,7 @@ class SocketService {
     details?: string;
   }): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 
@@ -329,7 +330,7 @@ class SocketService {
     customerName: string;
   }): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 
@@ -363,7 +364,7 @@ class SocketService {
     action: "low_stock" | "out_of_stock" | "restocked";
   }): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 
@@ -397,7 +398,7 @@ class SocketService {
   // Emit settings update
   public emitSettingsUpdate(settings: any): void {
     if (!this.io) {
-      console.error("Socket.IO not initialized");
+      logger.error("Socket.IO not initialized");
       return;
     }
 

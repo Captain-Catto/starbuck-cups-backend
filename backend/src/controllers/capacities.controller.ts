@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Capacities management controller
  * Handles CRUD operations for capacity entities
@@ -113,7 +114,7 @@ export const getCapacities = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get capacities error:", error);
+    logger.error("Get capacities error:", error);
     return res
       .status(500)
       .json(
@@ -218,7 +219,7 @@ export const getCapacitiesForAdmin = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get capacities for admin error:", error);
+    logger.error("Get capacities for admin error:", error);
     return res
       .status(500)
       .json(
@@ -256,7 +257,7 @@ export const getCapacityById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(capacity));
   } catch (error) {
-    console.error("Get capacity error:", error);
+    logger.error("Get capacity error:", error);
     return res
       .status(500)
       .json(
@@ -351,7 +352,7 @@ export const createCapacity = async (req: Request, res: Response) => {
 
     return res.status(201).json(ResponseHelper.success(createdCapacity));
   } catch (error) {
-    console.error("Create capacity error:", error);
+    logger.error("Create capacity error:", error);
     return res
       .status(500)
       .json(
@@ -487,7 +488,7 @@ export const updateCapacity = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedCapacity));
   } catch (error) {
-    console.error("Update capacity error:", error);
+    logger.error("Update capacity error:", error);
     return res
       .status(500)
       .json(
@@ -552,7 +553,7 @@ export const toggleCapacityStatus = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(updatedCapacity));
   } catch (error) {
-    console.error("Toggle capacity status error:", error);
+    logger.error("Toggle capacity status error:", error);
     return res
       .status(500)
       .json(
@@ -596,7 +597,7 @@ export const deleteCapacity = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Delete capacity error:", error);
+    logger.error("Delete capacity error:", error);
     return res
       .status(500)
       .json(
@@ -642,7 +643,7 @@ export const searchCapacities = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(capacities));
   } catch (error) {
-    console.error("Search capacities error:", error);
+    logger.error("Search capacities error:", error);
     return res
       .status(500)
       .json(
@@ -707,7 +708,7 @@ export const getPublicCapacityById = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(capacity));
   } catch (error) {
-    console.error("Get public capacity by id error:", error);
+    logger.error("Get public capacity by id error:", error);
     return res
       .status(500)
       .json(
@@ -791,7 +792,7 @@ export const getPublicCapacities = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get public capacities error:", error);
+    logger.error("Get public capacities error:", error);
     return res
       .status(500)
       .json(

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger";
 /**
  * Products management controller - COMPLETE VERSION
  * Handles CRUD operations for product entities with soft delete and stock management
@@ -47,11 +48,11 @@ const invalidateProductCaches = async (): Promise<void> => {
     const revalidateSecret = process.env.REVALIDATE_SECRET;
     if (frontendUrl && revalidateSecret) {
       fetch(`${frontendUrl}/api/revalidate?secret=${revalidateSecret}&tag=products`).catch((err) => {
-        console.error("Failed to trigger frontend revalidation:", err);
+        logger.error("Failed to trigger frontend revalidation:", err);
       });
     }
   } catch (error) {
-    console.error("Failed to invalidate product caches:", error);
+    logger.error("Failed to invalidate product caches:", error);
   }
 };
 
@@ -560,7 +561,7 @@ export const getProducts = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get products error:", error);
+    logger.error("Get products error:", error);
     return res
       .status(500)
       .json(
@@ -640,7 +641,7 @@ export const getProductById = async (req: Request, res: Response) => {
       .status(200)
       .json(ResponseHelper.success(applyLocaleToProduct(product, locale, true)));
   } catch (error) {
-    console.error("Get product error:", error);
+    logger.error("Get product error:", error);
     return res
       .status(500)
       .json(
@@ -903,7 +904,7 @@ export const createProduct = async (req: Request, res: Response) => {
       .status(201)
       .json(ResponseHelper.success(applyLocaleToProduct(createdProduct, "vi", true)));
   } catch (error: any) {
-    console.error("Create product error:", error);
+    logger.error("Create product error:", error);
 
     if (
       error.message.includes("not found") ||
@@ -1311,7 +1312,7 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
       .status(200)
       .json(ResponseHelper.success(applyLocaleToProduct(updatedProduct, "vi", true)));
   } catch (error: any) {
-    console.error("Update product with files error:", error);
+    logger.error("Update product with files error:", error);
 
     if (
       error.message.includes("not found") ||
@@ -1640,7 +1641,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       .status(200)
       .json(ResponseHelper.success(applyLocaleToProduct(updatedProduct, "vi", true)));
   } catch (error: any) {
-    console.error("Update product error:", error);
+    logger.error("Update product error:", error);
 
     if (
       error.message.includes("not found") ||
@@ -1695,7 +1696,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
         ResponseHelper.success({ message: "Product deleted successfully" })
       );
   } catch (error) {
-    console.error("Delete product error:", error);
+    logger.error("Delete product error:", error);
     return res
       .status(500)
       .json(
@@ -1750,7 +1751,7 @@ export const reactivateProduct = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Reactivate product error:", error);
+    logger.error("Reactivate product error:", error);
     return res
       .status(500)
       .json(
@@ -1812,7 +1813,7 @@ export const updateProductStock = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Update product stock error:", error);
+    logger.error("Update product stock error:", error);
     return res
       .status(500)
       .json(
@@ -1860,7 +1861,7 @@ export const toggleProductStatus = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Toggle product status error:", error);
+    logger.error("Toggle product status error:", error);
     return res
       .status(500)
       .json(
@@ -1989,7 +1990,7 @@ export const searchProducts = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Search products error:", error);
+    logger.error("Search products error:", error);
     return res
       .status(500)
       .json(
@@ -2076,7 +2077,7 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get low stock products error:", error);
+    logger.error("Get low stock products error:", error);
     return res
       .status(500)
       .json(
@@ -2360,7 +2361,7 @@ export const getPublicProducts = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Get public products error:", error);
+    logger.error("Get public products error:", error);
     return res
       .status(500)
       .json(
@@ -2464,7 +2465,7 @@ export const getPublicProductById = async (req: Request, res: Response) => {
       .status(200)
       .json(ResponseHelper.success(applyLocaleToProduct(product, locale)));
   } catch (error) {
-    console.error("Get public product error:", error);
+    logger.error("Get public product error:", error);
     return res
       .status(500)
       .json(
@@ -2516,7 +2517,7 @@ export const getFeaturedProductsStats = async (req: Request, res: Response) => {
 
     return res.status(200).json(ResponseHelper.success(stats));
   } catch (error) {
-    console.error("Get featured products stats error:", error);
+    logger.error("Get featured products stats error:", error);
     return res
       .status(500)
       .json(
@@ -2599,7 +2600,7 @@ export const reorderProductImages = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("Reorder product images error:", error);
+    logger.error("Reorder product images error:", error);
     return res
       .status(500)
       .json(
