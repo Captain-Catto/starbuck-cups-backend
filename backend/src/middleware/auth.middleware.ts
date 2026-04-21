@@ -3,7 +3,7 @@ import { logger } from "@/utils/logger";
  * Authentication and authorization middleware
  */
 import { Request, Response, NextFunction } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import { createClient } from "redis";
 import { AdminRole } from "../models/AdminUser";
@@ -242,8 +242,7 @@ export const rateLimitAuth = rateLimit({
   skipSuccessfulRequests: true,
   passOnStoreError: true,
   store: createRateLimitStore("auth_rate_limit:"),
-  keyGenerator: (req: Request): string =>
-    req.ip || req.socket.remoteAddress || "unknown",
+  keyGenerator: (req: Request): string => ipKeyGenerator(req),
   handler: (_req, res) => {
     return res
       .status(429)
@@ -268,8 +267,7 @@ export const rateLimitPublicSubmit = rateLimit({
   legacyHeaders: false,
   passOnStoreError: true,
   store: createRateLimitStore("public_submit_rate_limit:"),
-  keyGenerator: (req: Request): string =>
-    req.ip || req.socket.remoteAddress || "unknown",
+  keyGenerator: (req: Request): string => ipKeyGenerator(req),
   handler: (_req, res) => {
     return res
       .status(429)
@@ -294,8 +292,7 @@ export const rateLimitAnalytics = rateLimit({
   legacyHeaders: false,
   passOnStoreError: true,
   store: createRateLimitStore("analytics_rate_limit:"),
-  keyGenerator: (req: Request): string =>
-    req.ip || req.socket.remoteAddress || "unknown",
+  keyGenerator: (req: Request): string => ipKeyGenerator(req),
   handler: (_req, res) => {
     return res
       .status(429)
