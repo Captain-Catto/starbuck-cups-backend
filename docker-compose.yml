@@ -61,6 +61,7 @@ services:
 
       DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/starbucks_shop
       DB_SSL: "false"
+      DB_SCHEMA: ${DB_SCHEMA:-nhhas72k_starbucks_shop}
 
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_MASTER_KEY: ${MEILI_MASTER_KEY:-change-this-meili-master-key}

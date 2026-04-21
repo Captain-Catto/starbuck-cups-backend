@@ -19,6 +19,8 @@ const dbPoolMin = parsePoolNumber(process.env.DB_POOL_MIN, 0);
 const dbPoolAcquire = parsePoolNumber(process.env.DB_POOL_ACQUIRE_MS, 30000);
 const dbPoolIdle = parsePoolNumber(process.env.DB_POOL_IDLE_MS, 10000);
 
+const dbSchema = process.env.DB_SCHEMA;
+
 const baseConfig: Options = {
   dialect: "postgres",
   logging: process.env.NODE_ENV === "development" ? logger.info : false,
@@ -31,17 +33,12 @@ const baseConfig: Options = {
   define: {
     timestamps: true,
     underscored: true,
+    ...(dbSchema ? { schema: dbSchema } : {}),
   },
-  ...(shouldUseSSL
-    ? {
-        dialectOptions: {
-          ssl: {
-            require: true,
-            rejectUnauthorized: false,
-          },
-        },
-      }
-    : {}),
+  dialectOptions: {
+    ...(shouldUseSSL ? { ssl: { require: true, rejectUnauthorized: false } } : {}),
+    ...(dbSchema ? { options: `-c search_path=${dbSchema},public` } : {}),
+  },
 };
 
 const sequelize = process.env.DATABASE_URL
