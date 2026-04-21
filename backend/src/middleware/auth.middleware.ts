@@ -242,7 +242,8 @@ export const rateLimitAuth = rateLimit({
   skipSuccessfulRequests: true,
   passOnStoreError: true,
   store: createRateLimitStore("auth_rate_limit:"),
-  keyGenerator: ipKeyGenerator,
+  keyGenerator: (req: Request): string =>
+    ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown"),
   handler: (_req, res) => {
     return res
       .status(429)
@@ -267,7 +268,8 @@ export const rateLimitPublicSubmit = rateLimit({
   legacyHeaders: false,
   passOnStoreError: true,
   store: createRateLimitStore("public_submit_rate_limit:"),
-  keyGenerator: ipKeyGenerator,
+  keyGenerator: (req: Request): string =>
+    ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown"),
   handler: (_req, res) => {
     return res
       .status(429)
@@ -292,7 +294,8 @@ export const rateLimitAnalytics = rateLimit({
   legacyHeaders: false,
   passOnStoreError: true,
   store: createRateLimitStore("analytics_rate_limit:"),
-  keyGenerator: ipKeyGenerator,
+  keyGenerator: (req: Request): string =>
+    ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown"),
   handler: (_req, res) => {
     return res
       .status(429)
