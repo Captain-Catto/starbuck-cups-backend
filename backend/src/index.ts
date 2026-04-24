@@ -49,6 +49,7 @@ import heroImagesRoutes from "./routes/hero-images.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import promotionalBannersRoutes from "./routes/promotional-banners.routes";
 import settingsRoutes from "./routes/settings.routes";
+import newsRoutes from "./routes/news.routes";
 import { searchRoutes } from "./routes/search.routes";
 
 // Import Socket.IO service
@@ -158,6 +159,7 @@ app.use("/api/categories", categoriesRoutes);
 app.use("/api/products", productsRoutes);
 app.use("/api/hero-images", heroImagesRoutes);
 app.use("/api/promotional-banners", promotionalBannersRoutes);
+app.use("/api/news", newsRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/api/settings", settingsRoutes); // Support double /api prefix from frontend
 app.use("/api/search", searchRoutes);

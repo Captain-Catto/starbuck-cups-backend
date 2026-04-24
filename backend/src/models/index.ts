@@ -26,6 +26,8 @@ import { HeroImage, HeroImageModel } from "./HeroImage";
 import { ProductAnalytics, ProductAnalyticsModel } from "./ProductAnalytics";
 import { PromotionalBanner, PromotionalBannerModel } from "./PromotionalBanner";
 import { Setting, SettingModel } from "./Setting";
+import { News, NewsModel, NewsStatus } from "./News";
+import { NewsTranslation, NewsTranslationModel, NewsLocale } from "./NewsTranslation";
 
 // Initialize all models
 const models = {
@@ -50,6 +52,8 @@ const models = {
 
   PromotionalBanner: PromotionalBannerModel(sequelize),
   Setting: SettingModel(sequelize),
+  News: NewsModel(sequelize),
+  NewsTranslation: NewsTranslationModel(sequelize),
 };
 
 // Define associations
@@ -87,7 +91,11 @@ export {
   ProductAnalytics,
 
   PromotionalBanner,
-  Setting
+  Setting,
+  News,
+  NewsStatus,
+  NewsTranslation,
+  NewsLocale,
 };
 
 export default models;
