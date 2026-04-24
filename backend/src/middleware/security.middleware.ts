@@ -121,8 +121,10 @@ export const requestLogger = (
     // Log response when finished
     res.on("finish", () => {
       const duration = Date.now() - start;
-      if (res.statusCode >= 400) {
+      if (res.statusCode >= 500) {
         logger.error(`${res.statusCode} ${req.method} ${req.url} - ${duration}ms`);
+      } else if (res.statusCode >= 400) {
+        logger.warn(`${res.statusCode} ${req.method} ${req.url} - ${duration}ms`);
       } else {
         logger.info(`${res.statusCode} ${req.method} ${req.url} - ${duration}ms`);
       }
@@ -216,10 +218,9 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  logger.error("Error occurred:", error);
-
   // Handle CORS errors
   if (error.message === "Not allowed by CORS") {
+    logger.error(`CORS rejected: ${req.method} ${req.url} origin=${req.headers.origin}`);
     res
       .status(403)
       .json(ResponseHelper.error("CORS policy violation", "CORS_ERROR"));
@@ -228,6 +229,7 @@ export const errorHandler = (
 
   // Handle JSON parsing errors
   if (error.type === "entity.parse.failed") {
+    logger.warn(`Invalid JSON: ${req.method} ${req.url}`);
     res
       .status(400)
       .json(ResponseHelper.error("Invalid JSON format", "INVALID_JSON"));
@@ -236,6 +238,7 @@ export const errorHandler = (
 
   // Handle validation errors
   if (error.name === "ValidationError") {
+    logger.warn(`Validation error: ${req.method} ${req.url}`);
     res
       .status(400)
       .json(
@@ -250,6 +253,7 @@ export const errorHandler = (
 
   // Handle database errors
   if (error.code === "P2002") {
+    logger.warn(`Duplicate entry: ${req.method} ${req.url}`);
     res
       .status(409)
       .json(
@@ -259,11 +263,13 @@ export const errorHandler = (
   }
 
   if (error.code === "P2025") {
+    logger.warn(`Record not found: ${req.method} ${req.url}`);
     res.status(404).json(ResponseHelper.error("Record not found", "NOT_FOUND"));
     return;
   }
 
-  // Default server error
+  // Real server error — log and capture in Sentry
+  logger.error("Server error:", error);
   res
     .status(500)
     .json(

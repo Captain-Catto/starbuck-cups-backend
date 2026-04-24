@@ -3,6 +3,17 @@ import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
+const BOT_PATH_PATTERNS = [
+  /^\/.git\//,
+  /^\/board\.cgi/,
+  /^\/cgi-bin\//,
+  /^\/wp-(?:admin|login|includes)/,
+  /^\/phpMyAdmin/,
+  /^\/\.env/,
+  /^\/xmlrpc\.php/,
+  /^\/admin\.php/,
+];
+
 // Ensure to call this before importing any other modules!
 Sentry.init({
   dsn: process.env.SENTRY_DSN || "",
@@ -11,6 +22,23 @@ Sentry.init({
   ],
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
   profilesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+  beforeSend(event, hint) {
+    const url = event.request?.url ?? "";
+    const method = event.request?.method ?? "";
+
+    // Drop bot scanner paths
+    if (BOT_PATH_PATTERNS.some((p) => p.test(url))) return null;
+
+    // Drop WebDAV/HEAD noise from scanners
+    if (method === "PROPFIND" || method === "OPTIONS") return null;
+
+    const err = hint.originalException;
+    // Drop expected auth errors
+    if (err instanceof Error && err.name === "TokenExpiredError") return null;
+    if (err instanceof Error && err.name === "JsonWebTokenError") return null;
+
+    return event;
+  },
 });
 
 import express from "express";
@@ -107,9 +135,12 @@ app.set("trust proxy", parseTrustProxy());
 app.use(securityHeaders);
 app.use(permissionsPolicy);
 app.use(corsMiddleware);
+// Suppress common bot/scanner paths before they hit logger or Sentry
 app.get("/favicon.ico", (_req, res) => res.status(204).end());
+app.get("/robots.txt", (_req, res) => res.status(200).type("text/plain").send("User-agent: *\nDisallow: /api/\n"));
 app.get("/security.txt", (_req, res) => res.status(204).end());
 app.get("/.well-known/security.txt", (_req, res) => res.status(204).end());
+app.all(/^\/(\.git|\.env|wp-admin|wp-login|phpMyAdmin|board\.cgi|xmlrpc\.php|admin\.php|cgi-bin)/, (_req, res) => res.status(204).end());
 app.use(requestLogger);
 app.use(requestSizeLimit);
 app.use(apiVersioning);
@@ -122,8 +153,14 @@ app.use(cookieParser()); // Add cookie parser middleware
 // Initialize Redis client for sessions
 const redisClient = createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
+  socket: {
+    reconnectStrategy: (retries) => Math.min(retries * 100, 5000),
+    connectTimeout: 10000,
+  },
 });
-redisClient.connect().catch(logger.error);
+redisClient.on("error", (err) => logger.warn("Redis client error:", err.message));
+redisClient.on("reconnecting", () => logger.warn("Redis reconnecting..."));
+redisClient.connect().catch((err) => logger.error("Redis initial connect failed:", err));
 
 // Session middleware (Redis store)
 const sessionStore = new RedisStore({
