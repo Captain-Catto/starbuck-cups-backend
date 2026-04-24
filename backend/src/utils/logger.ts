@@ -1,6 +1,8 @@
 import winston from "winston";
+import Transport from "winston-transport";
 import DailyRotateFile from "winston-daily-rotate-file";
 import { AsyncLocalStorage } from "async_hooks";
+import * as Sentry from "@sentry/node";
 
 export const loggerContext = new AsyncLocalStorage<{ requestId: string }>();
 
@@ -14,6 +16,29 @@ const customFormat = winston.format.printf(({ level, message, timestamp, ...meta
   
   return `[${timestamp}] ${level.toUpperCase()} ${requestId}${message}${metaStr}`;
 });
+
+class SentryTransport extends Transport {
+  log(info: any, callback: () => void) {
+    setImmediate(() => this.emit("logged", info));
+
+    const splat = (info[Symbol.for("splat")] as unknown[]) ?? [];
+    const error = splat[0];
+
+    if (error instanceof Error) {
+      Sentry.withScope((scope) => {
+        scope.setExtra("logger_message", info.message);
+        Sentry.captureException(error);
+      });
+    } else {
+      Sentry.captureMessage(
+        splat.length ? `${info.message} ${JSON.stringify(splat)}` : info.message,
+        "error"
+      );
+    }
+
+    callback();
+  }
+}
 
 export const logger = winston.createLogger({
   level: process.env.NODE_ENV === "production" ? "info" : "debug",
@@ -44,5 +69,6 @@ export const logger = winston.createLogger({
       maxSize: "20m",
       maxFiles: "14d",
     }),
+    new SentryTransport({ level: "error" }),
   ],
 });
