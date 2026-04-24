@@ -100,12 +100,12 @@ export const NewsModel = (sequelize: Sequelize) => {
         field: "deleted_at",
       },
       deletedByAdminId: {
-        type: DataTypes.UUID,
+        type: DataTypes.CHAR(36),
         allowNull: true,
         field: "deleted_by_admin_id",
       },
       createdByAdminId: {
-        type: DataTypes.UUID,
+        type: DataTypes.CHAR(36),
         allowNull: false,
         field: "created_by_admin_id",
       },

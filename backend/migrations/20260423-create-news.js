@@ -42,14 +42,14 @@ module.exports = {
         allowNull: true,
       },
       deleted_by_admin_id: {
-        type: Sequelize.UUID,
+        type: Sequelize.CHAR(36),
         allowNull: true,
         references: { model: "admin_users", key: "id" },
         onUpdate: "CASCADE",
         onDelete: "SET NULL",
       },
       created_by_admin_id: {
-        type: Sequelize.UUID,
+        type: Sequelize.CHAR(36),
         allowNull: false,
         references: { model: "admin_users", key: "id" },
         onUpdate: "CASCADE",
