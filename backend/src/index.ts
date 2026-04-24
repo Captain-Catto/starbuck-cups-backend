@@ -107,6 +107,7 @@ app.set("trust proxy", parseTrustProxy());
 app.use(securityHeaders);
 app.use(permissionsPolicy);
 app.use(corsMiddleware);
+app.get("/favicon.ico", (_req, res) => res.status(204).end());
 app.use(requestLogger);
 app.use(requestSizeLimit);
 app.use(apiVersioning);
