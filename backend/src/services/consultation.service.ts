@@ -138,6 +138,7 @@ export class ConsultationService {
 
       const result = await Consultation.findAndCountAll({
         where,
+        distinct: true,
         include: [
           {
             model: ConsultationItem,
