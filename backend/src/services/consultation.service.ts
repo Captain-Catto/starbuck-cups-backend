@@ -93,7 +93,7 @@ export class ConsultationService {
         }
       );
 
-      return consultation;
+      return consultationWithItems!;
     } catch (error: any) {
       logger.error("Database error creating consultation:", error);
       // Preserve original error message for validation errors

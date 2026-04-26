@@ -159,7 +159,7 @@ class SocketService {
       id: `consultation_${consultationData.id}_${Date.now()}`,
       type: "consultation",
       title: "Tư vấn mới",
-      message: `${consultationData.customerName} đã gửi yêu cầu tư vấn`,
+      message: `${consultationData.customerName} đã gửi yêu cầu tư vấn về ${consultationData.items} sản phẩm`,
       data: {
         consultationId: consultationData.id,
         customerName: consultationData.customerName,

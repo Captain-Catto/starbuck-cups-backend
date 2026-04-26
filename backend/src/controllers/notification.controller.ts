@@ -47,9 +47,7 @@ export const getNotifications = async (req: Request, res: Response) => {
           data: {
             consultationId: consultation.id,
             customerName: consultation.customerName,
-            itemCount: itemCount,
-            status: consultation.status,
-            phoneNumber: consultation.phoneNumber
+            items: itemCount,
           }
         };
       });
