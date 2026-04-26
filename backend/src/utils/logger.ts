@@ -6,6 +6,11 @@ import * as Sentry from "@sentry/node";
 
 export const loggerContext = new AsyncLocalStorage<{ requestId: string }>();
 
+const toGMT7 = () => {
+  const d = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return d.toISOString().replace("T", " ").slice(0, 19);
+};
+
 // Define custom printf format
 const customFormat = winston.format.printf(({ level, message, timestamp, ...meta }) => {
   const store = loggerContext.getStore();
@@ -43,7 +48,7 @@ class SentryTransport extends Transport {
 export const logger = winston.createLogger({
   level: process.env.NODE_ENV === "production" ? "info" : "debug",
   format: winston.format.combine(
-    winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+    winston.format.timestamp({ format: toGMT7 }),
     winston.format.errors({ stack: true }),
     winston.format.splat(),
     customFormat
