@@ -49,13 +49,7 @@ export const logger = winston.createLogger({
     customFormat
   ),
   transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-        winston.format.colorize({ level: true }),
-        customFormat
-      ),
-    }),
+    new winston.transports.Console(),
     new DailyRotateFile({
       filename: "logs/error-%DATE%.log",
       datePattern: "YYYY-MM-DD",
