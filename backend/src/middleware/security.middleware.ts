@@ -109,7 +109,7 @@ export const requestLogger = (
   (req as any).id = requestId;
 
   loggerContext.run({ requestId }, () => {
-    if (!requestLoggingEnabled) {
+    if (!requestLoggingEnabled || req.path === "/health") {
       return next();
     }
 
