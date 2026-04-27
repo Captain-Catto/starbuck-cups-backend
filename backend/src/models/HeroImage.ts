@@ -28,7 +28,7 @@ export class HeroImage extends Model<HeroImageAttributes, HeroImageCreationAttri
   declare createdByAdminId: string;
 
   // Associations
-  public createdByAdmin?: any;
+  declare createdByAdmin?: any;
 
   static associate(models: any) {
     HeroImage.belongsTo(models.AdminUser, {

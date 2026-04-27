@@ -35,7 +35,7 @@ export class Consultation extends Model<ConsultationAttributes, ConsultationCrea
   declare updatedAt: Date;
 
   // Associations
-  public consultationItems?: any[];
+  declare consultationItems?: any[];
 
   static associate(models: any) {
     Consultation.hasMany(models.ConsultationItem, {

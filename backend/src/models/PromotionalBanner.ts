@@ -45,7 +45,7 @@ export class PromotionalBanner
   declare createdByAdminId: string;
 
   // Associations
-  public createdByAdmin?: any;
+  declare createdByAdmin?: any;
 
   static associate(models: any) {
     PromotionalBanner.belongsTo(models.AdminUser, {

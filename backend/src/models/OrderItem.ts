@@ -24,8 +24,8 @@ export class OrderItem extends Model<OrderItemAttributes, OrderItemCreationAttri
   declare updatedAt: Date;
 
   // Associations
-  public order?: any;
-  public product?: any;
+  declare order?: any;
+  declare product?: any;
 
   static associate(models: any) {
     OrderItem.belongsTo(models.Order, {

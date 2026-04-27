@@ -23,12 +23,12 @@ export class CustomerPhone
   declare customerId: string;
   declare phoneNumber: string;
   declare isMain: boolean;
-  public label?: string;
+  declare label?: string;
   declare createdAt: Date;
   declare updatedAt: Date;
 
   // Associations
-  public customer?: any;
+  declare customer?: any;
 
   static associate(models: any) {
     CustomerPhone.belongsTo(models.Customer, {

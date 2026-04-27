@@ -18,20 +18,20 @@ export interface CustomerCreationAttributes extends Omit<CustomerAttributes, 'id
 
 export class Customer extends Model<CustomerAttributes, CustomerCreationAttributes> implements CustomerAttributes {
   declare id: string;
-  public messengerId?: string;
-  public zaloId?: string;
+  declare messengerId?: string;
+  declare zaloId?: string;
   declare fullName: string;
-  public notes?: string;
+  declare notes?: string;
   declare isVip: boolean;
   declare createdAt: Date;
   declare updatedAt: Date;
   declare createdByAdminId: string;
 
   // Associations
-  public addresses?: any[];
-  public createdByAdmin?: any;
-  public orders?: any[];
-  public customerPhones?: any[];
+  declare addresses?: any[];
+  declare createdByAdmin?: any;
+  declare orders?: any[];
+  declare customerPhones?: any[];
 
   // Helper method to get main phone
   getMainPhone(): string | null {

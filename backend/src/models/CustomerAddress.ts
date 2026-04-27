@@ -21,16 +21,16 @@ export class CustomerAddress extends Model<CustomerAddressAttributes, CustomerAd
   declare id: string;
   declare customerId: string;
   declare addressLine: string;
-  public ward?: string;
-  public district?: string;
+  declare ward?: string;
+  declare district?: string;
   declare city: string;
-  public postalCode?: string;
+  declare postalCode?: string;
   declare isDefault: boolean;
   declare createdAt: Date;
   declare updatedAt: Date;
 
   // Associations
-  public customer?: any;
+  declare customer?: any;
 
   static associate(models: any) {
     CustomerAddress.belongsTo(models.Customer, {

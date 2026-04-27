@@ -46,20 +46,20 @@ export class Order extends Model<OrderAttributes, OrderCreationAttributes> imple
   declare status: OrderStatus;
   declare totalAmount: number;
   declare shippingCost: number;
-  public customDescription?: string;
-  public notes?: string;
+  declare customDescription?: string;
+  declare notes?: string;
   declare createdAt: Date;
   declare updatedAt: Date;
-  public confirmedAt?: Date;
-  public completedAt?: Date;
-  public deliveryAddress?: any;
+  declare confirmedAt?: Date;
+  declare completedAt?: Date;
+  declare deliveryAddress?: any;
   declare originalShippingCost: number;
   declare shippingDiscount: number;
-  public customerMainPhone?: string;
+  declare customerMainPhone?: string;
 
   // Associations
-  public items?: any[];
-  public customer?: any;
+  declare items?: any[];
+  declare customer?: any;
 
   static associate(models: any) {
     Order.hasMany(models.OrderItem, {

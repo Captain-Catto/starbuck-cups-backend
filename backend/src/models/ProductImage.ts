@@ -18,13 +18,13 @@ export class ProductImage extends Model<ProductImageAttributes, ProductImageCrea
   declare id: string;
   declare productId: string;
   declare url: string;
-  public altText?: string;
+  declare altText?: string;
   declare order: number;
   declare createdAt: Date;
   declare updatedAt: Date;
 
   // Associations
-  public product?: any;
+  declare product?: any;
 
   static associate(models: any) {
     ProductImage.belongsTo(models.Product, {

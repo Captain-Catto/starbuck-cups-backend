@@ -26,8 +26,8 @@ export class ConsultationItem extends Model<ConsultationItemAttributes, Consulta
   declare createdAt: Date;
 
   // Associations
-  public consultation?: any;
-  public product?: any;
+  declare consultation?: any;
+  declare product?: any;
 
   static associate(models: any) {
     ConsultationItem.belongsTo(models.Consultation, {
