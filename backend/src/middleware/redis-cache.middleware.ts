@@ -108,14 +108,14 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
 export const clearCachePrefix = async (prefix: string): Promise<void> => {
   try {
     const pattern = `api_cache:${prefix}*`;
-    let cursor = 0;
+    let cursor = "0";
     const keysToDelete: string[] = [];
 
     do {
       const reply = await redisClient.scan(cursor, { MATCH: pattern, COUNT: 100 });
       cursor = reply.cursor;
       keysToDelete.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== "0");
 
     if (keysToDelete.length > 0) {
       await redisClient.del(keysToDelete);
