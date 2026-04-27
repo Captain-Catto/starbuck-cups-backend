@@ -2315,13 +2315,9 @@ export const getPublicProducts = async (req: Request, res: Response) => {
             "metaDescription",
           ],
           required: false,
-          ...(search
-            ? {
-                where: {
-                  locale: { [Op.in]: getSearchableLocales(requestedLocale) },
-                },
-              }
-            : {}),
+          where: {
+            locale: { [Op.in]: getSearchableLocales(requestedLocale) },
+          },
         },
       ],
       attributes: [
@@ -2439,6 +2435,9 @@ export const getPublicProductById = async (req: Request, res: Response) => {
             "metaDescription",
           ],
           required: false,
+          where: {
+            locale: { [Op.in]: getSearchableLocales(locale) },
+          },
         },
       ],
       attributes: [

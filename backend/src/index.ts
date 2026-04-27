@@ -42,6 +42,7 @@ Sentry.init({
 });
 
 import express from "express";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
@@ -144,6 +145,9 @@ app.all(/^\/(\.git|\.env|wp-admin|wp-login|phpMyAdmin|board\.cgi|xmlrpc\.php|adm
 app.use(requestLogger);
 app.use(requestSizeLimit);
 app.use(apiVersioning);
+
+// Gzip compression for all responses
+app.use(compression());
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
