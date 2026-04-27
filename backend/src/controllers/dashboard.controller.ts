@@ -2,7 +2,7 @@ import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models } from "../models";
 
-const { Order, OrderItem, Customer, Product, Consultation } = models;
+const { Order, Customer, Product, Consultation } = models;
 
 import { ResponseHelper } from "../types/api";
 import { Op, QueryTypes } from "sequelize";
@@ -268,29 +268,40 @@ export const getStatistics = async (req: Request, res: Response) => {
         },
       }),
 
-      // Top selling products
+      // Top selling products (single JOIN query, no N+1)
       sequelize.query(
-        `SELECT 
+        `SELECT
           oi.product_id as "productId",
+          p.name as "productName",
+          p.slug as "productSlug",
+          cap.name as "capacityName",
           SUM(oi.quantity) as "totalQuantity"
-        FROM order_items oi 
-        INNER JOIN orders o ON oi.order_id = o.id 
-        WHERE o.status = 'DELIVERED' 
-        GROUP BY oi.product_id 
-        ORDER BY SUM(oi.quantity) DESC 
+        FROM order_items oi
+        INNER JOIN orders o ON oi.order_id = o.id
+        INNER JOIN products p ON oi.product_id = p.id
+        LEFT JOIN capacities cap ON p.capacity_id = cap.id
+        WHERE o.status = 'DELIVERED'
+        GROUP BY oi.product_id, p.name, p.slug, cap.name
+        ORDER BY SUM(oi.quantity) DESC
         LIMIT 10`,
         { type: QueryTypes.SELECT }
       ),
 
-      // Top customers by total spent
+      // Top customers by total spent (single JOIN query, no N+1)
       sequelize.query(
-        `SELECT 
-          customer_id as "customerId",
-          SUM(total_amount) as "totalSpent"
-        FROM orders 
-        WHERE status = 'DELIVERED' 
-        GROUP BY customer_id 
-        ORDER BY SUM(total_amount) DESC 
+        `SELECT
+          o.customer_id as "customerId",
+          c.full_name as "fullName",
+          c.messenger_id as "messengerId",
+          c.zalo_id as "zaloId",
+          SUM(o.total_amount) as "totalSpent",
+          (SELECT cp.phone_number FROM customer_phones cp
+           WHERE cp.customer_id = o.customer_id AND cp.is_main = true LIMIT 1) as "mainPhone"
+        FROM orders o
+        INNER JOIN customers c ON o.customer_id = c.id
+        WHERE o.status = 'DELIVERED'
+        GROUP BY o.customer_id, c.full_name, c.messenger_id, c.zalo_id
+        ORDER BY SUM(o.total_amount) DESC
         LIMIT 10`,
         { type: QueryTypes.SELECT }
       ),
@@ -360,57 +371,22 @@ export const getStatistics = async (req: Request, res: Response) => {
       productAnalyticsService.getAnalyticsSummary(),
     ]);
 
-    // Get product details for top selling products
-    const topProductsDetails = await Promise.all(
-      (topSellingProducts as any[]).map(async (item: any) => {
-        const product = await Product.findOne({
-          where: { id: item.productId },
-          attributes: ["id", "name"],
-          include: [
-            {
-              association: "capacity",
-              attributes: ["name"],
-            },
-          ],
-        });
-        return {
-          id: item.productId,
-          name: product?.name || "Unknown",
-          capacity: product?.capacity?.name || "Unknown",
-          totalSold: item.totalQuantity || 0,
-        };
-      })
-    );
+    const topProductsDetails = (topSellingProducts as any[]).map((item: any) => ({
+      id: item.productId,
+      name: item.productName || "Unknown",
+      slug: item.productSlug,
+      capacity: item.capacityName || "Unknown",
+      totalSold: Number(item.totalQuantity) || 0,
+    }));
 
-    // Get customer details for top customers
-    const topCustomersDetails = await Promise.all(
-      (topCustomers as TopCustomerQueryResult[]).map(async (item) => {
-        const customer = await Customer.findOne({
-          where: { id: item.customerId },
-          attributes: ["id", "fullName", "messengerId", "zaloId"],
-          include: [
-            {
-              association: "customerPhones",
-              attributes: ["phoneNumber", "isMain"],
-            },
-          ],
-        });
-
-        const mainPhone = customer?.customerPhones?.find(
-          (phone: any) => phone.isMain
-        );
-        const phoneNumber = mainPhone ? mainPhone.phoneNumber : null;
-
-        return {
-          id: item.customerId,
-          name: customer?.fullName || "Unknown",
-          phone: phoneNumber || "Unknown",
-          messengerId: customer?.messengerId || null,
-          zaloId: customer?.zaloId || null,
-          totalSpent: Number((item as any).totalSpent || 0),
-        };
-      })
-    );
+    const topCustomersDetails = (topCustomers as any[]).map((item: any) => ({
+      id: item.customerId,
+      name: item.fullName || "Unknown",
+      phone: item.mainPhone || "Unknown",
+      messengerId: item.messengerId || null,
+      zaloId: item.zaloId || null,
+      totalSpent: Number(item.totalSpent || 0),
+    }));
 
     // Calculate growth percentages
     const salesGrowth =
@@ -459,9 +435,9 @@ export const getStatistics = async (req: Request, res: Response) => {
         revenue: Number(item.revenue || 0),
       })),
       productAnalytics: {
-        topClickedProducts: topClickedProducts,
+        topClickedProducts: topClickedProducts.data,
         topAddToCartProducts: topAddToCartProducts,
-        topConversionProducts: topConversionProducts,
+        topConversionProducts: topConversionProducts.data,
         summary: {
           totalClicks: analyticsummary.totalClicks,
           totalAddToCarts: analyticsummary.totalAddToCarts,
@@ -496,57 +472,33 @@ export const getTopSellingProducts = async (req: Request, res: Response) => {
     const topSellingProducts = await sequelize.query(
       `SELECT
         oi.product_id as "productId",
+        p.name as "productName",
+        p.slug as "productSlug",
+        cap.name as "capacityName",
         SUM(oi.quantity) as "totalQuantity"
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
+      INNER JOIN products p ON oi.product_id = p.id
+      LEFT JOIN capacities cap ON p.capacity_id = cap.id
       WHERE o.status = 'DELIVERED'
-      GROUP BY oi.product_id
+      GROUP BY oi.product_id, p.name, p.slug, cap.name
       ORDER BY SUM(oi.quantity) DESC
       LIMIT ? OFFSET ?`,
-      {
-        replacements: [limit, offset],
-        type: QueryTypes.SELECT
-      }
+      { replacements: [limit, offset], type: QueryTypes.SELECT }
     );
 
-    // Get product details
-    const topProductsDetails = await Promise.all(
-      (topSellingProducts as any[]).map(async (item: any) => {
-        const product = await Product.findByPk(item.productId, {
-          attributes: ["id", "name", "slug"],
-          include: [
-            {
-              association: "capacity",
-              attributes: ["name"],
-            },
-          ],
-        });
-
-        if (!product) {
-          return null;
-        }
-
-        return {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          capacity: (product as any).capacity?.name || "N/A",
-          totalSold: parseInt(item.totalQuantity),
-        };
-      })
-    );
-
-    // Filter out null products
-    const validProducts = topProductsDetails.filter((p) => p !== null);
+    const validProducts = (topSellingProducts as any[]).map((item: any) => ({
+      id: item.productId,
+      name: item.productName || "Unknown",
+      slug: item.productSlug,
+      capacity: item.capacityName || "N/A",
+      totalSold: parseInt(item.totalQuantity),
+    }));
 
     return res.json({
       success: true,
       data: validProducts,
-      pagination: {
-        page,
-        limit,
-        offset,
-      },
+      pagination: { page, limit, offset },
     });
   } catch (error) {
     logger.error("Get top selling products error:", error);

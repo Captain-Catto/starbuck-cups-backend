@@ -96,15 +96,16 @@ export class AnalyticsController {
       const page = parseInt(req.query.page as string) || 1;
       const offset = (page - 1) * limit;
 
-      const topProducts = await productAnalyticsService.getTopClickedProducts(limit, offset);
+      const { data, total } = await productAnalyticsService.getTopClickedProducts(limit, offset);
 
       return res.json({
         success: true,
-        data: topProducts,
+        data,
         pagination: {
           page,
           limit,
-          offset,
+          total,
+          totalPages: Math.ceil(total / limit),
         },
       });
     } catch (error) {
@@ -152,15 +153,16 @@ export class AnalyticsController {
       const page = parseInt(req.query.page as string) || 1;
       const offset = (page - 1) * limit;
 
-      const topProducts = await productAnalyticsService.getTopConversionProducts(limit, offset);
+      const { data, total } = await productAnalyticsService.getTopConversionProducts(limit, offset);
 
       return res.json({
         success: true,
-        data: topProducts,
+        data,
         pagination: {
           page,
           limit,
-          offset,
+          total,
+          totalPages: Math.ceil(total / limit),
         },
       });
     } catch (error) {

@@ -182,9 +182,9 @@ export class ProductAnalyticsService {
   async getTopClickedProducts(
     limit: number = 10,
     offset: number = 0
-  ): Promise<TopProductsData[]> {
+  ): Promise<{ data: TopProductsData[]; total: number }> {
     try {
-      const topProducts = await ProductAnalytics.findAll({
+      const { count, rows } = await ProductAnalytics.findAndCountAll({
         include: [
           {
             model: Product,
@@ -196,19 +196,23 @@ export class ProductAnalyticsService {
         order: [["clickCount", "DESC"]],
         limit,
         offset,
+        distinct: true,
       });
 
-      return topProducts.map((analytics) => ({
-        productId: analytics.productId,
-        productName: (analytics as any).product.name,
-        productSlug: (analytics as any).product.slug,
-        clickCount: analytics.clickCount,
-        addToCartCount: analytics.addToCartCount,
-        conversionRate:
-          analytics.clickCount > 0
-            ? analytics.addToCartCount / analytics.clickCount
-            : 0,
-      }));
+      return {
+        data: rows.map((analytics) => ({
+          productId: analytics.productId,
+          productName: (analytics as any).product.name,
+          productSlug: (analytics as any).product.slug,
+          clickCount: analytics.clickCount,
+          addToCartCount: analytics.addToCartCount,
+          conversionRate:
+            analytics.clickCount > 0
+              ? analytics.addToCartCount / analytics.clickCount
+              : 0,
+        })),
+        total: count,
+      };
     } catch (error) {
       logger.error("Error getting top clicked products:", error);
       throw new Error("Failed to get top clicked products");
@@ -256,9 +260,9 @@ export class ProductAnalyticsService {
   async getTopConversionProducts(
     limit: number = 10,
     offset: number = 0
-  ): Promise<TopProductsData[]> {
+  ): Promise<{ data: TopProductsData[]; total: number }> {
     try {
-      const products = await ProductAnalytics.findAll({
+      const { count, rows } = await ProductAnalytics.findAndCountAll({
         include: [
           {
             model: Product,
@@ -267,25 +271,27 @@ export class ProductAnalyticsService {
             where: { isActive: true, isDeleted: false },
           },
         ],
-        where: {
-          clickCount: { [Op.gt]: 0 }, // Must have at least 1 click
-        },
+        where: { clickCount: { [Op.gt]: 0 } },
+        order: [
+          ["addToCartCount", "DESC"],
+          ["clickCount", "ASC"],
+        ],
+        limit,
+        offset,
+        distinct: true,
       });
 
-      // Calculate conversion rates and sort
-      const productsWithConversion = products
-        .map((analytics) => ({
+      return {
+        data: rows.map((analytics) => ({
           productId: analytics.productId,
           productName: (analytics as any).product.name,
           productSlug: (analytics as any).product.slug,
           clickCount: analytics.clickCount,
           addToCartCount: analytics.addToCartCount,
           conversionRate: analytics.addToCartCount / analytics.clickCount,
-        }))
-        .sort((a, b) => b.conversionRate - a.conversionRate)
-        .slice(offset, offset + limit);
-
-      return productsWithConversion;
+        })),
+        total: count,
+      };
     } catch (error) {
       logger.error("Error getting top conversion products:", error);
       throw new Error("Failed to get top conversion products");
