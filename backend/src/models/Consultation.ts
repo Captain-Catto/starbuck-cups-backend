@@ -30,7 +30,7 @@ export class Consultation extends Model<ConsultationAttributes, ConsultationCrea
   declare email?: string;
   declare address: string;
   declare status: ConsultationStatus;
-  public notes?: string;
+  declare notes?: string;
   declare createdAt: Date;
   declare updatedAt: Date;
 
