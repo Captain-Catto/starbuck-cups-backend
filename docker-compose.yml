@@ -39,7 +39,7 @@ services:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-change-this-meili-master-key}
       MEILI_NO_ANALYTICS: "true"
     ports:
-      - "7700:7700"
+      - "127.0.0.1:7700:7700"
     volumes:
       - meili_data:/meili_data
 
@@ -47,9 +47,14 @@ services:
     image: redis:7-alpine
     container_name: starbucks-redis
     restart: unless-stopped
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --requirepass ${REDIS_PASSWORD}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -87,7 +92,7 @@ services:
       JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
       EXPOSE_REFRESH_TOKEN: ${EXPOSE_REFRESH_TOKEN:-false}
       AUTH_RATE_LIMIT_STORE: ${AUTH_RATE_LIMIT_STORE:-redis}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_URL: ${REDIS_URL}
       DB_POOL_MIN: ${DB_POOL_MIN:-2}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
       ALLOW_IN_MEMORY_RATE_LIMIT: ${ALLOW_IN_MEMORY_RATE_LIMIT:-false}
