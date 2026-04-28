@@ -73,7 +73,7 @@ services:
       NODE_ENV: production
       PORT: 8080
 
-      DATABASE_URL: postgresql://starbuck:new-strong-password-here@postgres:5432/starbucks_shop
+      DATABASE_URL: ${DATABASE_URL}
       DB_SSL: "false"
       DB_SCHEMA: ${DB_SCHEMA:-nhhas72k_starbucks_shop}
 
