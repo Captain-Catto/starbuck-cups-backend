@@ -3,6 +3,19 @@ services:
     image: postgres:16-alpine
     container_name: starbucks-postgres
     restart: unless-stopped
+    # Tune for SSD VPS with ~2GB RAM. Adjust shared_buffers/effective_cache_size
+    # to ~25%/75% of actual RAM if server has more memory.
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=64MB
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c wal_compression=on
+      -c max_connections=100
+      -c idle_in_transaction_session_timeout=30000
     environment:
       POSTGRES_DB: starbucks_shop
       POSTGRES_USER: starbuck
@@ -34,6 +47,7 @@ services:
     image: redis:7-alpine
     container_name: starbucks-redis
     restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
     ports:
       - "6379:6379"
     volumes:
@@ -74,6 +88,8 @@ services:
       EXPOSE_REFRESH_TOKEN: ${EXPOSE_REFRESH_TOKEN:-false}
       AUTH_RATE_LIMIT_STORE: ${AUTH_RATE_LIMIT_STORE:-redis}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DB_POOL_MIN: ${DB_POOL_MIN:-2}
+      DB_POOL_MAX: ${DB_POOL_MAX:-20}
       ALLOW_IN_MEMORY_RATE_LIMIT: ${ALLOW_IN_MEMORY_RATE_LIMIT:-false}
       RATE_LIMIT_MAX_ATTEMPTS: ${RATE_LIMIT_MAX_ATTEMPTS:-5}
       RATE_LIMIT_BLOCK_DURATION_MS: ${RATE_LIMIT_BLOCK_DURATION_MS:-900000}
@@ -81,7 +97,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       INCLUDE_LOCAL_ORIGINS: ${INCLUDE_LOCAL_ORIGINS:-true}
-      DB_SYNC_ON_START: ${DB_SYNC_ON_START:-true}
+      DB_SYNC_ON_START: ${DB_SYNC_ON_START:-false}
       SESSION_STORE_SYNC_ON_START: ${SESSION_STORE_SYNC_ON_START:-true}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
