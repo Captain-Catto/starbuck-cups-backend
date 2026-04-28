@@ -1,79 +1,30 @@
 "use strict";
 
 module.exports = {
-  up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable("news", {
-      id: {
-        type: Sequelize.UUID,
-        defaultValue: Sequelize.UUIDV4,
-        allowNull: false,
-        primaryKey: true,
-      },
-      slug: {
-        type: Sequelize.STRING(300),
-        allowNull: false,
-        unique: true,
-      },
-      thumbnail: {
-        type: Sequelize.STRING(500),
-        allowNull: true,
-      },
-      status: {
-        type: Sequelize.ENUM("draft", "published"),
-        allowNull: false,
-        defaultValue: "draft",
-      },
-      published_at: {
-        type: Sequelize.DATE,
-        allowNull: true,
-      },
-      view_count: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        defaultValue: 0,
-      },
-      is_deleted: {
-        type: Sequelize.BOOLEAN,
-        allowNull: false,
-        defaultValue: false,
-      },
-      deleted_at: {
-        type: Sequelize.DATE,
-        allowNull: true,
-      },
-      deleted_by_admin_id: {
-        type: Sequelize.CHAR(36),
-        allowNull: true,
-        references: { model: "admin_users", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "SET NULL",
-      },
-      created_by_admin_id: {
-        type: Sequelize.CHAR(36),
-        allowNull: false,
-        references: { model: "admin_users", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "RESTRICT",
-      },
-      created_at: {
-        type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: Sequelize.literal("NOW()"),
-      },
-      updated_at: {
-        type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: Sequelize.literal("NOW()"),
-      },
-    });
+  up: async (queryInterface) => {
+    await queryInterface.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS news (
+        id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        slug VARCHAR(300) NOT NULL UNIQUE,
+        thumbnail VARCHAR(500),
+        status VARCHAR(10) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+        published_at TIMESTAMPTZ,
+        view_count INTEGER NOT NULL DEFAULT 0,
+        is_deleted BOOLEAN NOT NULL DEFAULT false,
+        deleted_at TIMESTAMPTZ,
+        deleted_by_admin_id CHAR(36) REFERENCES admin_users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+        created_by_admin_id CHAR(36) NOT NULL REFERENCES admin_users(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-    await queryInterface.addIndex("news", ["status"], { name: "idx_news_status" });
-    await queryInterface.addIndex("news", ["published_at"], { name: "idx_news_published_at" });
-    await queryInterface.addIndex("news", ["is_deleted"], { name: "idx_news_is_deleted" });
+    await queryInterface.sequelize.query(`CREATE INDEX IF NOT EXISTS idx_news_status ON news(status);`);
+    await queryInterface.sequelize.query(`CREATE INDEX IF NOT EXISTS idx_news_published_at ON news(published_at);`);
+    await queryInterface.sequelize.query(`CREATE INDEX IF NOT EXISTS idx_news_is_deleted ON news(is_deleted);`);
   },
 
   down: async (queryInterface) => {
     await queryInterface.dropTable("news");
-    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_news_status";');
   },
 };

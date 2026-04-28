@@ -2,60 +2,25 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable("news_translations", {
-      id: {
-        type: Sequelize.UUID,
-        defaultValue: Sequelize.UUIDV4,
-        allowNull: false,
-        primaryKey: true,
-      },
-      news_id: {
-        type: Sequelize.UUID,
-        allowNull: false,
-        references: { model: "news", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
-      },
-      locale: {
-        type: Sequelize.STRING(5),
-        allowNull: false,
-      },
-      title: {
-        type: Sequelize.STRING(300),
-        allowNull: false,
-      },
-      summary: {
-        type: Sequelize.TEXT,
-        allowNull: true,
-      },
-      content: {
-        type: Sequelize.TEXT,
-        allowNull: true,
-      },
-      meta_title: {
-        type: Sequelize.STRING(300),
-        allowNull: true,
-      },
-      meta_description: {
-        type: Sequelize.TEXT,
-        allowNull: true,
-      },
-      created_at: {
-        type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: Sequelize.literal("NOW()"),
-      },
-      updated_at: {
-        type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: Sequelize.literal("NOW()"),
-      },
-    });
+    await queryInterface.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS news_translations (
+        id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        news_id UUID NOT NULL REFERENCES news(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        locale VARCHAR(5) NOT NULL,
+        title VARCHAR(300) NOT NULL,
+        summary TEXT,
+        content TEXT,
+        meta_title VARCHAR(300),
+        meta_description TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-    await queryInterface.addIndex("news_translations", ["news_id", "locale"], {
-      unique: true,
-      name: "uq_news_translations_news_locale",
-    });
+    await queryInterface.sequelize.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_news_translations_news_locale
+      ON news_translations(news_id, locale);
+    `);
   },
 
   down: async (queryInterface) => {
