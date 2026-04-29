@@ -34,20 +34,27 @@ import { getProductImageProcessingOptions } from "../services/watermark-settings
 import { clearCachePrefix } from "../middleware/redis-cache.middleware";
 
 /**
- * Clear all product-related caches (Redis) and trigger frontend revalidation
+ * Clear all product-related caches (Redis) and trigger frontend revalidation.
+ * Pass slug to also immediately revalidate that specific product detail page.
  */
-const invalidateProductCaches = async (): Promise<void> => {
+const invalidateProductCaches = async (slug?: string): Promise<void> => {
   try {
     await Promise.all([
       clearCachePrefix("/api/products"),
       clearCachePrefix("/api/admin/products"),
     ]);
 
-    // Trigger Next.js on-demand revalidation
     const frontendUrl = process.env.FRONTEND_URL;
     const revalidateSecret = process.env.REVALIDATE_SECRET;
     if (frontendUrl && revalidateSecret) {
-      fetch(`${frontendUrl}/api/revalidate?secret=${revalidateSecret}&tag=products`).catch((err) => {
+      fetch(`${frontendUrl}/api/revalidate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${revalidateSecret}`,
+        },
+        body: JSON.stringify(slug ? { slug } : {}),
+      }).catch((err) => {
         logger.error("Failed to trigger frontend revalidation:", err);
       });
     }
@@ -1306,7 +1313,7 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
     });
 
     // Invalidate caches so customers see the update immediately
-    invalidateProductCaches();
+    invalidateProductCaches(updatedProduct?.slug);
 
     return res
       .status(200)
@@ -1635,7 +1642,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     });
 
     // Invalidate caches so customers see the update immediately
-    invalidateProductCaches();
+    invalidateProductCaches(updatedProduct?.slug);
 
     return res
       .status(200)
@@ -1688,7 +1695,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
     });
 
     // Invalidate caches so customers no longer see the deleted product
-    invalidateProductCaches();
+    invalidateProductCaches(product.slug);
 
     return res
       .status(200)
@@ -1742,7 +1749,7 @@ export const reactivateProduct = async (req: Request, res: Response) => {
     });
 
     // Invalidate caches so customers see the reactivated product
-    invalidateProductCaches();
+    invalidateProductCaches(product.slug);
 
     return res.status(200).json(
       ResponseHelper.success({
@@ -1802,7 +1809,7 @@ export const updateProductStock = async (req: Request, res: Response) => {
     await product.update({ stockQuantity });
 
     // Invalidate caches so stock changes reflect immediately
-    invalidateProductCaches();
+    invalidateProductCaches(product.slug);
 
     return res.status(200).json(
       ResponseHelper.success({
@@ -1850,7 +1857,7 @@ export const toggleProductStatus = async (req: Request, res: Response) => {
     });
 
     // Invalidate caches so status change reflects immediately
-    invalidateProductCaches();
+    invalidateProductCaches(product.slug);
 
     return res.status(200).json(
       ResponseHelper.success({
