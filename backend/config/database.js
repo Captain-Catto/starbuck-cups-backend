@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('./env-loader')();
 
 const shouldUseSSL =
   process.env.DB_SSL === 'true' ||

@@ -16,12 +16,12 @@ import { logger } from "@/utils/logger";
 
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
+import "../config/env-loader";
 import { initializeDatabase, cleanupDatabase } from "../config/database-init";
 import { Product } from "../models";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 
-dotenv.config();
+
 
 interface RedirectEntry {
   source: string;

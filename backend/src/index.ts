@@ -1,5 +1,5 @@
 import { logger } from "@/utils/logger";
-import "dotenv/config";
+import "./config/env-loader";
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
 

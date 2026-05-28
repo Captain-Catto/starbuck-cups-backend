@@ -1,8 +1,6 @@
 import { logger } from "@/utils/logger";
 import { Sequelize, Options } from "sequelize";
-import dotenv from "dotenv";
-
-dotenv.config();
+import "./env-loader";
 
 const shouldUseSSL =
   process.env.DB_SSL === "true" ||

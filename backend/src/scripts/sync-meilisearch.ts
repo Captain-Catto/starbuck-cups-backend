@@ -1,5 +1,5 @@
 import { logger } from "@/utils/logger";
-import dotenv from "dotenv";
+import "../config/env-loader";
 import { initializeDatabase, cleanupDatabase } from "../config/database-init";
 import {
   Capacity,
@@ -21,7 +21,7 @@ import {
   type SearchableProduct,
 } from "../services/meilisearch.service";
 
-dotenv.config();
+
 
 async function syncMeilisearch(): Promise<void> {
   logger.info("🔄 Starting MeiliSearch sync...");
