@@ -4,7 +4,7 @@
   "description": "Starbucks Cup E-commerce Backend API",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/index.ts",
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
     "start:low-memory": "node --max-old-space-size=512 --optimize-for-size dist/index.js",
@@ -73,6 +73,7 @@
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsc-alias": "^1.8.10",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.2"
   }
 }
