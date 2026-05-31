@@ -21,7 +21,7 @@ const dbSchema = process.env.DB_SCHEMA;
 
 const baseConfig: Options = {
   dialect: "postgres",
-  logging: process.env.NODE_ENV === "development" ? logger.info : false,
+  logging: process.env.NODE_ENV === "development" ? (msg: string) => logger.info(msg) : false,
   pool: {
     max: dbPoolMax,
     min: dbPoolMin,

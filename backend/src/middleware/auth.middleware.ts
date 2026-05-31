@@ -194,9 +194,11 @@ const MAX_LOGIN_ATTEMPTS = parseInt(process.env.RATE_LIMIT_MAX_ATTEMPTS || "5");
 const BLOCK_DURATION = parseInt(
   process.env.RATE_LIMIT_BLOCK_DURATION_MS || "900000"
 ); // 15 minutes default
-const AUTH_RATE_LIMIT_STORE =
-  process.env.AUTH_RATE_LIMIT_STORE ||
-  (process.env.NODE_ENV === "production" ? "redis" : "memory");
+const isRedisEnabled = process.env.REDIS_ENABLED === "true" || (process.env.NODE_ENV === "production" && process.env.REDIS_ENABLED !== "false");
+
+const AUTH_RATE_LIMIT_STORE = isRedisEnabled
+  ? (process.env.AUTH_RATE_LIMIT_STORE || (process.env.NODE_ENV === "production" ? "redis" : "memory"))
+  : "memory";
 
 let rateLimitRedisClient: ReturnType<typeof createClient> | undefined;
 if (AUTH_RATE_LIMIT_STORE === "redis") {

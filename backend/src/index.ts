@@ -154,30 +154,35 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser()); // Add cookie parser middleware
 
-// Initialize Redis client for sessions
-const redisClient = createClient({
-  url: process.env.REDIS_URL || "redis://localhost:6379",
-  socket: {
-    reconnectStrategy: (retries) => Math.min(retries * 100, 5000),
-    connectTimeout: 10000,
-  },
-});
-redisClient.on("error", (err) => logger.warn("Redis client error:", err.message));
-redisClient.on("reconnecting", () => logger.warn("Redis reconnecting..."));
-redisClient.connect().catch((err) => logger.error("Redis initial connect failed:", err));
+// Initialize Redis client for sessions if enabled
+const isRedisEnabled = process.env.REDIS_ENABLED === "true" || (process.env.NODE_ENV === "production" && process.env.REDIS_ENABLED !== "false");
 
-// Session middleware (Redis store)
-const sessionStore = new RedisStore({
-  client: redisClient,
-  prefix: "shop_session:",
-  ttl: 24 * 60 * 60, // 24 hours
-});
+let sessionStore: any;
+
+if (isRedisEnabled) {
+  const redisClient = createClient({
+    url: process.env.REDIS_URL || "redis://localhost:6379",
+    socket: {
+      reconnectStrategy: (retries) => Math.min(retries * 100, 5000),
+      connectTimeout: 10000,
+    },
+  });
+  redisClient.on("error", (err) => logger.warn("Redis client error:", err.message));
+  redisClient.on("reconnecting", () => logger.warn("Redis reconnecting..."));
+  redisClient.connect().catch((err) => logger.error("Redis initial connect failed:", err));
+
+  sessionStore = new RedisStore({
+    client: redisClient,
+    prefix: "shop_session:",
+    ttl: 24 * 60 * 60, // 24 hours
+  });
+}
 
 app.use(
   session({
     secret: (process.env.SESSION_SECRET || process.env.JWT_SECRET) as string,
     proxy: shouldUseSecureCookie,
-    store: sessionStore,
+    ...(isRedisEnabled ? { store: sessionStore } : {}),
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -280,7 +285,7 @@ const startServer = async () => {
     
     // sessionStore doesn't need explicit init like sequelize store does,
     // but we log it for consistency
-    logger.info("✅ Redis Session store ready.");
+    logger.info(`✅ Session store ready (${isRedisEnabled ? "Redis" : "Memory"}).`);
 
     // Start server
     server.listen(PORT, () => {

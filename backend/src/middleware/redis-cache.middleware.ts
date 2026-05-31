@@ -3,12 +3,18 @@ import { Request, Response, NextFunction } from "express";
 import { createClient } from "redis";
 import { ResponseHelper } from "../types/api";
 
-const redisClient = createClient({
-  url: process.env.REDIS_URL || "redis://localhost:6379",
-});
+const isRedisEnabled = process.env.REDIS_ENABLED === "true" || (process.env.NODE_ENV === "production" && process.env.REDIS_ENABLED !== "false");
 
-redisClient.on("error", (err) => logger.error("Redis Cache Client Error", err));
-redisClient.connect().catch(logger.error);
+let redisClient: any = null;
+
+if (isRedisEnabled) {
+  redisClient = createClient({
+    url: process.env.REDIS_URL || "redis://localhost:6379",
+  });
+
+  redisClient.on("error", (err: any) => logger.error("Redis Cache Client Error", err));
+  redisClient.connect().catch(logger.error);
+}
 
 /**
  * Middleware to cache API responses in Redis with Stale-While-Revalidate.
@@ -17,6 +23,11 @@ redisClient.connect().catch(logger.error);
 export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (req.method !== "GET") {
+      return next();
+    }
+
+    // Skip caching if Redis is not enabled or not connected/ready
+    if (!isRedisEnabled || !redisClient || !redisClient.isOpen || !redisClient.isReady) {
       return next();
     }
 
@@ -65,7 +76,7 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
             };
             redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData))
               .then(() => redisClient.del(lockKey))
-              .catch((err) => logger.error("Redis Cache SWR Set Error:", err));
+              .catch((err: any) => logger.error("Redis Cache SWR Set Error:", err));
           } else {
             redisClient.del(lockKey).catch(() => {});
           }
@@ -86,7 +97,7 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
             _staleAt: Date.now() + durationInSeconds * 1000,
             data: body,
           };
-          redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch((err) => {
+          redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch((err: any) => {
             logger.error("Redis Cache Set Error:", err);
           });
           res.setHeader("Cache-Control", `public, max-age=${durationInSeconds}, stale-while-revalidate=${durationInSeconds * 10}`);
@@ -106,6 +117,9 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
  * Clear cache keys matching a prefix using SCAN (non-blocking, safe for production).
  */
 export const clearCachePrefix = async (prefix: string): Promise<void> => {
+  if (!isRedisEnabled || !redisClient || !redisClient.isOpen || !redisClient.isReady) {
+    return;
+  }
   try {
     const pattern = `api_cache:${prefix}*`;
     let cursor = "0";
