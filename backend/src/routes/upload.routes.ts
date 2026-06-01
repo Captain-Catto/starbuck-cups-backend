@@ -1,6 +1,5 @@
 import { logger } from "@/utils/logger";
 import express, { Request, Response } from "express";
-// import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
 // import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace (Shared Drive)
 import {

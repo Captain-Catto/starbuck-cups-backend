@@ -112,7 +112,9 @@ class SocketService {
     // Handle disconnection
     socket.on("disconnect", (reason) => {
       this.info(`👋 Socket client disconnected: ${reason}`);
-      this.adminSockets.delete(user.id);
+      if (this.adminSockets.get(user.id)?.id === socket.id) {
+        this.adminSockets.delete(user.id);
+      }
     });
   }
 
@@ -211,7 +213,7 @@ class SocketService {
   }
 
   // Send current notification count
-  private async sendNotificationCount(): Promise<void> {
+  public async sendNotificationCount(): Promise<void> {
     if (!this.io) return;
 
     try {

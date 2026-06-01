@@ -68,6 +68,9 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
 
         res.status = () => res;
         res.setHeader = () => res;
+        res.send = () => res;
+        res.end = () => res;
+        res.sendStatus = () => res;
         res.json = (body: any) => {
           if (body && body.success === true) {
             const cacheData = {

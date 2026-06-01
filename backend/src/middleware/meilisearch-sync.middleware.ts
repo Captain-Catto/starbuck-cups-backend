@@ -53,7 +53,7 @@ export class MeiliSearchSyncMiddleware {
       order: [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]],
     });
 
-    if (!product || product.isDeleted || !product.capacity) {
+    if (!product || product.isDeleted) {
       await this.deleteProduct(productId);
       return;
     }
@@ -80,12 +80,14 @@ export class MeiliSearchSyncMiddleware {
           slug: pc.color.slug,
           hexCode: pc.color.hexCode,
         })),
-      capacity: {
-        id: (product.capacity as any).id,
-        name: (product.capacity as any).name,
-        slug: (product.capacity as any).slug,
-        volumeMl: (product.capacity as any).volumeMl,
-      },
+      ...(product.capacity && {
+        capacity: {
+          id: (product.capacity as any).id,
+          name: (product.capacity as any).name,
+          slug: (product.capacity as any).slug,
+          volumeMl: (product.capacity as any).volumeMl,
+        },
+      }),
       images: (product.productImages || []).map((img: any) => img.url),
       productUrl: product.productUrl || "",
       createdAt: product.createdAt.toISOString(),

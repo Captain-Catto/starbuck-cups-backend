@@ -91,13 +91,13 @@ sudo systemctl start redis-server
 sudo systemctl status redis-server
 ```
 
-## 6) Frontend deploy (React build)
+## 6) Frontend deploy
 
-Place build output at:
+The frontend is a Next.js app. Build and run it with its own process manager
+(for example systemd or PM2), then point the `hasron.vn` nginx site to that
+Next.js server.
 
-- `/var/www/starbucks-frontend/current/dist`
-
-Then reload nginx:
+Then reload nginx after updating the frontend nginx config:
 
 ```bash
 sudo nginx -t

@@ -1,69 +1,21 @@
-# Starbucks Cup E-commerce Website
+# Starbucks Cups Backend Stack
 
-A Vietnamese Starbucks cup e-commerce platform with customer browsing (no prices) and Messenger integration for consultation, plus comprehensive admin management.
+Backend stack for the Starbucks cups shop.
 
-## 🏗️ Project Structure
+## Structure
 
-```
-starbucks-shop/
-├── backend/          # Node.js API server (port 8080)
-├── frontend/         # React app (port 3000)
-├── shared/           # Shared types and schemas
-├── docs/             # Technical documentation
-├── specs/            # Feature specifications
-└── docker-compose.yml # Local development setup
-```
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- Docker & Docker Compose
-- Git
-
-### Development Setup
-
-1. **Clone and install dependencies**:
-
-```bash
-git clone <repository>
-cd starbucks-shop
+```text
+starbuck-cups-backend/
+├── backend/            # Express + TypeScript API
+├── deploy/             # Production nginx/systemd/env examples
+├── docker/             # Docker helper files
+├── docker-compose.yml  # Local PostgreSQL, Redis, MeiliSearch, API stack
+└── README.md
 ```
 
-2. **Start databases**:
+## Local Docker Stack
 
-```bash
-docker-compose up -d
-```
-
-3. **Initialize project** (VS Code):
-
-   - Open VS Code in project root
-   - Run task: `Ctrl+Shift+P` → "Tasks: Run Task" → "setup:init-project"
-   - Or run individual setup tasks
-
-4. **Start development servers**:
-
-```bash
-# Backend (port 8080)
-cd backend && npm run dev
-
-# Frontend (port 3000)
-cd frontend && npm run dev
-
-# Or use VS Code task: "dev:full-stack"
-```
-
-5. **Access applications**:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8080
-   - API Docs: http://localhost:8080/docs
-   - Database Admin: http://localhost:8081
-
-## 🐳 Run Backend With Docker
-
-Chạy từ thư mục `starbucks-shop/`:
+From this directory:
 
 ```bash
 cp .env.docker.example .env
@@ -71,83 +23,39 @@ docker compose up -d --build
 docker compose logs -f backend
 ```
 
-Sau khi có dữ liệu DB, sync MeiliSearch:
+After the database has data, sync MeiliSearch:
 
 ```bash
 docker compose exec backend node dist/scripts/sync-meilisearch.js
 ```
 
-## 📋 Implementation Tasks
+## Backend Development
 
-See [specs/001-starbucks-website/tasks.md](./specs/001-starbucks-website/tasks.md) for detailed implementation breakdown.
+```bash
+cd backend
+npm install
+npm run dev
+```
 
-## 🛠️ VS Code Tasks
+Useful commands:
 
-Available tasks (Ctrl+Shift+P → "Tasks: Run Task"):
+```bash
+npm run build
+npm start
+npm run db:migrate
+npm run db:migrate:status
+npm run sync-meilisearch
+```
 
-- `setup:init-project` - Initialize project structure
-- `dev:full-stack` - Start both backend and frontend
-- `db:migrate` - Run database migrations
-- `db:seed` - Seed database with initial data
-- `test:backend` - Run backend tests
-- `test:frontend` - Run frontend tests
-- `build:all` - Build for production
+## Runtime Services
 
-## 📚 Documentation
+- API: `http://localhost:8080`
+- PostgreSQL: `127.0.0.1:5432`
+- Redis: `127.0.0.1:6379`
+- MeiliSearch: `127.0.0.1:7700`
 
-- [Feature Specification](./specs/001-starbucks-website/spec.md)
-- [Implementation Plan](./specs/001-starbucks-website/plan.md)
-- [Data Model](./specs/001-starbucks-website/data-model-overview.md)
-- [API Contracts](./specs/001-starbucks-website/contracts/)
-- [Tasks Breakdown](./specs/001-starbucks-website/tasks.md)
-- [VPS + Cloudflare Deployment](./deploy/README.md)
+## Notes
 
-## 🔧 Technology Stack
-
-**Backend**:
-
-- Node.js 18+ with TypeScript
-- Express.js with OpenAPI validation
-- Prisma ORM + PostgreSQL
-- Redis for sessions/cache
-- JWT authentication
-
-**Frontend**:
-
-- React 18+ with TypeScript
-- Redux Toolkit for state management
-- Vite for build tooling
-- Swiper.js for carousel
-- Mobile-first responsive design
-
-**Integration**:
-
-- Facebook Messenger Platform API
-- OpenAPI contract-first development
-- Docker for local development
-
-## 🎯 Key Features
-
-- **Customer Interface**: Product browsing without prices, Messenger consultation
-- **Admin Dashboard**: Complete management for products, orders, customers
-- **Dynamic Management**: Colors, capacities, categories created as needed
-- **Single Color Products**: Simplified catalog with consultation for variants
-- **Vietnamese-first**: Optimized for Vietnamese market and language
-
-## 📊 Project Status
-
-- **Specification**: ✅ Complete
-- **Planning**: ✅ Complete
-- **Implementation**: 🔄 In Progress (Completed Task 3.4 - Customer & Order Management UI)
-- **Testing**: ⏳ Pending
-- **Deployment**: ⏳ Pending
-
-**Recent Completions**:
-
-- ✅ Task 3.4: Advanced pagination, optimistic updates, enhanced filtering
-- ✅ Customer management dashboard with comprehensive UI
-- ✅ Order processing interface with mobile responsiveness
-
----
-
-**Next Steps**: Continue with Phase 4 (Messenger Integration) or expand current features
+- Database schema changes are managed through Sequelize migrations in `backend/migrations`.
+- Backend source scripts live under `backend/src/scripts`.
+- Deployment notes live in `deploy/README.md`.

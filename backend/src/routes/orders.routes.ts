@@ -5,6 +5,7 @@ import {
   createOrder,
   updateOrderStatus,
   updateOrder,
+  deleteOrder,
   getOrderStats,
   getRecentOrders,
 } from "../controllers/orders.controller";
@@ -20,5 +21,6 @@ router.get("/:id", authenticateWithAutoRefresh, getOrderById);
 router.post("/", authenticateWithAutoRefresh, requireAdmin, createOrder);
 router.patch("/:id/status", authenticateWithAutoRefresh, requireAdmin, updateOrderStatus);
 router.put("/:id", authenticateWithAutoRefresh, requireAdmin, updateOrder);
+router.delete("/:id", authenticateWithAutoRefresh, requireAdmin, deleteOrder);
 
 export default router;

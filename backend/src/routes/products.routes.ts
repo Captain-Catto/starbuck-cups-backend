@@ -129,6 +129,10 @@ router.get("/public/:id", redisCacheMiddleware(600), getPublicProductById);
  *       404:
  *         description: Product not found
  */
+// Specific named routes must come before /:id to avoid being swallowed by the catch-all
+router.get("/low-stock", authenticateWithAutoRefresh, getLowStockProducts);
+router.get("/search", authenticateWithAutoRefresh, searchProducts);
+
 // Public product routes (must be at the end to avoid conflicts) - cached for 10 minutes (600s)
 router.get("/:id", redisCacheMiddleware(600), getPublicProductById);
 
@@ -409,37 +413,7 @@ router.get("/:id", redisCacheMiddleware(600), getPublicProductById);
  *       200:
  *         description: Low stock products retrieved successfully
  */
-router.get("/low-stock", authenticateWithAutoRefresh, getLowStockProducts);
-
-/**
- * @swagger
- * /api/admin/products/search:
- *   get:
- *     summary: Search products for autocomplete
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: q
- *         schema:
- *           type: string
- *         description: Search query
- *       - in: query
- *         name: active
- *         schema:
- *           type: boolean
- *         description: Only active products
- *       - in: query
- *         name: includeDeleted
- *         schema:
- *           type: boolean
- *         description: Include deleted products
- *     responses:
- *       200:
- *         description: Products found
- */
-router.get("/search", authenticateWithAutoRefresh, searchProducts);
+// Note: /low-stock and /search are registered above /:id to ensure correct Express routing order
 
 /**
  * @swagger
@@ -521,10 +495,10 @@ router.get("/:id", authenticateWithAutoRefresh, getProductById);
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: Product images to upload to AWS S3
+ *                 description: Product images to upload
  *     responses:
  *       201:
- *         description: Product created successfully with images uploaded to AWS S3
+ *         description: Product created successfully with images uploaded
  *       400:
  *         description: Validation failed, invalid file type, or upload error
  */

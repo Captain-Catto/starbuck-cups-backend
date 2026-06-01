@@ -93,16 +93,18 @@ export const authenticate = async (
     logger.error("Authentication middleware error:", error);
 
     // Handle specific JWT errors
-    if (error.message.includes("expired")) {
-      res
-        .status(401)
-        .json(ResponseHelper.error("Token expired", "TOKEN_EXPIRED"));
-      return;
-    } else if (error.message.includes("invalid")) {
-      res
-        .status(401)
-        .json(ResponseHelper.error("Invalid token", "INVALID_TOKEN"));
-      return;
+    if (error && error.message && typeof error.message === "string") {
+      if (error.message.includes("expired")) {
+        res
+          .status(401)
+          .json(ResponseHelper.error("Token expired", "TOKEN_EXPIRED"));
+        return;
+      } else if (error.message.includes("invalid")) {
+        res
+          .status(401)
+          .json(ResponseHelper.error("Invalid token", "INVALID_TOKEN"));
+        return;
+      }
     }
 
     res

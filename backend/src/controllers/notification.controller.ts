@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { models } from "../models";
 import { ConsultationStatus } from "../models/Consultation";
 import { OrderStatus } from "../models/Order";
+import { socketService } from "../services/socket.service";
 
 const { Order, Consultation, Customer, Product, ConsultationItem } = models;
 
@@ -19,9 +20,11 @@ import { ResponseHelper } from "../types/api";
 export const getNotifications = async (req: Request, res: Response) => {
   try {
     const { page = 1, limit = 20, type } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
+    const limitNum = Number(limit);
+    const skip = (Number(page) - 1) * limitNum;
 
     const notifications = [];
+    let totalCount = 0;
 
     // Get recent consultations as notifications
     if (!type || type === 'consultation') {
@@ -31,8 +34,8 @@ export const getNotifications = async (req: Request, res: Response) => {
           as: 'consultationItems'
         }],
         order: [['createdAt', 'DESC']],
-        limit: Number(limit),
-        offset: type === 'consultation' ? skip : 0
+        limit: limitNum,
+        offset: skip
       });
 
       const consultationNotifications = consultations.map(consultation => {
@@ -53,34 +56,36 @@ export const getNotifications = async (req: Request, res: Response) => {
       });
 
       notifications.push(...consultationNotifications);
+
+      // Count total for pagination meta
+      totalCount = await Consultation.count();
     }
 
     // Get recent orders as notifications (when orders are implemented)
-    if (!type || type === 'order') {
+    if (type === 'order') {
       // For now, we don't have orders, so we'll skip this
-      // When orders are implemented, add similar logic here
     }
 
     // Sort by timestamp (newest first)
     notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-    // Apply pagination if no specific type
-    const startIndex = type ? 0 : skip;
-    const paginatedNotifications = notifications.slice(startIndex, startIndex + Number(limit));
-
     // Count unread notifications
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = await Consultation.count({
+      where: {
+        status: ConsultationStatus.PENDING
+      }
+    });
 
     const response = {
       success: true,
-      data: paginatedNotifications,
+      data: notifications, // Already paginated at DB level
       meta: {
         timestamp: new Date().toISOString(),
         pagination: {
           page: Number(page),
-          limit: Number(limit),
-          total: notifications.length,
-          totalPages: Math.ceil(notifications.length / Number(limit))
+          limit: limitNum,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limitNum)
         },
         unreadCount
       },
@@ -119,6 +124,11 @@ export const markNotificationAsRead = async (req: Request, res: Response) => {
           }
         }
       );
+
+      // Trigger real-time badge update
+      socketService.sendNotificationCount().catch((err) => {
+        logger.error("Failed to update socket notification count on read:", err);
+      });
     }
 
     // For orders, implement similar logic when orders are ready
@@ -188,6 +198,13 @@ export const markAllNotificationsAsRead = async (req: Request, res: Response) =>
         }
       }
     );
+
+    // Trigger real-time badge update if any notifications were updated
+    if (updatedCount > 0) {
+      socketService.sendNotificationCount().catch((err) => {
+        logger.error("Failed to update socket notification count on mark all read:", err);
+      });
+    }
 
     const response = {
       success: true,

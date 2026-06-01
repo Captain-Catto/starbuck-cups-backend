@@ -315,9 +315,27 @@ export const uploadSecurity = (
     ".jar",
     ".php",
   ];
-  const fileName = req.file?.originalname?.toLowerCase();
 
-  if (fileName && dangerousExtensions.some((ext) => fileName.endsWith(ext))) {
+  const checkFile = (file?: Express.Multer.File): boolean => {
+    const fileName = file?.originalname?.toLowerCase();
+    return !!fileName && dangerousExtensions.some((ext) => fileName.endsWith(ext));
+  };
+
+  const files: Express.Multer.File[] = [];
+  if (req.file) {
+    files.push(req.file);
+  }
+  if (req.files) {
+    if (Array.isArray(req.files)) {
+      files.push(...req.files);
+    } else {
+      Object.values(req.files).forEach((fileArray) => {
+        files.push(...fileArray);
+      });
+    }
+  }
+
+  if (files.some(checkFile)) {
     res
       .status(400)
       .json(ResponseHelper.error("File type not allowed", "INVALID_FILE_TYPE"));

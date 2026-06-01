@@ -1,7 +1,7 @@
 import multer from "multer";
 import { Request, Response, NextFunction } from "express";
 
-// Configure multer for memory storage (we'll upload to S3 directly)
+// Configure multer for memory storage before image processing and external upload.
 const storage = multer.memoryStorage();
 
 // File filter function
@@ -96,7 +96,7 @@ export const handleMulterError = (
     }
   }
 
-  if (error.message.includes("Invalid file type")) {
+  if (error && error.message && error.message.includes("Invalid file type")) {
     res.status(400).json({
       success: false,
       message: error.message,

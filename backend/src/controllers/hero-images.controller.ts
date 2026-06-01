@@ -1,7 +1,6 @@
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { HeroImage, AdminUser } from "../models";
-// import { s3Service } from "../services/s3.service"; // LEGACY S3 - Switched to Google Drive
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
 // import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace
 import { z } from "zod";

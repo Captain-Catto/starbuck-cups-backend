@@ -1,28 +1,13 @@
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
-import { models, AdminRole } from "../models";
-
-const { AdminUser } = models;
-
-import {
-  hashPassword,
-  comparePassword,
-  validatePassword,
-} from "../utils/password";
-import {
-  generateAccessToken,
-  generateRefreshToken,
-  verifyRefreshToken,
-  hashRefreshToken,
-  getRefreshTokenExpiration,
-} from "../utils/jwt";
 import { ResponseHelper } from "../types/api";
+import { ServiceError } from "../utils/service-error";
 import { z } from "zod";
+import * as authService from "../services/auth.service";
 import { AuthRequest } from "../middleware/auth.middleware";
 
-// Request interface extended in auth.middleware.ts
+// ── Validation schemas ────────────────────────────────────────────────────────
 
-// Validation schemas
 const loginSchema = z.object({
   email: z.string().email("Invalid email format"),
   password: z.string().min(1, "Password is required"),
@@ -36,941 +21,168 @@ const changePasswordSchema = z.object({
 const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required"),
 });
-const shouldExposeRefreshToken = (): boolean =>
-  process.env.EXPOSE_REFRESH_TOKEN === "true";
 
-/**
- * Login admin user (specific endpoint for admin panel)
- */
+// ── Error handler helper ──────────────────────────────────────────────────────
+
+function handleError(res: Response, err: unknown, label: string) {
+  if (err instanceof ServiceError) {
+    return res.status(err.statusCode).json(ResponseHelper.error(err.message, err.code));
+  }
+  logger.error(`${label}:`, err);
+  return res.status(500).json(ResponseHelper.error("Internal server error", "INTERNAL_ERROR"));
+}
+
+// ── Cookie helpers ────────────────────────────────────────────────────────────
+
+function setRefreshCookie(res: Response, token: string) {
+  res.cookie("admin_refresh_token", token, authService.COOKIE_OPTIONS);
+}
+
+function clearRefreshCookie(res: Response) {
+  res.clearCookie("admin_refresh_token", {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === "true",
+    sameSite: (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
+    path: "/",
+    domain: process.env.COOKIE_DOMAIN || undefined,
+  });
+}
+
+// ── Controllers ───────────────────────────────────────────────────────────────
+
 export const adminLogin = async (req: Request, res: Response) => {
+  const validation = loginSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
-    // Validate input
-    const validationResult = loginSchema.safeParse(req.body);
-    if (!validationResult.success) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Validation failed",
-            "VALIDATION_ERROR",
-            validationResult.error.issues
-          )
-        );
-    }
-
-    const { email, password } = validationResult.data;
-
-    // Find admin user by email
-    const user = await AdminUser.findOne({
-      where: { email: email.toLowerCase() },
-    });
-
-    if (!user) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error(
-            "Invalid email or password",
-            "INVALID_CREDENTIALS"
-          )
-        );
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Account is deactivated", "ACCOUNT_DEACTIVATED")
-        );
-    }
-
-    // Check if user has admin privileges
-    if (!["SUPER_ADMIN", "ADMIN", "STAFF"].includes(user.role)) {
-      return res
-        .status(403)
-        .json(
-          ResponseHelper.error(
-            "Access denied. Admin privileges required.",
-            "ACCESS_DENIED"
-          )
-        );
-    }
-
-    // Verify password
-    const isPasswordValid = await comparePassword(password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error(
-            "Invalid email or password",
-            "INVALID_CREDENTIALS"
-          )
-        );
-    }
-
-    // Update last login
-    await user.update({ lastLoginAt: new Date() });
-
-    // Generate tokens
-    const accessToken = generateAccessToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      username: user.username,
-    });
-
-    const refreshToken = generateRefreshToken({
-      userId: user.id,
-      tokenVersion: 1,
-    });
-
-    // Save refresh token hash to database
-    const refreshTokenHash = hashRefreshToken(refreshToken);
-    const refreshTokenExpiresAt = getRefreshTokenExpiration();
-
-    await user.update({
-      refreshTokenHash,
-      refreshTokenExpiresAt,
-    });
-
-    // Set refresh token as HTTP-only cookie
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    };
-
-    res.cookie("admin_refresh_token", refreshToken, cookieOptions);
-
-    const responseData: Record<string, unknown> = {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.username,
-        role: user.role,
-      },
-      token: accessToken,
-      message: "Admin login successful",
-    };
-
-    if (shouldExposeRefreshToken()) {
-      responseData.refreshToken = refreshToken;
-    }
-
-    return res.status(200).json(
-      ResponseHelper.success(responseData)
-    );
-  } catch (error) {
-    logger.error("Admin login error:", error);
-    return res
-      .status(500)
-      .json(ResponseHelper.error("Internal server error", "INTERNAL_ERROR"));
+    const result = await authService.adminLogin(validation.data.email, validation.data.password);
+    setRefreshCookie(res, result.refreshToken);
+    const responseData: Record<string, unknown> = { user: result.user, token: result.token, message: "Admin login successful" };
+    if (authService.EXPOSE_REFRESH_TOKEN()) responseData.refreshToken = result.refreshToken;
+    return res.status(200).json(ResponseHelper.success(responseData));
+  } catch (err) {
+    return handleError(res, err, "admin login");
   }
 };
 
-/**
- * Login admin user (general endpoint)
- */
 export const login = async (req: Request, res: Response) => {
+  const validation = loginSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
-    // Validate input
-    const validationResult = loginSchema.safeParse(req.body);
-    if (!validationResult.success) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Validation failed",
-            "VALIDATION_ERROR",
-            validationResult.error.issues
-          )
-        );
-    }
-
-    const { email, password } = validationResult.data;
-
-    // Find user by email
-    const user = await AdminUser.findOne({
-      where: { email: email.toLowerCase() },
-    });
-
-    if (!user) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error(
-            "Invalid email or password",
-            "INVALID_CREDENTIALS"
-          )
-        );
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Account is deactivated", "ACCOUNT_DEACTIVATED")
-        );
-    }
-
-    // Verify password
-    const isPasswordValid = await comparePassword(password, user.passwordHash);
-    if (!isPasswordValid) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error(
-            "Invalid email or password",
-            "INVALID_CREDENTIALS"
-          )
-        );
-    }
-
-    // Update last login
-    await user.update({ lastLoginAt: new Date() });
-
-    // Generate tokens
-    const accessToken = generateAccessToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      username: user.username,
-    });
-
-    const refreshToken = generateRefreshToken({
-      userId: user.id,
-      tokenVersion: 1, // Default version, could be stored in database if needed
-    });
-
-    // Set refresh token as HTTP-only cookie
-    res.cookie("admin_refresh_token", refreshToken, {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
-
-    const responseData: Record<string, unknown> = {
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        role: user.role,
-      },
-      accessToken,
-    };
-
-    if (shouldExposeRefreshToken()) {
-      responseData.refreshToken = refreshToken;
-    }
-
+    const result = await authService.login(validation.data.email, validation.data.password);
+    setRefreshCookie(res, result.refreshToken);
+    const responseData: Record<string, unknown> = { user: result.user, accessToken: result.accessToken };
+    if (authService.EXPOSE_REFRESH_TOKEN()) responseData.refreshToken = result.refreshToken;
     return res.status(200).json(ResponseHelper.success(responseData));
-  } catch (error) {
-    logger.error("Login error:", error);
-    return res
-      .status(500)
-      .json(ResponseHelper.error("Login failed", "LOGIN_ERROR"));
+  } catch (err) {
+    return handleError(res, err, "login");
   }
 };
 
-/**
- * Refresh access token
- */
 export const refreshToken = async (req: Request, res: Response) => {
+  const validation = refreshTokenSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
-    // Validate input
-    const validationResult = refreshTokenSchema.safeParse(req.body);
-    if (!validationResult.success) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Validation failed",
-            "VALIDATION_ERROR",
-            validationResult.error.issues
-          )
-        );
+    const result = await authService.refreshAccessToken(validation.data.refreshToken);
+    return res.status(200).json(ResponseHelper.success(result));
+  } catch (err) {
+    if (err instanceof ServiceError) {
+      return res.status(err.statusCode).json(ResponseHelper.error(err.message, err.code));
     }
-
-    const { refreshToken: token } = validationResult.data;
-
-    // Verify refresh token
-    const decoded = verifyRefreshToken(token);
-
-    // Find user and verify token hash against database
-    const user = await AdminUser.findOne({
-      where: { id: decoded.userId },
-      attributes: [
-        "id",
-        "email",
-        "role",
-        "username",
-        "isActive",
-        "refreshTokenHash",
-        "refreshTokenExpiresAt",
-      ],
-    });
-
-    if (!user || !user.isActive) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
-        );
-    }
-
-    // Verify refresh token hash against database
-    const currentTokenHash = hashRefreshToken(token);
-    if (
-      !user.refreshTokenHash ||
-      user.refreshTokenHash !== currentTokenHash
-    ) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
-        );
-    }
-
-    // Check if refresh token is expired in database
-    if (
-      !user.refreshTokenExpiresAt ||
-      user.refreshTokenExpiresAt < new Date()
-    ) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Refresh token expired", "REFRESH_TOKEN_EXPIRED")
-        );
-    }
-
-    // Generate new access token
-    const accessToken = generateAccessToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      username: user.username,
-    });
-
-    return res.status(200).json(ResponseHelper.success({ accessToken }));
-  } catch (error) {
-    logger.error("Refresh token error:", error);
-    return res
-      .status(401)
-      .json(
-        ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
-      );
+    logger.error("Refresh token error:", err);
+    return res.status(401).json(ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN"));
   }
 };
 
-/**
- * Logout user (invalidate all tokens)
- */
 export const logout = async (req: Request, res: Response) => {
+  if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
-    // Clear refresh token from database
-    const adminUser = await AdminUser.findByPk(req.user.userId);
-    if (adminUser) {
-      await adminUser.update({
-        refreshTokenHash: undefined,
-        refreshTokenExpiresAt: undefined,
-      });
-    }
-
-    // Clear refresh token cookie
-    res.clearCookie("admin_refresh_token", {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
-      path: "/",
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
-
-    return res
-      .status(200)
-      .json(
-        ResponseHelper.success(null, { message: "Logged out successfully" })
-      );
-  } catch (error) {
-    logger.error("Logout error:", error);
-    return res
-      .status(500)
-      .json(ResponseHelper.error("Logout failed", "LOGOUT_ERROR"));
+    await authService.logoutUser(req.user.userId);
+    clearRefreshCookie(res);
+    return res.status(200).json(ResponseHelper.success(null, { message: "Logged out successfully" }));
+  } catch (err) {
+    return handleError(res, err, "logout");
   }
 };
 
-/**
- * Change password
- */
 export const changePassword = async (req: Request, res: Response) => {
+  if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+  const validation = changePasswordSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
-    // Validate input
-    const validationResult = changePasswordSchema.safeParse(req.body);
-    if (!validationResult.success) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Validation failed",
-            "VALIDATION_ERROR",
-            validationResult.error.issues
-          )
-        );
-    }
-
-    const { currentPassword, newPassword } = validationResult.data;
-
-    // Validate new password strength
-    const passwordValidation = validatePassword(newPassword);
-    if (!passwordValidation.valid) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Password does not meet requirements",
-            "WEAK_PASSWORD",
-            passwordValidation.errors
-          )
-        );
-    }
-
-    // Find user
-    const user = await AdminUser.findOne({
-      where: { id: req.user.userId },
-    });
-
-    if (!user) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("User not found", "USER_NOT_FOUND"));
-    }
-
-    // Verify current password
-    const isCurrentPasswordValid = await comparePassword(
-      currentPassword,
-      user.passwordHash
-    );
-    if (!isCurrentPasswordValid) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Current password is incorrect",
-            "INCORRECT_PASSWORD"
-          )
-        );
-    }
-
-    // Hash new password
-    const hashedNewPassword = await hashPassword(newPassword);
-
-    // Update password
-    await AdminUser.update(
-      {
-        passwordHash: hashedNewPassword,
-        updatedAt: new Date(),
-      },
-      { where: { id: user.id } }
-    );
-
-    return res.status(200).json(
-      ResponseHelper.success(null, {
-        message: "Password changed successfully",
-      })
-    );
-  } catch (error) {
-    logger.error("Change password error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error(
-          "Failed to change password",
-          "CHANGE_PASSWORD_ERROR"
-        )
-      );
+    await authService.changePassword(req.user.userId, validation.data.currentPassword, validation.data.newPassword);
+    return res.status(200).json(ResponseHelper.success(null, { message: "Password changed successfully" }));
+  } catch (err) {
+    return handleError(res, err, "change password");
   }
 };
 
-/**
- * Verify token and get user info
- */
 export const verifyToken = async (req: Request, res: Response) => {
+  if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
-    const user = await AdminUser.findOne({
-      where: { id: req.user.userId },
-      attributes: [
-        "id",
-        "email",
-        "username",
-        "role",
-        "isActive",
-        "lastLoginAt",
-        "createdAt",
-      ],
-    });
-
-    if (!user) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("User not found", "USER_NOT_FOUND"));
-    }
-
-    if (!user.isActive) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Account is deactivated", "ACCOUNT_DEACTIVATED")
-        );
-    }
-
-    return res.status(200).json(
-      ResponseHelper.success({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.username,
-          role: user.role,
-        },
-        message: "Token is valid",
-      })
-    );
-  } catch (error) {
-    logger.error("Verify token error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error(
-          "Token verification failed",
-          "TOKEN_VERIFICATION_ERROR"
-        )
-      );
+    const user = await authService.getUserById(req.user.userId);
+    return res.status(200).json(ResponseHelper.success({ user: { id: user.id, email: user.email, name: user.username, role: user.role }, message: "Token is valid" }));
+  } catch (err) {
+    return handleError(res, err, "verify token");
   }
 };
 
-/**
- * Get current user profile
- */
 export const getProfile = async (req: Request, res: Response) => {
+  if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
-    const user = await AdminUser.findOne({
-      where: { id: req.user.userId },
-      attributes: [
-        "id",
-        "email",
-        "username",
-        "role",
-        "lastLoginAt",
-        "createdAt",
-      ],
-    });
-
-    if (!user) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("User not found", "USER_NOT_FOUND"));
-    }
-
+    const user = await authService.getUserById(req.user.userId, ["id", "email", "username", "role", "lastLoginAt", "createdAt"]);
     return res.status(200).json(ResponseHelper.success(user));
-  } catch (error) {
-    logger.error("Get profile error:", error);
-    return res
-      .status(500)
-      .json(ResponseHelper.error("Failed to get profile", "GET_PROFILE_ERROR"));
+  } catch (err) {
+    return handleError(res, err, "get profile");
   }
 };
 
-/**
- * Admin-specific token verification
- */
 export const adminVerifyToken = async (req: Request, res: Response) => {
+  if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
-    // Ensure this is an admin user
-    const adminUser = await AdminUser.findOne({
-      where: { id: req.user.userId },
-      attributes: ["id", "email", "username", "role", "isActive"],
-    });
-
-    if (!adminUser) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("Admin user not found", "ADMIN_NOT_FOUND"));
-    }
-
-    if (!adminUser.isActive) {
-      return res
-        .status(403)
-        .json(
-          ResponseHelper.error(
-            "Admin account is deactivated",
-            "ACCOUNT_DEACTIVATED"
-          )
-        );
-    }
-
-    return res.status(200).json(
-      ResponseHelper.success({
-        user: {
-          id: adminUser.id,
-          email: adminUser.email,
-          name: adminUser.username,
-          role: adminUser.role,
-        },
-      })
-    );
-  } catch (error) {
-    logger.error("Admin verify token error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error("Token verification failed", "VERIFY_TOKEN_ERROR")
-      );
+    const user = await authService.getAdminUserById(req.user.userId);
+    return res.status(200).json(ResponseHelper.success({ user: { id: user.id, email: user.email, name: user.username, role: user.role } }));
+  } catch (err) {
+    return handleError(res, err, "admin verify token");
   }
 };
 
-/**
- * Admin-specific token refresh
- */
 export const adminRefreshToken = async (req: Request, res: Response) => {
+  const token = req.body.refreshToken || req.cookies?.admin_refresh_token;
+  if (!token) return res.status(400).json(ResponseHelper.error("Refresh token is required", "MISSING_REFRESH_TOKEN"));
   try {
-    // Try to get refresh token from body first, then from cookie
-    let refreshToken = req.body.refreshToken;
-
-    if (!refreshToken) {
-      refreshToken = req.cookies.admin_refresh_token;
-    }
-
-    if (!refreshToken) {
-      return res
-        .status(400)
-        .json(
-          ResponseHelper.error(
-            "Refresh token is required",
-            "MISSING_REFRESH_TOKEN"
-          )
-        );
-    }
-
-    // Verify refresh token
-    const payload = verifyRefreshToken(refreshToken);
-    if (!payload) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
-        );
-    }
-
-    // Check if admin user exists and is active
-    const adminUser = await AdminUser.findOne({
-      where: { id: payload.userId },
-      attributes: [
-        "id",
-        "email",
-        "username",
-        "role",
-        "isActive",
-        "refreshTokenHash",
-        "refreshTokenExpiresAt",
-      ],
-    });
-
-    if (!adminUser) {
-      return res
-        .status(404)
-        .json(ResponseHelper.error("Admin user not found", "ADMIN_NOT_FOUND"));
-    }
-
-    if (!adminUser.isActive) {
-      return res
-        .status(403)
-        .json(
-          ResponseHelper.error(
-            "Admin account is deactivated",
-            "ACCOUNT_DEACTIVATED"
-          )
-        );
-    }
-
-    // Verify refresh token against database
-    const currentTokenHash = hashRefreshToken(refreshToken);
-    if (
-      !adminUser.refreshTokenHash ||
-      adminUser.refreshTokenHash !== currentTokenHash
-    ) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Invalid refresh token", "INVALID_REFRESH_TOKEN")
-        );
-    }
-
-    // Check if refresh token is expired in database
-    if (
-      !adminUser.refreshTokenExpiresAt ||
-      adminUser.refreshTokenExpiresAt < new Date()
-    ) {
-      return res
-        .status(401)
-        .json(
-          ResponseHelper.error("Refresh token expired", "REFRESH_TOKEN_EXPIRED")
-        );
-    }
-
-    // Generate new tokens
-    const accessToken = generateAccessToken({
-      userId: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
-      username: adminUser.username,
-    });
-
-    const newRefreshToken = generateRefreshToken({
-      userId: adminUser.id,
-      tokenVersion: 0, // You can implement token versioning if needed
-    });
-
-    // Save new refresh token hash to database
-    const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
-    const newRefreshTokenExpiresAt = getRefreshTokenExpiration();
-
-    await adminUser.update({
-      refreshTokenHash: newRefreshTokenHash,
-      refreshTokenExpiresAt: newRefreshTokenExpiresAt,
-    });
-
-    // Set new refresh token as HTTP-only cookie
-    res.cookie("admin_refresh_token", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
-
-    const responseData: Record<string, unknown> = {
-      token: accessToken,
-      user: {
-        id: adminUser.id,
-        email: adminUser.email,
-        name: adminUser.username,
-        role: adminUser.role,
-      },
-    };
-
-    if (shouldExposeRefreshToken()) {
-      responseData.refreshToken = newRefreshToken;
-    }
-
+    const result = await authService.adminRefreshToken(token);
+    setRefreshCookie(res, result.refreshToken);
+    const responseData: Record<string, unknown> = { token: result.token, user: result.user };
+    if (authService.EXPOSE_REFRESH_TOKEN()) responseData.refreshToken = result.refreshToken;
     return res.status(200).json(ResponseHelper.success(responseData));
-  } catch (error) {
-    logger.error("Admin refresh token error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error("Failed to refresh token", "REFRESH_TOKEN_ERROR")
-      );
+  } catch (err) {
+    return handleError(res, err, "admin refresh token");
   }
 };
 
-/**
- * Admin-specific logout
- */
 export const adminLogout = async (req: Request, res: Response) => {
+  if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
-    }
-
-    // Invalidate the refresh token in database
-    const adminUser = await AdminUser.findByPk(req.user.userId);
-    if (adminUser) {
-      await adminUser.update({
-        refreshTokenHash: undefined,
-        refreshTokenExpiresAt: undefined,
-      });
-    }
-
-    // Clear refresh token cookie
-    res.clearCookie("admin_refresh_token", {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite:
-        (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
-      path: "/",
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
-
-    return res
-      .status(200)
-      .json(
-        ResponseHelper.success({ message: "Admin logged out successfully" })
-      );
-  } catch (error) {
-    logger.error("Admin logout error:", error);
-    return res
-      .status(500)
-      .json(ResponseHelper.error("Failed to logout", "LOGOUT_ERROR"));
+    await authService.logoutUser(req.user.userId);
+    clearRefreshCookie(res);
+    return res.status(200).json(ResponseHelper.success({ message: "Admin logged out successfully" }));
+  } catch (err) {
+    return handleError(res, err, "admin logout");
   }
 };
 
-/**
- * Check admin session using refresh token from cookie
- */
 export const adminSessionCheck = async (req: Request, res: Response) => {
+  const token = req.cookies?.admin_refresh_token;
+  if (!token) return res.status(401).json(ResponseHelper.error("No session found", "NO_SESSION"));
   try {
-    const refreshToken = req.cookies?.admin_refresh_token;
-
-    if (!refreshToken) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("No session found", "NO_SESSION"));
+    const result = await authService.checkAdminSession(token);
+    setRefreshCookie(res, result.newRefreshToken);
+    return res.status(200).json(ResponseHelper.success({ user: result.user, token: result.token, message: "Session restored successfully" }));
+  } catch (err) {
+    if (err instanceof ServiceError) {
+      return res.status(err.statusCode).json(ResponseHelper.error(err.message, err.code));
     }
-
-    try {
-      const payload = verifyRefreshToken(refreshToken);
-      const user = await AdminUser.findOne({
-        where: { id: payload.userId },
-        attributes: [
-          "id",
-          "email",
-          "role",
-          "isActive",
-          "username",
-          "refreshTokenHash",
-          "refreshTokenExpiresAt",
-        ],
-      });
-
-      if (!user || !user.isActive) {
-        return res
-          .status(401)
-          .json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
-      }
-
-      // Verify refresh token hash against database
-      const currentTokenHash = hashRefreshToken(refreshToken);
-      if (
-        !user.refreshTokenHash ||
-        user.refreshTokenHash !== currentTokenHash
-      ) {
-        return res
-          .status(401)
-          .json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
-      }
-
-      // Check if refresh token is expired in database
-      if (
-        !user.refreshTokenExpiresAt ||
-        user.refreshTokenExpiresAt < new Date()
-      ) {
-        return res
-          .status(401)
-          .json(ResponseHelper.error("Session expired", "SESSION_EXPIRED"));
-      }
-
-      // Generate new access token
-      const accessToken = generateAccessToken({
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        username: user.username,
-      });
-
-      // Generate new refresh token and update cookie + DB
-      const newRefreshToken = generateRefreshToken({
-        userId: user.id,
-        tokenVersion: 0,
-      });
-
-      // Save new refresh token hash to database
-      const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
-      const newRefreshTokenExpiresAt = getRefreshTokenExpiration();
-
-      await user.update({
-        refreshTokenHash: newRefreshTokenHash,
-        refreshTokenExpiresAt: newRefreshTokenExpiresAt,
-      });
-
-      // Set new refresh token as HTTP-only cookie
-      res.cookie("admin_refresh_token", newRefreshToken, {
-        httpOnly: true,
-        secure: process.env.COOKIE_SECURE === "true",
-        sameSite:
-          (process.env.COOKIE_SAME_SITE as "strict" | "lax" | "none") || "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: "/",
-        domain: process.env.COOKIE_DOMAIN || undefined,
-      });
-
-      return res.status(200).json(
-        ResponseHelper.success({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.username,
-            role: user.role,
-          },
-          token: accessToken,
-          message: "Session restored successfully",
-        })
-      );
-    } catch (refreshError) {
-      return res
-        .status(401)
-        .json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
-    }
-  } catch (error) {
-    logger.error("Admin session check error:", error);
-    return res
-      .status(500)
-      .json(
-        ResponseHelper.error("Session check failed", "SESSION_CHECK_ERROR")
-      );
+    logger.error("Admin session check error:", err);
+    return res.status(401).json(ResponseHelper.error("Invalid session", "INVALID_SESSION"));
   }
 };

@@ -148,6 +148,7 @@ export const getStatistics = async (req: Request, res: Response) => {
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const currentWeek = new Date(now);
     currentWeek.setDate(now.getDate() - now.getDay());
+    currentWeek.setHours(0, 0, 0, 0);
     const lastWeek = new Date(currentWeek);
     lastWeek.setDate(currentWeek.getDate() - 7);
 

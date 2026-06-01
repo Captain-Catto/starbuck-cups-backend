@@ -400,6 +400,8 @@ router.post("/admin/logout", authenticateWithAutoRefresh, adminLogout);
  *       401:
  *         description: No valid session found
  */
-router.get("/admin/session", authenticateWithAutoRefresh, adminSessionCheck);
+// No auth middleware here — adminSessionCheck reads the refresh cookie to RESTORE a session
+// Adding authenticateWithAutoRefresh would block this route when the access token is expired
+router.get("/admin/session", adminSessionCheck);
 
 export default router;
