@@ -90,21 +90,27 @@ const buildWatermarkSvg = async (
   const textOpacity = clampUnit(watermark.opacity ?? 0.92, 0.92);
   const bgOpacity = clampUnit(watermark.backgroundOpacity ?? 0.4, 0.4);
 
-  // Logo layout math
-  const logoSize = Math.round(fontSize * 1.1);
-  const logoGap = Math.round(fontSize * 0.4);
+  // Padding definitions
+  const paddingLeft = 10;
+  const paddingRight = 12;
+
+  // Logo layout math: make logo double (2.0x fontSize)
+  const logoSize = Math.round(fontSize * 2.0);
+  const logoGap = Math.round(fontSize * 0.25); // tight gap
   const logoSectionWidth = logoBuffer ? logoSize + logoGap : 0;
 
-  // Rough width estimate: average glyph width ~0.62em for Latin text.
+  // Rough width estimate: average glyph width ~0.55em for Latin text.
   const boxWidth = Math.max(
-    110 + logoSectionWidth,
-    Math.round(text.length * fontSize * 0.62 + 26 + logoSectionWidth)
+    80 + logoSectionWidth,
+    Math.round(text.length * fontSize * 0.55 + paddingLeft + paddingRight + logoSectionWidth)
   );
-  const boxHeight = Math.max(34, Math.round(fontSize + 18));
+  // Box height dynamically adjusts to fit the double-sized logo
+  const boxHeight = Math.max(40, Math.round(logoSize + 12));
   const svgWidth = boxWidth + margin;
   const svgHeight = boxHeight + margin;
 
   const logoY = Math.round((boxHeight - logoSize) / 2);
+  const textY = Math.round(boxHeight / 2 + fontSize * 0.34);
 
   try {
     // 1. Create transparent base canvas
@@ -129,13 +135,13 @@ const buildWatermarkSvg = async (
       .png()
       .toBuffer();
 
-    // 3. Create text SVG
+    // 3. Create text SVG (align to start/left after the logo section)
     const textSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${boxWidth}" height="${boxHeight}">
         <text
-          x="${boxWidth - 10}"
-          y="${boxHeight - 11}"
-          text-anchor="end"
+          x="${paddingLeft + logoSectionWidth}"
+          y="${textY}"
+          text-anchor="start"
           font-family="Arial, 'Helvetica Neue', Helvetica, Tahoma, 'Segoe UI', sans-serif"
           font-size="${fontSize}"
           font-weight="700"
@@ -154,7 +160,7 @@ const buildWatermarkSvg = async (
       const logoResized = await sharp(logoBuffer)
         .resize(logoSize, logoSize)
         .toBuffer();
-      composites.push({ input: logoResized, left: 12, top: logoY });
+      composites.push({ input: logoResized, left: paddingLeft, top: logoY });
     }
 
     composites.push({ input: Buffer.from(textSvg), left: 0, top: 0 });
