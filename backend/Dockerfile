@@ -14,6 +14,7 @@ COPY .sequelizerc ./
 COPY src ./src
 COPY config ./config
 COPY migrations ./migrations
+COPY assets ./assets
 
 RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
@@ -30,6 +31,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/config ./config
 COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/.sequelizerc ./.sequelizerc
+COPY --from=build /app/assets ./assets
 
 RUN mkdir -p /app/uploads && chown -R node:node /app
 
