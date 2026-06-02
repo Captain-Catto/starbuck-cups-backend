@@ -1,5 +1,19 @@
 import { logger } from "@/utils/logger";
 import sharp from "sharp";
+import fs from "fs";
+import path from "path";
+
+// Load logo as base64 string
+let logoBase64 = "";
+try {
+  const logoPath = path.join(process.cwd(), "assets/vip-logo.webp");
+  if (fs.existsSync(logoPath)) {
+    const logoBuffer = fs.readFileSync(logoPath);
+    logoBase64 = logoBuffer.toString("base64");
+  }
+} catch (err) {
+  logger.warn("Failed to load watermark logo image:", err);
+}
 
 export interface WatermarkOptions {
   /** Enable/disable watermark rendering */
@@ -75,18 +89,30 @@ const buildWatermarkSvg = (watermark: WatermarkOptions): Buffer | null => {
   const textOpacity = clampUnit(watermark.opacity ?? 0.92, 0.92);
   const bgOpacity = clampUnit(watermark.backgroundOpacity ?? 0.4, 0.4);
 
+  // Logo layout math
+  const logoSize = Math.round(fontSize * 1.1);
+  const logoGap = Math.round(fontSize * 0.4);
+  const logoSectionWidth = logoBase64 ? logoSize + logoGap : 0;
+
   // Rough width estimate: average glyph width ~0.62em for Latin text.
   const boxWidth = Math.max(
-    110,
-    Math.round(text.length * fontSize * 0.62 + 26)
+    110 + logoSectionWidth,
+    Math.round(text.length * fontSize * 0.62 + 26 + logoSectionWidth)
   );
   const boxHeight = Math.max(34, Math.round(fontSize + 18));
   const svgWidth = boxWidth + margin;
   const svgHeight = boxHeight + margin;
 
+  const logoY = Math.round((boxHeight - logoSize) / 2);
+
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
       <rect x="0" y="0" rx="8" ry="8" width="${boxWidth}" height="${boxHeight}" fill="black" fill-opacity="${bgOpacity}" />
+      ${
+        logoBase64
+          ? `<image href="data:image/webp;base64,${logoBase64}" x="12" y="${logoY}" width="${logoSize}" height="${logoSize}" />`
+          : ""
+      }
       <text
         x="${boxWidth - 10}"
         y="${boxHeight - 11}"
