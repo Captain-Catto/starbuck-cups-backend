@@ -3,13 +3,12 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 
-// Load logo as base64 string
-let logoBase64 = "";
+// Load logo buffer
+let logoBuffer: Buffer | null = null;
 try {
   const logoPath = path.join(process.cwd(), "assets/vip-logo.webp");
   if (fs.existsSync(logoPath)) {
-    const logoBuffer = fs.readFileSync(logoPath);
-    logoBase64 = logoBuffer.toString("base64");
+    logoBuffer = fs.readFileSync(logoPath);
   }
 } catch (err) {
   logger.warn("Failed to load watermark logo image:", err);
@@ -78,7 +77,9 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-const buildWatermarkSvg = (watermark: WatermarkOptions): Buffer | null => {
+const buildWatermarkSvg = async (
+  watermark: WatermarkOptions
+): Promise<Buffer | null> => {
   if (watermark.enabled === false) return null;
 
   const text = (watermark.text || "hasron.vn").trim();
@@ -92,7 +93,7 @@ const buildWatermarkSvg = (watermark: WatermarkOptions): Buffer | null => {
   // Logo layout math
   const logoSize = Math.round(fontSize * 1.1);
   const logoGap = Math.round(fontSize * 0.4);
-  const logoSectionWidth = logoBase64 ? logoSize + logoGap : 0;
+  const logoSectionWidth = logoBuffer ? logoSize + logoGap : 0;
 
   // Rough width estimate: average glyph width ~0.62em for Latin text.
   const boxWidth = Math.max(
@@ -105,28 +106,64 @@ const buildWatermarkSvg = (watermark: WatermarkOptions): Buffer | null => {
 
   const logoY = Math.round((boxHeight - logoSize) / 2);
 
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
-      <rect x="0" y="0" rx="8" ry="8" width="${boxWidth}" height="${boxHeight}" fill="black" fill-opacity="${bgOpacity}" />
-      ${
-        logoBase64
-          ? `<image href="data:image/webp;base64,${logoBase64}" x="12" y="${logoY}" width="${logoSize}" height="${logoSize}" />`
-          : ""
-      }
-      <text
-        x="${boxWidth - 10}"
-        y="${boxHeight - 11}"
-        text-anchor="end"
-        font-family="Arial, 'Helvetica Neue', Helvetica, Tahoma, 'Segoe UI', sans-serif"
-        font-size="${fontSize}"
-        font-weight="700"
-        fill="white"
-        fill-opacity="${textOpacity}"
-      >${escapeXml(text)}</text>
-    </svg>
-  `.trim();
+  try {
+    // 1. Create transparent base canvas
+    const watermarkBase = sharp({
+      create: {
+        width: svgWidth,
+        height: svgHeight,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    });
 
-  return Buffer.from(svg);
+    // 2. Create the black background rectangle
+    const rectBuffer = await sharp({
+      create: {
+        width: boxWidth,
+        height: boxHeight,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: bgOpacity },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    // 3. Create text SVG
+    const textSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${boxWidth}" height="${boxHeight}">
+        <text
+          x="${boxWidth - 10}"
+          y="${boxHeight - 11}"
+          text-anchor="end"
+          font-family="Arial, 'Helvetica Neue', Helvetica, Tahoma, 'Segoe UI', sans-serif"
+          font-size="${fontSize}"
+          font-weight="700"
+          fill="white"
+          fill-opacity="${textOpacity}"
+        >${escapeXml(text)}</text>
+      </svg>
+    `.trim();
+
+    // 4. Composite the layers together
+    const composites: sharp.OverlayOptions[] = [
+      { input: rectBuffer, left: 0, top: 0 },
+    ];
+
+    if (logoBuffer) {
+      const logoResized = await sharp(logoBuffer)
+        .resize(logoSize, logoSize)
+        .toBuffer();
+      composites.push({ input: logoResized, left: 12, top: logoY });
+    }
+
+    composites.push({ input: Buffer.from(textSvg), left: 0, top: 0 });
+
+    return await watermarkBase.composite(composites).png().toBuffer();
+  } catch (err) {
+    logger.error("Failed to generate image watermark:", err);
+    return null;
+  }
 };
 
 /**
@@ -158,7 +195,7 @@ export async function processImage(
   }
 
   // Add watermark before output encoding.
-  const watermarkSvg = buildWatermarkSvg(watermark || {});
+  const watermarkSvg = await buildWatermarkSvg(watermark || {});
   if (watermarkSvg) {
     pipeline = pipeline.composite([
       {
