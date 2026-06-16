@@ -11,7 +11,6 @@ import {
   setDefaultAddress,
   searchCustomers,
   getCustomerOrders,
-  getCustomersForSelect,
 } from "../controllers/customers.controller";
 import {
   authenticateWithAutoRefresh,

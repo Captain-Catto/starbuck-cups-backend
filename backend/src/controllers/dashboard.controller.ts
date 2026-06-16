@@ -1,48 +1,29 @@
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
-import { models } from "../models";
-
-const { Order, Customer, Product, Consultation } = models;
-
 import { ResponseHelper } from "../types/api";
-import { Op, QueryTypes } from "sequelize";
-import { sequelize } from "../config/database";
-import { productAnalyticsService } from "../services/productAnalytics.service";
+import {
+  dashboardService,
+  StatisticsPeriod,
+} from "../services/dashboard.service";
 
-interface TopCustomerQueryResult {
-  customerId: number;
-  totalSpent: string;
-}
+const VALID_PERIODS: StatisticsPeriod[] = ["week", "month", "year"];
+
+const parsePeriod = (raw: unknown): StatisticsPeriod =>
+  VALID_PERIODS.includes(raw as StatisticsPeriod)
+    ? (raw as StatisticsPeriod)
+    : "month";
+
+const growthPercent = (current: number, last: number): number => {
+  const growth = last > 0 ? ((current - last) / last) * 100 : current > 0 ? 100 : 0;
+  return Math.round(growth * 10) / 10;
+};
 
 /**
  * Get dashboard statistics
  */
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
-    // Get all counts in parallel
-    const [totalOrders, totalCustomers, totalProducts, pendingConsultations] =
-      await Promise.all([
-        Order.count(),
-        Customer.count(),
-        Product.count({
-          where: {
-            isActive: true,
-          },
-        }),
-        Consultation.count({
-          where: {
-            status: "PENDING",
-          },
-        }),
-      ]);
-
-    const stats = {
-      totalOrders,
-      totalCustomers,
-      totalProducts,
-      pendingConsultations,
-    };
-
+    const stats = await dashboardService.getCounts();
     return res.status(200).json(ResponseHelper.success(stats));
   } catch (error) {
     logger.error("Get dashboard stats error:", error);
@@ -62,63 +43,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
  */
 export const getRevenueData = async (req: Request, res: Response) => {
   try {
-    const now = new Date();
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    // Get revenue data in parallel
-    const [totalRevenue, thisMonthRevenue, lastMonthRevenue] =
-      await Promise.all([
-        // Total revenue from all completed orders (DELIVERED or other completion statuses)
-        Order.sum("totalAmount", {
-          where: {
-            status: "DELIVERED",
-          },
-        }),
-
-        // This month revenue
-        Order.sum("totalAmount", {
-          where: {
-            status: "DELIVERED",
-            createdAt: {
-              [Op.gte]: currentMonth,
-              [Op.lt]: nextMonth,
-            },
-          },
-        }),
-
-        // Last month revenue
-        Order.sum("totalAmount", {
-          where: {
-            status: "DELIVERED",
-            createdAt: {
-              [Op.gte]: lastMonth,
-              [Op.lt]: currentMonth,
-            },
-          },
-        }),
-      ]);
-
-    const total = Number(totalRevenue || 0);
-    const thisMonth = Number(thisMonthRevenue || 0);
-    const lastMonthAmount = Number(lastMonthRevenue || 0);
-
-    // Calculate growth percentage
-    const growth =
-      lastMonthAmount > 0
-        ? ((thisMonth - lastMonthAmount) / lastMonthAmount) * 100
-        : thisMonth > 0
-          ? 100
-          : 0;
-
-    const revenueData = {
-      totalRevenue: total,
-      thisMonthRevenue: thisMonth,
-      lastMonthRevenue: lastMonthAmount,
-      growth: Math.round(growth * 10) / 10, // Round to 1 decimal place
-    };
-
+    const revenueData = await dashboardService.getRevenueSummary();
     return res.status(200).json(ResponseHelper.success(revenueData));
   } catch (error) {
     logger.error("Get revenue data error:", error);
@@ -138,315 +63,59 @@ export const getRevenueData = async (req: Request, res: Response) => {
  */
 export const getStatistics = async (req: Request, res: Response) => {
   try {
-    const { period = "month" } = req.query;
-    const now = new Date();
-
-    // Date calculations
-    const currentYear = new Date(now.getFullYear(), 0, 1);
-    const lastYear = new Date(now.getFullYear() - 1, 0, 1);
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const currentWeek = new Date(now);
-    currentWeek.setDate(now.getDate() - now.getDay());
-    currentWeek.setHours(0, 0, 0, 0);
-    const lastWeek = new Date(currentWeek);
-    lastWeek.setDate(currentWeek.getDate() - 7);
-
-    // Helper function to get date range based on period
-    const getDateRange = (period: string) => {
-      switch (period) {
-        case "week":
-          return {
-            current: { gte: currentWeek },
-            last: { gte: lastWeek, lt: currentWeek },
-          };
-        case "year":
-          return {
-            current: { gte: currentYear },
-            last: { gte: lastYear, lt: currentYear },
-          };
-        default: // month
-          return {
-            current: { gte: currentMonth },
-            last: { gte: lastMonth, lt: currentMonth },
-          };
-      }
-    };
-
-    const dateRange = getDateRange(period as string);
-
-    // Get all statistics in parallel
-    const [
-      // Sales statistics
-      totalSoldProducts,
-      currentPeriodSales,
-      lastPeriodSales,
-
-      // Revenue statistics
-      totalRevenue,
-      currentPeriodRevenue,
-      lastPeriodRevenue,
-
-      // Top selling products
-      topSellingProducts,
-
-      // Top customers by total spent
-      topCustomers,
-
-      // Orders count this period
-      currentPeriodOrders,
-      lastPeriodOrders,
-
-      // Low stock products
-      lowStockProducts,
-
-      // Weekly/Monthly revenue trend
-      revenueTrend,
-
-      // Product analytics data
-      topClickedProducts,
-      topAddToCartProducts,
-      topConversionProducts,
-      analyticsummary,
-    ] = await Promise.all([
-      // Total products sold (all time)
-      sequelize
-        .query(
-          "SELECT COALESCE(SUM(oi.quantity), 0) as sum FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = ?",
-          { replacements: ["DELIVERED"], type: QueryTypes.SELECT, plain: true }
-        )
-        .then((result: any) => result?.sum || 0),
-
-      // Current period sales
-      sequelize
-        .query(
-          "SELECT COALESCE(SUM(oi.quantity), 0) as sum FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = ? AND o.created_at >= ?",
-          {
-            replacements: ["DELIVERED", dateRange.current.gte],
-            type: QueryTypes.SELECT,
-            plain: true,
-          }
-        )
-        .then((result: any) => result?.sum || 0),
-
-      // Last period sales
-      sequelize
-        .query(
-          "SELECT COALESCE(SUM(oi.quantity), 0) as sum FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = ? AND o.created_at >= ? AND o.created_at < ?",
-          {
-            replacements: ["DELIVERED", dateRange.last.gte, dateRange.last.lt],
-            type: QueryTypes.SELECT,
-            plain: true,
-          }
-        )
-        .then((result: any) => result?.sum || 0),
-
-      // Total revenue
-      Order.sum("totalAmount", {
-        where: {
-          status: "DELIVERED",
-        },
-      }),
-
-      // Current period revenue
-      Order.sum("totalAmount", {
-        where: {
-          status: "DELIVERED",
-          createdAt: {
-            [Op.gte]: dateRange.current.gte,
-          },
-        },
-      }),
-
-      // Last period revenue
-      Order.sum("totalAmount", {
-        where: {
-          status: "DELIVERED",
-          createdAt: {
-            [Op.gte]: dateRange.last.gte,
-            [Op.lt]: dateRange.last.lt,
-          },
-        },
-      }),
-
-      // Top selling products (single JOIN query, no N+1)
-      sequelize.query(
-        `SELECT
-          oi.product_id as "productId",
-          p.name as "productName",
-          p.slug as "productSlug",
-          cap.name as "capacityName",
-          SUM(oi.quantity) as "totalQuantity"
-        FROM order_items oi
-        INNER JOIN orders o ON oi.order_id = o.id
-        INNER JOIN products p ON oi.product_id = p.id
-        LEFT JOIN capacities cap ON p.capacity_id = cap.id
-        WHERE o.status = 'DELIVERED'
-        GROUP BY oi.product_id, p.name, p.slug, cap.name
-        ORDER BY SUM(oi.quantity) DESC
-        LIMIT 10`,
-        { type: QueryTypes.SELECT }
-      ),
-
-      // Top customers by total spent (single JOIN query, no N+1)
-      sequelize.query(
-        `SELECT
-          o.customer_id as "customerId",
-          c.full_name as "fullName",
-          c.messenger_id as "messengerId",
-          c.zalo_id as "zaloId",
-          SUM(o.total_amount) as "totalSpent",
-          (SELECT cp.phone_number FROM customer_phones cp
-           WHERE cp.customer_id = o.customer_id AND cp.is_main = true LIMIT 1) as "mainPhone"
-        FROM orders o
-        INNER JOIN customers c ON o.customer_id = c.id
-        WHERE o.status = 'DELIVERED'
-        GROUP BY o.customer_id, c.full_name, c.messenger_id, c.zalo_id
-        ORDER BY SUM(o.total_amount) DESC
-        LIMIT 10`,
-        { type: QueryTypes.SELECT }
-      ),
-
-      // Current period orders count
-      Order.count({
-        where: {
-          status: "DELIVERED",
-          createdAt: {
-            [Op.gte]: dateRange.current.gte,
-          },
-        },
-      }),
-
-      // Last period orders count
-      Order.count({
-        where: {
-          status: "DELIVERED",
-          createdAt: {
-            [Op.gte]: dateRange.last.gte,
-            [Op.lt]: dateRange.last.lt,
-          },
-        },
-      }),
-
-      // Low stock products (stock <= 1)
-      Product.findAll({
-        where: {
-          isActive: true,
-          isDeleted: false,
-          stockQuantity: {
-            [Op.lte]: 1,
-          },
-        },
-        attributes: ["id", "name", "stockQuantity"],
-        include: [
-          {
-            association: "capacity",
-            attributes: ["name"],
-          },
-        ],
-        order: [["stockQuantity", "ASC"]],
-        limit: 20,
-      }),
-
-      // Revenue trend - simple query compatible with both PostgreSQL and MySQL
-      sequelize.query(
-        `SELECT 
-          DATE(created_at) as period,
-          SUM(total_amount) as revenue
-        FROM orders 
-        WHERE status = 'DELIVERED' 
-          AND created_at >= ?
-        GROUP BY DATE(created_at)
-        ORDER BY period ASC
-        LIMIT 30`,
-        {
-          replacements: [dateRange.current.gte],
-          type: QueryTypes.SELECT,
-        }
-      ),
-
-      // Product analytics data
-      productAnalyticsService.getTopClickedProducts(10),
-      productAnalyticsService.getTopAddedToCartProducts(10),
-      productAnalyticsService.getTopConversionProducts(10),
-      productAnalyticsService.getAnalyticsSummary(),
-    ]);
-
-    const topProductsDetails = (topSellingProducts as any[]).map((item: any) => ({
-      id: item.productId,
-      name: item.productName || "Unknown",
-      slug: item.productSlug,
-      capacity: item.capacityName || "Unknown",
-      totalSold: Number(item.totalQuantity) || 0,
-    }));
-
-    const topCustomersDetails = (topCustomers as any[]).map((item: any) => ({
-      id: item.customerId,
-      name: item.fullName || "Unknown",
-      phone: item.mainPhone || "Unknown",
-      messengerId: item.messengerId || null,
-      zaloId: item.zaloId || null,
-      totalSpent: Number(item.totalSpent || 0),
-    }));
-
-    // Calculate growth percentages
-    const salesGrowth =
-      (lastPeriodSales || 0) > 0
-        ? (((currentPeriodSales || 0) - (lastPeriodSales || 0)) /
-            (lastPeriodSales || 1)) *
-          100
-        : (currentPeriodSales || 0) > 0
-          ? 100
-          : 0;
-
-    const revenueGrowth =
-      Number(lastPeriodRevenue || 0) > 0
-        ? ((Number(currentPeriodRevenue || 0) -
-            Number(lastPeriodRevenue || 0)) /
-            Number(lastPeriodRevenue || 1)) *
-          100
-        : Number(currentPeriodRevenue || 0) > 0
-          ? 100
-          : 0;
-
-    const ordersGrowth =
-      lastPeriodOrders > 0
-        ? ((currentPeriodOrders - lastPeriodOrders) / lastPeriodOrders) * 100
-        : currentPeriodOrders > 0
-          ? 100
-          : 0;
+    const period = parsePeriod(req.query.period);
+    const data = await dashboardService.getStatistics(period);
 
     const statistics = {
       period,
       overview: {
-        totalProductsSold: Number(totalSoldProducts || 0),
-        totalRevenue: Number(totalRevenue || 0),
-        currentPeriodSales: Number(currentPeriodSales || 0),
-        currentPeriodRevenue: Number(currentPeriodRevenue || 0),
-        currentPeriodOrders: currentPeriodOrders,
-        salesGrowth: Math.round(salesGrowth * 10) / 10,
-        revenueGrowth: Math.round(revenueGrowth * 10) / 10,
-        ordersGrowth: Math.round(ordersGrowth * 10) / 10,
+        totalProductsSold: data.totalSoldProducts,
+        totalRevenue: data.totalRevenue,
+        currentPeriodSales: data.currentPeriodSales,
+        currentPeriodRevenue: data.currentPeriodRevenue,
+        currentPeriodOrders: data.currentPeriodOrders,
+        salesGrowth: growthPercent(data.currentPeriodSales, data.lastPeriodSales),
+        revenueGrowth: growthPercent(
+          data.currentPeriodRevenue,
+          data.lastPeriodRevenue
+        ),
+        ordersGrowth: growthPercent(
+          data.currentPeriodOrders,
+          data.lastPeriodOrders
+        ),
       },
-      topSellingProducts: topProductsDetails,
-      topCustomers: topCustomersDetails,
-      lowStockProducts: lowStockProducts,
-      revenueTrend: (revenueTrend as any[]).map((item: any) => ({
+      topSellingProducts: data.topSellingProducts.map((item) => ({
+        id: item.productId,
+        name: item.productName || "Unknown",
+        slug: item.productSlug,
+        capacity: item.capacityName || "Unknown",
+        totalSold: Number(item.totalQuantity) || 0,
+      })),
+      topCustomers: data.topCustomers.map((item) => ({
+        id: item.customerId,
+        name: item.fullName || "Unknown",
+        phone: item.mainPhone || "Unknown",
+        messengerId: item.messengerId || null,
+        zaloId: item.zaloId || null,
+        totalSpent: Number(item.totalSpent || 0),
+      })),
+      lowStockProducts: data.lowStockProducts,
+      revenueTrend: data.revenueTrend.map((item) => ({
         period: item.period,
         revenue: Number(item.revenue || 0),
       })),
       productAnalytics: {
-        topClickedProducts: topClickedProducts.data,
-        topAddToCartProducts: topAddToCartProducts,
-        topConversionProducts: topConversionProducts.data,
+        topClickedProducts: data.topClickedProducts.data,
+        topAddToCartProducts: data.topAddToCartProducts,
+        topConversionProducts: data.topConversionProducts.data,
         summary: {
-          totalClicks: analyticsummary.totalClicks,
-          totalAddToCarts: analyticsummary.totalAddToCarts,
+          totalClicks: data.analyticsSummary.totalClicks,
+          totalAddToCarts: data.analyticsSummary.totalAddToCarts,
           overallConversionRate:
-            Math.round(analyticsummary.overallConversionRate * 1000) / 10, // Convert to percentage with 1 decimal
-          totalTrackedProducts: analyticsummary.totalProducts,
+            Math.round(data.analyticsSummary.overallConversionRate * 1000) / 10, // Convert to percentage with 1 decimal
+          totalTrackedProducts: data.analyticsSummary.totalProducts,
         },
-        recentActivity: analyticsummary.recentActivity,
+        recentActivity: data.analyticsSummary.recentActivity,
       },
     };
 
@@ -470,30 +139,17 @@ export const getTopSellingProducts = async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const offset = (page - 1) * limit;
 
-    const topSellingProducts = await sequelize.query(
-      `SELECT
-        oi.product_id as "productId",
-        p.name as "productName",
-        p.slug as "productSlug",
-        cap.name as "capacityName",
-        SUM(oi.quantity) as "totalQuantity"
-      FROM order_items oi
-      INNER JOIN orders o ON oi.order_id = o.id
-      INNER JOIN products p ON oi.product_id = p.id
-      LEFT JOIN capacities cap ON p.capacity_id = cap.id
-      WHERE o.status = 'DELIVERED'
-      GROUP BY oi.product_id, p.name, p.slug, cap.name
-      ORDER BY SUM(oi.quantity) DESC
-      LIMIT ? OFFSET ?`,
-      { replacements: [limit, offset], type: QueryTypes.SELECT }
+    const topSellingProducts = await dashboardService.getTopSellingProducts(
+      limit,
+      offset
     );
 
-    const validProducts = (topSellingProducts as any[]).map((item: any) => ({
+    const validProducts = topSellingProducts.map((item) => ({
       id: item.productId,
       name: item.productName || "Unknown",
       slug: item.productSlug,
       capacity: item.capacityName || "N/A",
-      totalSold: parseInt(item.totalQuantity),
+      totalSold: Number(item.totalQuantity) || 0,
     }));
 
     return res.json({

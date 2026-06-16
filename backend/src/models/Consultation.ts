@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { ConsultationItemAttributes } from './ConsultationItem';
 
 export enum ConsultationStatus {
   PENDING = 'PENDING',
@@ -34,10 +35,9 @@ export class Consultation extends Model<ConsultationAttributes, ConsultationCrea
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  // Associations
-  declare consultationItems?: any[];
+  declare consultationItems?: ConsultationItemAttributes[];
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     Consultation.hasMany(models.ConsultationItem, {
       foreignKey: 'consultationId',
       as: 'consultationItems',
@@ -104,3 +104,4 @@ export const ConsultationModel = (sequelize: Sequelize) => {
 
   return Consultation;
 };
+

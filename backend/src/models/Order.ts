@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { OrderItem } from './OrderItem';
+import type { CustomerAttributes } from './Customer';
 
 export enum OrderType {
   CUSTOM = 'CUSTOM',
@@ -28,7 +30,7 @@ export interface OrderAttributes {
   updatedAt: Date;
   confirmedAt?: Date;
   completedAt?: Date;
-  deliveryAddress?: any;
+  deliveryAddress?: Record<string, unknown>;
   originalShippingCost: number;
   shippingDiscount: number;
   customerMainPhone?: string;
@@ -52,16 +54,15 @@ export class Order extends Model<OrderAttributes, OrderCreationAttributes> imple
   declare updatedAt: Date;
   declare confirmedAt?: Date;
   declare completedAt?: Date;
-  declare deliveryAddress?: any;
+  declare deliveryAddress?: Record<string, unknown>;
   declare originalShippingCost: number;
   declare shippingDiscount: number;
   declare customerMainPhone?: string;
 
-  // Associations
-  declare items?: any[];
-  declare customer?: any;
+  declare items?: OrderItem[];
+  declare customer?: CustomerAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     Order.hasMany(models.OrderItem, {
       foreignKey: 'orderId',
       as: 'items',
@@ -197,3 +198,4 @@ export const OrderModel = (sequelize: Sequelize) => {
 
   return Order;
 };
+

@@ -6,7 +6,7 @@ export class AnalyticsController {
   // Track product click
   async trackProductClick(req: Request, res: Response) {
     try {
-      const { productId, productName, timestamp } = req.body;
+      const { productId } = req.body;
 
       if (!productId) {
         return res.status(400).json({
@@ -35,7 +35,7 @@ export class AnalyticsController {
   // Track add to cart click
   async trackAddToCartClick(req: Request, res: Response) {
     try {
-      const { productId, productName, timestamp } = req.body;
+      const { productId } = req.body;
 
       if (!productId) {
         return res.status(400).json({

@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { ProductAttributes } from './Product';
 
 export type ProductLocale = "vi" | "en" | "zh";
 
@@ -36,9 +37,9 @@ export class ProductTranslation
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  declare product?: any;
+  declare product?: ProductAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     ProductTranslation.belongsTo(models.Product, {
       foreignKey: "productId",
       as: "product",
@@ -112,3 +113,4 @@ export const ProductTranslationModel = (sequelize: Sequelize) => {
 
   return ProductTranslation;
 };
+

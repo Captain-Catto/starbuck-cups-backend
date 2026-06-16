@@ -1,10 +1,10 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import { Consultation, ConsultationStatus } from "../models/Consultation";
 import { ConsultationItem } from "../models/ConsultationItem";
 import { Product } from "../models/Product";
 import { ProductImage } from "../models/ProductImage";
-import { sequelize } from "../config/database";
-import { Op } from "sequelize";
+import { Op, WhereOptions } from "sequelize";
 
 export interface ConsultationCreateData {
   customer: {
@@ -67,7 +67,7 @@ export class ConsultationService {
       });
 
       // Create consultation items
-      const consultationItems = await Promise.all(
+      await Promise.all(
         data.items.map((item) =>
           ConsultationItem.create({
             consultationId: consultation.id,
@@ -94,13 +94,13 @@ export class ConsultationService {
       );
 
       return consultationWithItems!;
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Database error creating consultation:", error);
       // Preserve original error message for validation errors
-      if (error.message?.startsWith("Products not found")) {
+      if (getErrorMessage(error).startsWith("Products not found")) {
         throw error;
       }
-      throw new Error("Failed to create consultation in database");
+      throw new Error("Failed to create consultation in database", { cause: error });
     }
   }
 
@@ -109,31 +109,31 @@ export class ConsultationService {
       const { page, limit, status, dateFrom, dateTo } = filters;
       const skip = (page - 1) * limit;
 
-      const where: any = {};
+      const where: WhereOptions = {};
 
       if (status) {
-        where.status = status;
+        (where as Record<string, unknown>)["status"] = status;
       }
 
       // Date filtering
       if (dateFrom || dateTo) {
-        const dateFilter: any = {};
+        const dateFilter: WhereOptions = {};
 
         if (dateFrom) {
           // Parse dateFrom and set to start of day
           const fromDate = new Date(dateFrom);
           fromDate.setHours(0, 0, 0, 0);
-          dateFilter[Op.gte] = fromDate;
+          Object.assign(dateFilter, { [Op.gte]: fromDate });
         }
 
         if (dateTo) {
           // Parse dateTo and set to end of day
           const toDate = new Date(dateTo);
           toDate.setHours(23, 59, 59, 999);
-          dateFilter[Op.lte] = toDate;
+          Object.assign(dateFilter, { [Op.lte]: toDate });
         }
 
-        where.createdAt = dateFilter;
+        (where as Record<string, unknown>)["createdAt"] = dateFilter;
       }
 
       const result = await Consultation.findAndCountAll({
@@ -180,7 +180,7 @@ export class ConsultationService {
       };
     } catch (error) {
       logger.error("Database error fetching consultations:", error);
-      throw new Error("Failed to fetch consultations from database");
+      throw new Error("Failed to fetch consultations from database", { cause: error });
     }
   }
 
@@ -205,7 +205,7 @@ export class ConsultationService {
       return consultation;
     } catch (error) {
       logger.error("Database error fetching consultation:", error);
-      throw new Error("Failed to fetch consultation from database");
+      throw new Error("Failed to fetch consultation from database", { cause: error });
     }
   }
 
@@ -246,7 +246,7 @@ export class ConsultationService {
       return consultation;
     } catch (error) {
       logger.error("Database error updating consultation:", error);
-      throw new Error("Failed to update consultation in database");
+      throw new Error("Failed to update consultation in database", { cause: error });
     }
   }
 
@@ -264,7 +264,7 @@ export class ConsultationService {
       return { success: true };
     } catch (error) {
       logger.error("Database error deleting consultation:", error);
-      throw new Error("Failed to delete consultation from database");
+      throw new Error("Failed to delete consultation from database", { cause: error });
     }
   }
 
@@ -277,7 +277,7 @@ export class ConsultationService {
       return count;
     } catch (error) {
       logger.error("Database error counting pending consultations:", error);
-      throw new Error("Failed to count pending consultations from database");
+      throw new Error("Failed to count pending consultations from database", { cause: error });
     }
   }
 }

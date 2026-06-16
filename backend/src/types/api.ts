@@ -3,17 +3,17 @@
  * Used across all endpoints for consistent response format
  */
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data: T | null;
-  meta: Record<string, any>;
+  meta: Record<string, unknown>;
   error: ApiError | null;
 }
 
 export interface ApiError {
   message: string;
   code: string;
-  details?: any;
+  details?: unknown;
   stack?: string;
 }
 
@@ -33,7 +33,7 @@ export interface ListResponse<T> {
 
 // Helper functions for creating standardized responses
 export class ResponseHelper {
-  static success<T>(data: T, meta: Record<string, any> = {}): ApiResponse<T> {
+  static success<T>(data: T, meta: Record<string, unknown> = {}): ApiResponse<T> {
     return {
       success: true,
       data,
@@ -48,8 +48,8 @@ export class ResponseHelper {
   static error(
     message: string,
     code: string = "UNKNOWN_ERROR",
-    details?: any,
-    meta: Record<string, any> = {}
+    details?: unknown,
+    meta: Record<string, unknown> = {}
   ): ApiResponse<null> {
     return {
       success: false,
@@ -69,7 +69,7 @@ export class ResponseHelper {
   static paginated<T>(
     items: T[],
     pagination: PaginationMeta,
-    meta: Record<string, any> = {}
+    meta: Record<string, unknown> = {}
   ): ApiResponse<ListResponse<T>> {
     return this.success(
       {

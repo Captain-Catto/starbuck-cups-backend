@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { AdminUserAttributes } from './AdminUser';
+import type { ProductAttributes } from './Product';
 
 export interface CapacityAttributes {
   id: string;
@@ -29,11 +31,10 @@ export class Capacity
   declare updatedAt: Date;
   declare createdByAdminId: string;
 
-  // Associations - Use declare to avoid shadowing Sequelize getters/setters
-  declare createdByAdmin?: any;
-  declare products?: any[];
+  declare createdByAdmin?: AdminUserAttributes;
+  declare products?: ProductAttributes[];
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     Capacity.belongsTo(models.AdminUser, {
       foreignKey: "createdByAdminId",
       as: "createdByAdmin",
@@ -101,3 +102,4 @@ export const CapacityModel = (sequelize: Sequelize) => {
 
   return Capacity;
 };
+

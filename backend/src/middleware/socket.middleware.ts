@@ -24,7 +24,7 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: Error) => void
       return next(new Error('Authentication error: Server configuration error'));
     }
 
-    const decoded = jwt.verify(cleanToken, jwtSecret) as any;
+    const decoded = jwt.verify(cleanToken, jwtSecret) as { userId?: string; role?: string; email?: string; name?: string };
 
     if (!decoded || !decoded.userId) {
       return next(new Error('Authentication error: Invalid token'));

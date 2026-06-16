@@ -53,7 +53,7 @@ async function updateProductSlugs(): Promise<void> {
     conflict: boolean;
   }> = [];
 
-  for (const product of products as any[]) {
+  for (const product of products) {
     const baseSlug = generateVietnameseSlug(product.name);
     let finalSlug = baseSlug;
     let suffix = 2;
@@ -117,8 +117,8 @@ async function updateProductSlugs(): Promise<void> {
         { where: { id: entry.id } }
       );
       updated++;
-    } catch (err: any) {
-      logger.error(`  ❌ Failed to update [${entry.id}] ${entry.name}: ${err.message}`);
+    } catch (err: unknown) {
+      logger.error(`  ❌ Failed to update [${entry.id}] ${entry.name}:`, err);
       failed++;
     }
   }

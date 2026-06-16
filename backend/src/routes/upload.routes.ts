@@ -1,7 +1,7 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import express, { Request, Response } from "express";
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
-// import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace (Shared Drive)
 import {
   uploadSingle,
   uploadMultiple,
@@ -84,11 +84,11 @@ router.post(
         },
         message: "File uploaded successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Upload error:", error);
       res.status(500).json({
         success: false,
-        message: error?.message || "Upload failed",
+        message: getErrorMessage(error) || "Upload failed",
       });
     }
   }
@@ -137,7 +137,7 @@ router.post(
             : IMAGE_PRESETS.product;
 
       // Resize & convert all images to AVIF before uploading
-      const originalFiles = req.files.map((file: any) => ({
+      const originalFiles = req.files.map((file) => ({
         buffer: file.buffer,
         filename: file.originalname,
       }));
@@ -161,11 +161,11 @@ router.post(
         })),
         message: `${results.length} files uploaded successfully`,
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Multiple upload error:", error);
       res.status(500).json({
         success: false,
-        message: error?.message || "Upload failed",
+        message: getErrorMessage(error) || "Upload failed",
       });
     }
   }
@@ -204,11 +204,11 @@ router.delete(
         success: true,
         message: "File deleted successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Delete error:", error);
       res.status(500).json({
         success: false,
-        message: error?.message || "Delete failed",
+        message: getErrorMessage(error) || "Delete failed",
       });
     }
   }
@@ -251,11 +251,11 @@ router.get(
         },
         message: "Public URL retrieved successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Public URL error:", error);
       res.status(500).json({
         success: false,
-        message: error?.message || "Failed to get public URL",
+        message: getErrorMessage(error) || "Failed to get public URL",
       });
     }
   }

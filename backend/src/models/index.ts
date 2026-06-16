@@ -1,5 +1,4 @@
-import { Sequelize } from "sequelize";
-import sequelize from "../config/database";
+﻿import sequelize from "../config/database";
 
 // Import all models
 import { AdminUser, AdminUserModel, AdminRole } from "./AdminUser";
@@ -57,9 +56,10 @@ const models = {
 };
 
 // Define associations
-Object.values(models).forEach((model: any) => {
-  if (model.associate) {
-    model.associate(models);
+Object.values(models).forEach((model) => {
+  const m = model as { associate?: (m: Record<string, unknown>) => void };
+  if (m.associate) {
+    m.associate(models);
   }
 });
 

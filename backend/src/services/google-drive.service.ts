@@ -1,3 +1,4 @@
+import { getErrorMessage, getErrorProperty } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import { google, drive_v3 } from "googleapis";
 import { v4 as uuidv4 } from "uuid";
@@ -91,10 +92,11 @@ export class GoogleDriveService {
         key: fileId,
         bucket: folder,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Google Drive upload error:", error);
       throw new Error(
-        `Failed to upload file to Google Drive: ${error?.message || "Unknown error"}`
+        `Failed to upload file to Google Drive: ${getErrorMessage(error) || "Unknown error"}`,
+        { cause: error }
       );
     }
   }
@@ -121,10 +123,11 @@ export class GoogleDriveService {
       await this.drive.files.delete({
         fileId: fileId,
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Google Drive delete error:", error);
       throw new Error(
-        `Failed to delete file from Google Drive: ${error?.message || "Unknown error"}`
+        `Failed to delete file from Google Drive: ${getErrorMessage(error) || "Unknown error"}`,
+        { cause: error }
       );
     }
   }
@@ -138,10 +141,11 @@ export class GoogleDriveService {
     try {
       const deletePromises = fileIds.map((fileId) => this.deleteFile(fileId));
       await Promise.all(deletePromises);
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Google Drive bulk delete error:", error);
       throw new Error(
-        `Failed to delete files from Google Drive: ${error?.message || "Unknown error"}`
+        `Failed to delete files from Google Drive: ${getErrorMessage(error) || "Unknown error"}`,
+        { cause: error }
       );
     }
   }
@@ -156,8 +160,8 @@ export class GoogleDriveService {
         fields: "id",
       });
       return true;
-    } catch (error: any) {
-      if (error?.code === 404) {
+    } catch (error) {
+      if (getErrorProperty(error, "code") === 404) {
         return false;
       }
       throw error;

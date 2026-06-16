@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { CustomerAttributes } from './Customer';
 
 export interface CustomerPhoneAttributes {
   id: string;
@@ -27,10 +28,9 @@ export class CustomerPhone
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  // Associations
-  declare customer?: any;
+  declare customer?: CustomerAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     CustomerPhone.belongsTo(models.Customer, {
       foreignKey: "customerId",
       as: "customer",
@@ -107,3 +107,4 @@ export const CustomerPhoneModel = (sequelize: Sequelize) => {
 
   return CustomerPhone;
 };
+

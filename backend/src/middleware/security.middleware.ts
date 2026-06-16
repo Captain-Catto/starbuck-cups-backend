@@ -106,7 +106,7 @@ export const requestLogger = (
   next: NextFunction
 ) => {
   const requestId = crypto.randomUUID();
-  (req as any).id = requestId;
+  (req as Request & { id?: string }).id = requestId;
 
   loggerContext.run({ requestId }, () => {
     if (!requestLoggingEnabled || req.path === "/health") {
@@ -187,7 +187,7 @@ export const apiVersioning = (
   }
 
   // Add version to request
-  (req as any).apiVersion = version;
+  (req as Request & { apiVersion?: string }).apiVersion = version;
   res.set("API-Version", version);
 
   next();
@@ -213,10 +213,10 @@ export const healthCheck = (req: Request, res: Response) => {
  * Error handling middleware
  */
 export const errorHandler = (
-  error: any,
+  error: Error & { type?: string; code?: string; details?: unknown },
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   // Handle CORS errors
   if (error.message === "Not allowed by CORS") {

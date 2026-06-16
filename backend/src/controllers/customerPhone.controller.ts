@@ -1,7 +1,8 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { CustomerPhoneService } from "../services/customerPhone.service";
-import { ApiResponse, ResponseHelper } from "../types/api";
+import { ApiResponse } from "../types/api";
 
 // Initialize customer phone service
 const customerPhoneService = new CustomerPhoneService();
@@ -105,7 +106,7 @@ export const createCustomerPhone = async (req: Request, res: Response) => {
     };
 
     res.status(201).json(response);
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error creating customer phone:", error);
 
     const response: ApiResponse = {
@@ -113,7 +114,7 @@ export const createCustomerPhone = async (req: Request, res: Response) => {
       data: null,
       meta: { timestamp: new Date().toISOString() },
       error: {
-        message: error.message || "Failed to create customer phone number",
+        message: getErrorMessage(error) || "Failed to create customer phone number",
         code: "CUSTOMER_PHONE_CREATE_ERROR",
       },
     };
@@ -158,7 +159,7 @@ export const updateCustomerPhone = async (req: Request, res: Response) => {
     };
 
     res.json(response);
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error updating customer phone:", error);
 
     const response: ApiResponse = {
@@ -166,7 +167,7 @@ export const updateCustomerPhone = async (req: Request, res: Response) => {
       data: null,
       meta: { timestamp: new Date().toISOString() },
       error: {
-        message: error.message || "Failed to update customer phone number",
+        message: getErrorMessage(error) || "Failed to update customer phone number",
         code: "CUSTOMER_PHONE_UPDATE_ERROR",
       },
     };
@@ -209,7 +210,7 @@ export const deleteCustomerPhone = async (req: Request, res: Response) => {
     };
 
     res.json(response);
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error deleting customer phone:", error);
 
     const response: ApiResponse = {
@@ -217,7 +218,7 @@ export const deleteCustomerPhone = async (req: Request, res: Response) => {
       data: null,
       meta: { timestamp: new Date().toISOString() },
       error: {
-        message: error.message || "Failed to delete customer phone number",
+        message: getErrorMessage(error) || "Failed to delete customer phone number",
         code: "CUSTOMER_PHONE_DELETE_ERROR",
       },
     };
@@ -257,7 +258,7 @@ export const setMainPhone = async (req: Request, res: Response) => {
     };
 
     res.json(response);
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error setting main phone:", error);
 
     const response: ApiResponse = {
@@ -265,7 +266,7 @@ export const setMainPhone = async (req: Request, res: Response) => {
       data: null,
       meta: { timestamp: new Date().toISOString() },
       error: {
-        message: error.message || "Failed to set main phone number",
+        message: getErrorMessage(error) || "Failed to set main phone number",
         code: "CUSTOMER_PHONE_SET_MAIN_ERROR",
       },
     };

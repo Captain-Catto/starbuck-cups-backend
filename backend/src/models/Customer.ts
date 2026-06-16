@@ -1,4 +1,8 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { CustomerAddressAttributes } from './CustomerAddress';
+import type { AdminUserAttributes } from './AdminUser';
+import type { OrderAttributes } from './Order';
+import type { CustomerPhoneAttributes } from './CustomerPhone';
 
 export interface CustomerAttributes {
   id: string;
@@ -27,19 +31,18 @@ export class Customer extends Model<CustomerAttributes, CustomerCreationAttribut
   declare updatedAt: Date;
   declare createdByAdminId: string;
 
-  // Associations
-  declare addresses?: any[];
-  declare createdByAdmin?: any;
-  declare orders?: any[];
-  declare customerPhones?: any[];
+  declare addresses?: CustomerAddressAttributes[];
+  declare createdByAdmin?: AdminUserAttributes;
+  declare orders?: OrderAttributes[];
+  declare customerPhones?: CustomerPhoneAttributes[];
 
   // Helper method to get main phone
   getMainPhone(): string | null {
-    const mainPhone = this.customerPhones?.find((phone: any) => phone.isMain);
+    const mainPhone = this.customerPhones?.find((phone) => phone.isMain);
     return mainPhone ? mainPhone.phoneNumber : null;
   }
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     Customer.hasMany(models.CustomerAddress, {
       foreignKey: 'customerId',
       as: 'addresses',
@@ -122,3 +125,4 @@ export const CustomerModel = (sequelize: Sequelize) => {
 
   return Customer;
 };
+

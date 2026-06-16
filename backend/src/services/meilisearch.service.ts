@@ -1,9 +1,10 @@
+import { getErrorProperty } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 /**
  * Meilisearch service for fast and relevant search functionality
  * Handles indexing, searching, and data synchronization
  */
-import { MeiliSearch, Index } from "meilisearch";
+import { MeiliSearch, Index, SearchParams } from "meilisearch";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -148,8 +149,9 @@ class MeilisearchService {
         try {
           await this.client.createIndex(indexName, { primaryKey: "id" });
           logger.info(`✅ Index '${indexName}' created`);
-        } catch (error: any) {
-          if (error.cause?.code === "index_already_exists") {
+        } catch (error) {
+          const cause = getErrorProperty<{ code?: string }>(error, "cause");
+          if (cause?.code === "index_already_exists") {
             logger.info(`ℹ️  Index '${indexName}' already exists`);
           } else {
             throw error;
@@ -349,7 +351,7 @@ class MeilisearchService {
     options: SearchOptions = {}
   ): Promise<SearchResult<SearchableProduct>> {
     try {
-      const searchOptions: any = {
+      const searchOptions: SearchParams = {
         limit: options.limit || 20,
         offset: options.offset || 0,
         highlightPreTag: options.highlightPreTag || "<mark>",
@@ -395,7 +397,7 @@ class MeilisearchService {
     options: SearchOptions = {}
   ): Promise<SearchResult<SearchableCategory>> {
     try {
-      const searchOptions: any = {
+      const searchOptions: SearchParams = {
         limit: options.limit || 20,
         offset: options.offset || 0,
       };
@@ -428,7 +430,7 @@ class MeilisearchService {
     options: SearchOptions = {}
   ): Promise<SearchResult<SearchableColor>> {
     try {
-      const searchOptions: any = {
+      const searchOptions: SearchParams = {
         limit: options.limit || 20,
         offset: options.offset || 0,
       };
@@ -461,7 +463,7 @@ class MeilisearchService {
     options: SearchOptions = {}
   ): Promise<SearchResult<SearchableCapacity>> {
     try {
-      const searchOptions: any = {
+      const searchOptions: SearchParams = {
         limit: options.limit || 20,
         offset: options.offset || 0,
       };
@@ -494,7 +496,7 @@ class MeilisearchService {
     options: SearchOptions = {}
   ): Promise<SearchResult<SearchableCustomer>> {
     try {
-      const searchOptions: any = {
+      const searchOptions: SearchParams = {
         limit: options.limit || 20,
         offset: options.offset || 0,
       };
@@ -532,7 +534,7 @@ class MeilisearchService {
         attributesToRetrieve: ["name"],
       });
 
-      return result.hits.map((hit: any) => hit.name);
+      return result.hits.map((hit) => String(hit["name"]));
     } catch (error) {
       logger.error("❌ Error getting product suggestions:", error);
       throw error;
@@ -641,7 +643,7 @@ class MeilisearchService {
   /**
    * Get index statistics
    */
-  async getIndexStats(): Promise<Record<string, any>> {
+  async getIndexStats(): Promise<Record<string, unknown>> {
     try {
       const [
         productsStats,

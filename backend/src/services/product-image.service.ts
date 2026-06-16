@@ -1,5 +1,4 @@
 import { ProductImage } from "../models/ProductImage";
-import { Product } from "../models/Product";
 
 export interface ProductImageData {
   url: string;

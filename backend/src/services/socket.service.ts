@@ -3,17 +3,14 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HTTPServer } from "http";
 import {
   socketAuthMiddleware,
-  requireAdminRole,
 } from "../middleware/socket.middleware";
-import { Order } from "../models/Order";
 import { Consultation } from "../models/Consultation";
-import { Customer } from "../models/Customer";
 import {
   ServerToClientEvents,
   ClientToServerEvents,
   InterServerEvents,
   SocketData,
-  NotificationPayload,
+  SocketUser,
   ConsultationNotification,
   OrderNotification,
   UserNotification,
@@ -83,7 +80,7 @@ class SocketService {
   }
 
   private handleConnection(socket: Socket): void {
-    const user = (socket as any).data?.user;
+    const user = (socket.data as SocketData)?.user;
 
     if (!user) {
       logger.error("Socket connection without user data");
@@ -118,7 +115,7 @@ class SocketService {
     });
   }
 
-  private handleAdminJoin(socket: Socket, user: any): void {
+  private handleAdminJoin(socket: Socket, user: SocketUser): void {
     // Verify admin role
     const adminRoles = ["SUPER_ADMIN", "ADMIN", "STAFF"];
     if (!adminRoles.includes(user.role)) {
@@ -140,7 +137,7 @@ class SocketService {
     this.sendNotificationCount();
   }
 
-  private handleAdminLeave(socket: Socket, user: any): void {
+  private handleAdminLeave(socket: Socket, user: SocketUser): void {
     socket.leave("admin-room");
     this.adminSockets.delete(user.id);
     this.info("🚪 Admin left socket room");
@@ -398,7 +395,7 @@ class SocketService {
     this.sendNotificationCount();
   }
   // Emit settings update
-  public emitSettingsUpdate(settings: any): void {
+  public emitSettingsUpdate(settings: unknown): void {
     if (!this.io) {
       logger.error("Socket.IO not initialized");
       return;

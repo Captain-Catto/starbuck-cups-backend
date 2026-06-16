@@ -12,7 +12,9 @@
     "db:migrate:undo": "npx --yes sequelize-cli db:migrate:undo --env production",
     "db:migrate:status": "npx --yes sequelize-cli db:migrate:status --env production",
     "sync-meilisearch": "ts-node src/scripts/sync-meilisearch.ts",
-    "test-meilisearch": "ts-node src/test-meilisearch.ts"
+    "test-meilisearch": "ts-node src/test-meilisearch.ts",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "starbucks",
@@ -54,9 +56,10 @@
     "uuid": "^10.0.0",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "zod": "^3.23.8"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.9",
@@ -68,11 +71,13 @@
     "@types/node": "^20.9.0",
     "@types/sharp": "^0.31.1",
     "@types/uuid": "^10.0.0",
+    "eslint": "^10.4.1",
     "sequelize-cli": "^6.6.5",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsc-alias": "^1.8.10",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.61.0"
   }
 }

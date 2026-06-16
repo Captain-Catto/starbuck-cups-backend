@@ -1,5 +1,5 @@
 import { logger } from "@/utils/logger";
-import { Op, col, where as sequelizeWhere } from "sequelize";
+import { Op, col, where as sequelizeWhere, Order, WhereOptions, Includeable, IncludeOptions, Transaction } from "sequelize";
 import { sequelize } from "../config/database";
 import {
   Product,
@@ -29,15 +29,88 @@ export type TranslationPayload = {
   metaDescription?: string;
 };
 
+export interface ProductFilters {
+  page?: string;
+  limit?: string;
+  search?: string;
+  isActive?: string;
+  isDeleted?: string;
+  isFeatured?: string;
+  categorySlug?: string;
+  colorSlug?: string;
+  minCapacity?: string;
+  maxCapacity?: string;
+  locale?: string;
+  sortBy?: string;
+  sortOrder?: string;
+  lowStock?: string;
+  lowStockThreshold?: string;
+}
+
+export interface SearchFilters {
+  q?: string;
+  page?: string;
+  limit?: string;
+  categorySlug?: string;
+  colorSlug?: string;
+  capacitySlug?: string;
+  isActive?: string;
+}
+
+export interface LowStockFilters {
+  threshold?: string;
+  page?: string;
+  limit?: string;
+}
+
+export interface PublicProductFilters {
+  page?: string;
+  limit?: string;
+  search?: string;
+  category?: string;
+  categorySlug?: string;
+  color?: string;
+  colorSlug?: string;
+  capacity?: string;
+  capacitySlug?: string;
+  minCapacity?: string;
+  maxCapacity?: string;
+  isFeatured?: string;
+  locale?: string;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+export interface ProductUpdateData {
+  name?: string;
+  slug?: string;
+  description?: string;
+  capacityId?: string | null;
+  stockQuantity?: number;
+  unitPrice?: number;
+  productUrl?: string;
+  isVip?: boolean;
+  isFeatured?: boolean;
+  isActive?: boolean;
+  categoryIds?: string[];
+  colorIds?: string[];
+  productImages?: Array<{ url: string; order: number }>;
+  translations?: unknown;
+}
+
+export interface ProductUpdateWithFilesData extends ProductUpdateData {
+  keepExistingImages?: boolean;
+}
+
 const ADMIN_SORT_FIELDS = new Set(["name", "stockQuantity", "createdAt", "updatedAt", "isFeatured"]);
 const PUBLIC_SORT_FIELDS = new Set(["name", "createdAt", "isFeatured"]);
 
 // ── Shared include config ─────────────────────────────────────────────────────
 
 // Top-level order clause to sort product images by their `order` field
-const IMAGE_ORDER: any = [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]];
+const IMAGE_ORDER: Order = [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]];
 
-const FULL_PRODUCT_INCLUDE: any[] = [
+const FULL_PRODUCT_INCLUDE: Includeable[] = [
   { model: Capacity, as: "capacity", attributes: ["id", "name", "slug", "volumeMl"] },
   {
     model: ProductCategory,
@@ -75,18 +148,28 @@ export const normalizeLocale = (rawLocale?: string): SupportedLocale => {
 const getSearchableLocales = (locale: SupportedLocale): SupportedLocale[] =>
   locale === "vi" ? ["vi"] : [locale, "vi"];
 
-const toTranslationMap = (translations: any = []) => {
-  const arr = Array.isArray(translations) ? translations : Object.values(translations || {});
+interface RawTranslation {
+  locale: string;
+  name?: string;
+  description?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+}
+
+const toTranslationMap = (translations: unknown = []) => {
+  const arr: RawTranslation[] = Array.isArray(translations)
+    ? (translations as RawTranslation[])
+    : Object.values((translations as Record<string, RawTranslation>) || {});
   return Object.fromEntries(
-    arr.map((t: any) => [
+    arr.map((t) => [
       t.locale,
       { locale: t.locale, name: t.name, description: t.description || "", metaTitle: t.metaTitle || "", metaDescription: t.metaDescription || "" },
     ])
   ) as Partial<Record<SupportedLocale, { locale: SupportedLocale; name: string; description: string; metaTitle: string; metaDescription: string }>>;
 };
 
-export const applyLocaleToProduct = (product: any, locale: SupportedLocale, includeTranslationsMap = false) => {
-  const plain = typeof product.toJSON === "function" ? product.toJSON() : product;
+export const applyLocaleToProduct = (product: Product, locale: SupportedLocale, includeTranslationsMap = false) => {
+  const plain = (typeof product.toJSON === "function" ? product.toJSON() : product) as unknown as Record<string, unknown>;
   const map = toTranslationMap(plain.translations);
   const localized = map[locale] || map.vi;
   const { translations: _t, ...rest } = plain;
@@ -127,10 +210,10 @@ export const parseTranslationPayload = (translations?: unknown): Partial<Record<
 const buildLocalizedSearchConditions = (keyword: string, includeSlug = false) => {
   const likeKeyword = `%${keyword}%`;
   const escapedLike = sequelize.escape(likeKeyword);
-  const conditions: any[] = [
+  const conditions: object[] = [
     sequelizeWhere(
       sequelize.fn("unaccent", col("Product.name")),
-      { [Op.iLike]: sequelize.fn("unaccent", likeKeyword) as any }
+      { [Op.iLike]: sequelize.fn("unaccent", likeKeyword) as unknown as string }
     ),
     sequelize.literal(`EXISTS (SELECT 1 FROM product_translations AS "pt_search" WHERE "pt_search"."product_id" = "Product"."id" AND unaccent("pt_search"."name") ILIKE unaccent(${escapedLike}))`),
   ];
@@ -147,15 +230,15 @@ const normalizeSortOrder = (raw: unknown, fallback: "asc" | "desc" = "desc"): "a
   return n === "asc" || n === "desc" ? n : fallback;
 };
 
-const buildCapacityWhere = (min?: string | number, max?: string | number) => {
-  const where: any = {};
-  if (min && max) where.volumeMl = { [Op.between]: [parseInt(String(min)), parseInt(String(max))] };
-  else if (min) where.volumeMl = { [Op.gte]: parseInt(String(min)) };
-  else if (max) where.volumeMl = { [Op.lte]: parseInt(String(max)) };
+const buildCapacityWhere = (min?: string | number, max?: string | number): WhereOptions => {
+  const where: WhereOptions = {};
+  if (min && max) (where as Record<string, unknown>)["volumeMl"] = { [Op.between]: [parseInt(String(min)), parseInt(String(max))] };
+  else if (min) (where as Record<string, unknown>)["volumeMl"] = { [Op.gte]: parseInt(String(min)) };
+  else if (max) (where as Record<string, unknown>)["volumeMl"] = { [Op.lte]: parseInt(String(max)) };
   return where;
 };
 
-const buildCountInclude = (categoryWhere: any, colorWhere: any, capacityWhere: any) => [
+const buildCountInclude = (categoryWhere: WhereOptions, colorWhere: WhereOptions, capacityWhere: WhereOptions): Includeable[] => [
   { model: Capacity, as: "capacity", where: Object.keys(capacityWhere).length > 0 ? capacityWhere : undefined, required: Object.keys(capacityWhere).length > 0, attributes: [] },
   {
     model: ProductCategory,
@@ -197,7 +280,7 @@ async function upsertTranslations(
   parsedTranslations: Partial<Record<SupportedLocale, TranslationPayload>>,
   finalName: string,
   finalDescription?: string,
-  t?: any
+  t?: Transaction
 ) {
   const existing = await ProductTranslation.findAll({ where: { productId }, transaction: t });
   const existingMap = new Map(existing.map((tr) => [tr.locale, tr]));
@@ -229,7 +312,7 @@ async function upsertTranslations(
 
 // ── Service methods ───────────────────────────────────────────────────────────
 
-export async function findProducts(filters: Record<string, any>) {
+export async function findProducts(filters: ProductFilters) {
   const {
     page = "1", limit = "20", search = "", isActive = "all", isDeleted = "false",
     isFeatured = "all", categorySlug, colorSlug, minCapacity, maxCapacity,
@@ -242,20 +325,20 @@ export async function findProducts(filters: Record<string, any>) {
   const pageNum = parseInt(page) || 1; const limitNum = parseInt(limit) || 20;
   const offset = (pageNum - 1) * limitNum;
 
-  const where: any = {};
-  if (isDeleted === "false") where.isDeleted = false;
-  else if (isDeleted === "true") where.isDeleted = true;
-  if (isActive !== "all") where.isActive = isActive === "true";
-  if (isFeatured !== "all") where.isFeatured = isFeatured === "true";
-  if (search) where[Op.or] = buildLocalizedSearchConditions(search, true);
-  if (lowStock === "true") where.stockQuantity = { [Op.lte]: parseInt(lowStockThreshold) };
+  const where: WhereOptions = {};
+  if (isDeleted === "false") (where as Record<string, unknown>)["isDeleted"] = false;
+  else if (isDeleted === "true") (where as Record<string, unknown>)["isDeleted"] = true;
+  if (isActive !== "all") (where as Record<string, unknown>)["isActive"] = isActive === "true";
+  if (isFeatured !== "all") (where as Record<string, unknown>)["isFeatured"] = isFeatured === "true";
+  if (search) (where as Record<symbol, unknown>)[Op.or] = buildLocalizedSearchConditions(search, true);
+  if (lowStock === "true") (where as Record<string, unknown>)["stockQuantity"] = { [Op.lte]: parseInt(lowStockThreshold) };
 
-  const categoryWhere: any = categorySlug ? { slug: categorySlug } : {};
-  const colorWhere: any = colorSlug ? { slug: colorSlug } : {};
+  const categoryWhere: WhereOptions = categorySlug ? { slug: categorySlug } : {};
+  const colorWhere: WhereOptions = colorSlug ? { slug: colorSlug } : {};
   const capacityWhere = buildCapacityWhere(minCapacity, maxCapacity);
   const countInclude = buildCountInclude(categoryWhere, colorWhere, capacityWhere);
 
-  const orderClauses: any[] = [];
+  const orderClauses: Order = [];
   if (isFeatured === "true") orderClauses.push(["isFeatured", "DESC"]);
   if (sortByNorm === "isFeatured") orderClauses.push(["createdAt", "DESC"]);
   else orderClauses.push([sortByNorm, sortOrderNorm.toUpperCase()]);
@@ -310,8 +393,8 @@ export async function createProduct(data: {
     ]);
 
     if (data.capacityId && !capacity) throw new ServiceError(400, "VALIDATION_ERROR", "Capacity not found or inactive");
-    if (data.colorIds && (colors as any[]).length !== data.colorIds.length) throw new ServiceError(400, "VALIDATION_ERROR", "One or more colors not found or inactive");
-    if ((categories as any[]).length !== data.categoryIds.length) throw new ServiceError(400, "VALIDATION_ERROR", "One or more categories not found or inactive");
+    if (data.colorIds && colors.length !== data.colorIds.length) throw new ServiceError(400, "VALIDATION_ERROR", "One or more colors not found or inactive");
+    if (categories.length !== data.categoryIds.length) throw new ServiceError(400, "VALIDATION_ERROR", "One or more categories not found or inactive");
 
     const finalSlug = data.slug?.trim() || generateVietnameseSlug(canonicalName);
     if (!finalSlug) throw new ServiceError(400, "VALIDATION_ERROR", "Cannot generate slug from product name");
@@ -337,10 +420,10 @@ export async function createProduct(data: {
 
   const created = await Product.findByPk(result.id, { include: FULL_PRODUCT_INCLUDE, order: IMAGE_ORDER });
   invalidateProductCaches();
-  return applyLocaleToProduct(created, "vi", true);
+  return applyLocaleToProduct(created!, "vi", true);
 }
 
-export async function updateProduct(id: string, data: Record<string, any>) {
+export async function updateProduct(id: string, data: ProductUpdateData) {
   const existing = await Product.findByPk(id);
   if (!existing || existing.isDeleted) throw new ServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
 
@@ -377,7 +460,7 @@ export async function updateProduct(id: string, data: Record<string, any>) {
     }
 
     if (productImages?.length) {
-      const sorted = productImages.sort((a: any, b: any) => a.order - b.order).map((img: any) => img.url);
+      const sorted = (productImages as Array<{ order: number; url: string }>).sort((a, b) => a.order - b.order).map((img) => img.url);
       await ProductImage.destroy({ where: { productId: id }, transaction: t });
       await ProductImage.bulkCreate(sorted.map((url: string, i: number) => ({ productId: id, url, altText: finalName, order: i })), { transaction: t });
     }
@@ -388,10 +471,10 @@ export async function updateProduct(id: string, data: Record<string, any>) {
   });
 
   invalidateProductCaches(updated?.slug);
-  return applyLocaleToProduct(updated, "vi", true);
+  return applyLocaleToProduct(updated!, "vi", true);
 }
 
-export async function updateProductWithFiles(id: string, data: Record<string, any>, files: Express.Multer.File[]) {
+export async function updateProductWithFiles(id: string, data: ProductUpdateWithFilesData, files: Express.Multer.File[]) {
   const existing = await Product.findByPk(id);
   if (!existing || existing.isDeleted) throw new ServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
 
@@ -425,7 +508,7 @@ export async function updateProductWithFiles(id: string, data: Record<string, an
     }
 
     if (productImages?.length && (!files?.length)) {
-      const sorted = productImages.sort((a: any, b: any) => a.order - b.order).map((img: any) => img.url);
+      const sorted = (productImages as Array<{ order: number; url: string }>).sort((a, b) => a.order - b.order).map((img) => img.url);
       await ProductImage.destroy({ where: { productId: id }, transaction: t });
       await ProductImage.bulkCreate(sorted.map((url: string, i: number) => ({ productId: id, url, altText: finalName, order: i })), { transaction: t });
     }
@@ -452,7 +535,7 @@ export async function updateProductWithFiles(id: string, data: Record<string, an
   });
 
   invalidateProductCaches(updated?.slug);
-  return applyLocaleToProduct(updated, "vi", true);
+  return applyLocaleToProduct(updated!, "vi", true);
 }
 
 export async function deleteProduct(id: string, adminId: string) {
@@ -488,15 +571,15 @@ export async function toggleProductStatus(id: string) {
   return { message: `Product ${product.isActive ? "activated" : "deactivated"} successfully`, isActive: product.isActive };
 }
 
-export async function searchProducts(filters: Record<string, any>) {
+export async function searchProducts(filters: SearchFilters) {
   const { q = "", page = "1", limit = "20", categorySlug, colorSlug, capacitySlug, isActive = "true" } = filters;
   const pageNum = parseInt(page) || 1; const limitNum = parseInt(limit) || 20;
   const offset = (pageNum - 1) * limitNum;
 
-  const where: any = { isDeleted: false, isActive: isActive === "true" };
-  if (q) where[Op.or] = [sequelizeWhere(sequelize.fn("unaccent", col("Product.name")), { [Op.iLike]: sequelize.fn("unaccent", `%${q}%`) as any }), { slug: { [Op.iLike]: `%${q}%` } }];
+  const where: WhereOptions = { isDeleted: false, isActive: isActive === "true" };
+  if (q) Object.assign(where, { [Op.or]: [sequelizeWhere(sequelize.fn("unaccent", col("Product.name")), { [Op.iLike]: sequelize.fn("unaccent", `%${q}%`) as unknown as string }), { slug: { [Op.iLike]: `%${q}%` } }] });
 
-  const include: any[] = [
+  const include: IncludeOptions[] = [
     { model: Capacity, as: "capacity", where: capacitySlug ? { slug: capacitySlug } : undefined, attributes: ["id", "name", "slug", "volumeMl"] },
     { model: ProductCategory, as: "productCategories", include: [{ model: Category, as: "category", attributes: ["id", "name", "slug"] }] },
     { model: ProductColor, as: "productColors", include: [{ model: Color, as: "color", where: colorSlug ? { slug: colorSlug } : undefined, attributes: ["id", "name", "slug", "hexCode"] }] },
@@ -504,10 +587,10 @@ export async function searchProducts(filters: Record<string, any>) {
   ];
 
   if (categorySlug) {
-    const catInclude = include.find((i) => i.as === "productCategories");
+    const catInclude = include.find((i) => i.as === "productCategories")!;
     catInclude.required = true;
-    catInclude.include[0].where = { slug: categorySlug };
-    catInclude.include[0].required = true;
+    (catInclude.include![0] as IncludeOptions).where = { slug: categorySlug };
+    (catInclude.include![0] as IncludeOptions).required = true;
   }
 
   const { count: totalCount, rows: products } = await Product.findAndCountAll({ where, include, order: [["name", "ASC"]], offset, limit: limitNum, distinct: true });
@@ -516,7 +599,7 @@ export async function searchProducts(filters: Record<string, any>) {
   return { items: products, pagination: { current_page: pageNum, per_page: limitNum, total_pages: totalPages, total_items: totalCount, has_next: pageNum < totalPages, has_prev: pageNum > 1 } };
 }
 
-export async function findLowStockProducts(filters: Record<string, any>) {
+export async function findLowStockProducts(filters: LowStockFilters) {
   const { threshold = "1", page = "1", limit = "20" } = filters;
   const thresholdNum = parseInt(threshold) || 1; const pageNum = parseInt(page) || 1; const limitNum = parseInt(limit) || 20;
   const offset = (pageNum - 1) * limitNum;
@@ -536,7 +619,7 @@ export async function findLowStockProducts(filters: Record<string, any>) {
   return { items: products, pagination: { current_page: pageNum, per_page: limitNum, total_pages: Math.ceil(totalCount / limitNum), total_items: totalCount, has_next: pageNum < Math.ceil(totalCount / limitNum), has_prev: pageNum > 1 } };
 }
 
-export async function findPublicProducts(filters: Record<string, any>) {
+export async function findPublicProducts(filters: PublicProductFilters) {
   const {
     page = "1", limit = "20", search = "", category, categorySlug, color, colorSlug,
     capacity, capacitySlug, minCapacity, maxCapacity, isFeatured = "all", locale, sortBy = "createdAt", sortOrder = "desc",
@@ -548,25 +631,25 @@ export async function findPublicProducts(filters: Record<string, any>) {
   const pageNum = parseInt(page) || 1; const limitNum = parseInt(limit) || 20;
   const offset = (pageNum - 1) * limitNum;
 
-  const where: any = { isActive: true, isDeleted: false, stockQuantity: { [Op.gt]: 0 } };
-  if (search) where[Op.or] = buildLocalizedSearchConditions(search);
-  if (isFeatured !== "all") where.isFeatured = isFeatured === "true";
+  const where: WhereOptions = { isActive: true, isDeleted: false, stockQuantity: { [Op.gt]: 0 } };
+  if (search) Object.assign(where, { [Op.or]: buildLocalizedSearchConditions(search) });
+  if (isFeatured !== "all") (where as Record<string, unknown>)["isFeatured"] = isFeatured === "true";
 
   const categorySlugValue = category || categorySlug;
   const colorSlugValue = color || colorSlug;
   const capacitySlugValue = capacity || capacitySlug;
 
-  const categoryWhere: any = categorySlugValue ? { slug: categorySlugValue } : {};
-  const colorWhere: any = colorSlugValue ? { slug: colorSlugValue } : {};
+  const categoryWhere: WhereOptions = categorySlugValue ? { slug: categorySlugValue } : {};
+  const colorWhere: WhereOptions = colorSlugValue ? { slug: colorSlugValue } : {};
   const capacityWhere = capacitySlugValue ? { slug: capacitySlugValue } : buildCapacityWhere(minCapacity, maxCapacity);
 
   const countInclude = buildCountInclude(categoryWhere, colorWhere, capacityWhere);
   const totalCount = await Product.count({ where, include: countInclude, distinct: true, col: "id" });
 
-  const orderClauses: any[] = [
-    ...(sortByNorm === "isFeatured" && isFeatured !== "true" ? [["isFeatured", sortOrderNorm.toUpperCase()] as any] : isFeatured === "true" ? [["isFeatured", "DESC"] as any] : []),
-    ...(sortByNorm === "isFeatured" ? [["createdAt", "DESC"] as any] : [[sortByNorm, sortOrderNorm.toUpperCase()] as any]),
-  ];
+  const orderClauses: Order = [
+    ...(sortByNorm === "isFeatured" && isFeatured !== "true" ? [["isFeatured", sortOrderNorm.toUpperCase()]] : isFeatured === "true" ? [["isFeatured", "DESC"]] : []),
+    ...(sortByNorm === "isFeatured" ? [["createdAt", "DESC"]] : [[sortByNorm, sortOrderNorm.toUpperCase()]]),
+  ] as Order;
 
   const idRows = await Product.findAll({ where, include: countInclude, attributes: ["id"], order: orderClauses, group: ["Product.id"], offset, limit: limitNum, raw: true, subQuery: false });
   const paginatedIds = (idRows as Array<{ id: string }>).map((r) => r.id);

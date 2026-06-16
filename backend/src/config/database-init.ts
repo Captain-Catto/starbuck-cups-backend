@@ -43,7 +43,7 @@ export const initializeDatabase = async (): Promise<boolean> => {
 /**
  * Initialize session store
  */
-export const initializeSessionStore = async (sessionStore?: any): Promise<void> => {
+export const initializeSessionStore = async (sessionStore?: { sync?: () => Promise<void> }): Promise<void> => {
   try {
     logger.info('🔄 Initializing session store...');
 

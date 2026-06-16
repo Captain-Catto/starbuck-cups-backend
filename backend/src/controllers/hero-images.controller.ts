@@ -1,8 +1,10 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
+
+type AuthRequest = Request & { user?: { userId: string } };
 import { HeroImage, AdminUser } from "../models";
 import { googleDriveService } from "../services/google-drive.service"; // OAuth2 - Required for Gmail free accounts
-// import { googleDriveSAService } from "../services/google-drive-sa.service"; // Service Account requires Google Workspace
 import { z } from "zod";
 import multer from "multer";
 import { sequelize } from "../config/database";
@@ -60,12 +62,12 @@ export const getHeroImages = async (req: Request, res: Response) => {
       success: true,
       data: heroImages,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error fetching hero images:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch hero images",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -90,12 +92,12 @@ export const getAdminHeroImages = async (req: Request, res: Response) => {
       success: true,
       data: heroImages,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error fetching admin hero images:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch hero images",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -128,12 +130,12 @@ export const getHeroImageById = async (req: Request, res: Response) => {
       success: true,
       data: heroImage,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error fetching hero image:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch hero image",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -174,7 +176,7 @@ export const createHeroImage = async (req: Request, res: Response) => {
     );
 
     // Get admin ID from request (set by auth middleware)
-    const adminId = (req as any).user?.userId;
+    const adminId = (req as AuthRequest).user?.userId;
     if (!adminId) {
       return res.status(401).json({
         success: false,
@@ -212,7 +214,7 @@ export const createHeroImage = async (req: Request, res: Response) => {
       message: "Hero image created successfully",
       data: createdHeroImage,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error creating hero image:", error);
 
     if (error instanceof z.ZodError) {
@@ -226,7 +228,7 @@ export const createHeroImage = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create hero image",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -309,7 +311,7 @@ export const updateHeroImage = async (req: Request, res: Response) => {
       message: "Hero image updated successfully",
       data: updatedHeroImage,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error updating hero image:", error);
 
     if (error instanceof z.ZodError) {
@@ -323,7 +325,7 @@ export const updateHeroImage = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update hero image",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -358,12 +360,12 @@ export const deleteHeroImage = async (req: Request, res: Response) => {
       success: true,
       message: "Hero image deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error deleting hero image:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete hero image",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -407,7 +409,7 @@ export const reorderHeroImages = async (req: Request, res: Response) => {
       success: true,
       message: "Hero images reordered successfully",
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error reordering hero images:", error);
 
     if (error instanceof z.ZodError) {
@@ -421,7 +423,7 @@ export const reorderHeroImages = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Failed to reorder hero images",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };

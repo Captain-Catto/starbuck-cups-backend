@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { NewsTranslationAttributes } from './NewsTranslation';
+import type { AdminUserAttributes } from './AdminUser';
 
 export type NewsStatus = "draft" | "published";
 
@@ -39,10 +41,10 @@ export class News
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  declare translations?: any[];
-  declare createdByAdmin?: any;
+  declare translations?: NewsTranslationAttributes[];
+  declare createdByAdmin?: AdminUserAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     News.hasMany(models.NewsTranslation, {
       foreignKey: "newsId",
       as: "translations",
@@ -132,3 +134,4 @@ export const NewsModel = (sequelize: Sequelize) => {
 
   return News;
 };
+

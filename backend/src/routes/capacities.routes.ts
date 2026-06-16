@@ -3,7 +3,6 @@
  */
 import { Router } from "express";
 import {
-  getCapacities,
   getCapacitiesForAdmin,
   getCapacityById,
   createCapacity,

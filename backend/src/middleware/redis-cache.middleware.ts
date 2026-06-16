@@ -1,18 +1,17 @@
 import { logger } from "@/utils/logger";
 import { Request, Response, NextFunction } from "express";
 import { createClient } from "redis";
-import { ResponseHelper } from "../types/api";
 
 const isRedisEnabled = process.env.REDIS_ENABLED === "true" || (process.env.NODE_ENV === "production" && process.env.REDIS_ENABLED !== "false");
 
-let redisClient: any = null;
+let redisClient: ReturnType<typeof createClient> | null = null;
 
 if (isRedisEnabled) {
   redisClient = createClient({
     url: process.env.REDIS_URL || "redis://localhost:6379",
   });
 
-  redisClient.on("error", (err: any) => logger.error("Redis Cache Client Error", err));
+  redisClient.on("error", (err: Error) => logger.error("Redis Cache Client Error", err));
   redisClient.connect().catch(logger.error);
 }
 
@@ -71,19 +70,20 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
         res.send = () => res;
         res.end = () => res;
         res.sendStatus = () => res;
-        res.json = (body: any) => {
-          if (body && body.success === true) {
+        res.json = (body: unknown) => {
+          const b = body as Record<string, unknown>;
+          if (b && b["success"] === true) {
             const cacheData = {
               _staleAt: Date.now() + durationInSeconds * 1000,
-              data: body,
+              data: b,
             };
-            redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData))
-              .then(() => redisClient.del(lockKey))
-              .catch((err: any) => logger.error("Redis Cache SWR Set Error:", err));
+            redisClient!.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData))
+              .then(() => redisClient!.del(lockKey))
+              .catch((err: unknown) => logger.error("Redis Cache SWR Set Error:", err));
           } else {
-            redisClient.del(lockKey).catch(() => {});
+            redisClient!.del(lockKey).catch(() => {});
           }
-          return res as any;
+          return res;
         };
 
         next();
@@ -94,13 +94,14 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
       res.setHeader("X-Cache", "MISS");
 
       const originalJson = res.json.bind(res);
-      res.json = (body: any) => {
-        if (body && body.success === true) {
+      res.json = (body: unknown) => {
+        const b = body as Record<string, unknown>;
+        if (b && b["success"] === true) {
           const cacheData = {
             _staleAt: Date.now() + durationInSeconds * 1000,
-            data: body,
+            data: b,
           };
-          redisClient.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch((err: any) => {
+          redisClient!.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch((err: unknown) => {
             logger.error("Redis Cache Set Error:", err);
           });
           res.setHeader("Cache-Control", `public, max-age=${durationInSeconds}, stale-while-revalidate=${durationInSeconds * 10}`);

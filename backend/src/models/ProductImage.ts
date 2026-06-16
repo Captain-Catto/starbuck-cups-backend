@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { ProductAttributes } from './Product';
 
 export interface ProductImageAttributes {
   id: string;
@@ -23,10 +24,9 @@ export class ProductImage extends Model<ProductImageAttributes, ProductImageCrea
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  // Associations
-  declare product?: any;
+  declare product?: ProductAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     ProductImage.belongsTo(models.Product, {
       foreignKey: 'productId',
       as: 'product',
@@ -91,3 +91,4 @@ export const ProductImageModel = (sequelize: Sequelize) => {
 
   return ProductImage;
 };
+

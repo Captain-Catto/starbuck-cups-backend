@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { ConsultationAttributes } from './Consultation';
+import type { ProductAttributes } from './Product';
 
 export interface ConsultationItemAttributes {
   id: string;
@@ -25,11 +27,10 @@ export class ConsultationItem extends Model<ConsultationItemAttributes, Consulta
   declare category: string;
   declare createdAt: Date;
 
-  // Associations
-  declare consultation?: any;
-  declare product?: any;
+  declare consultation?: ConsultationAttributes;
+  declare product?: ProductAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     ConsultationItem.belongsTo(models.Consultation, {
       foreignKey: 'consultationId',
       as: 'consultation',
@@ -95,3 +96,4 @@ export const ConsultationItemModel = (sequelize: Sequelize) => {
 
   return ConsultationItem;
 };
+

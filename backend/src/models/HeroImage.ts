@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { AdminUserAttributes } from './AdminUser';
 
 export interface HeroImageAttributes {
   id: string;
@@ -27,10 +28,9 @@ export class HeroImage extends Model<HeroImageAttributes, HeroImageCreationAttri
   declare updatedAt: Date;
   declare createdByAdminId: string;
 
-  // Associations
-  declare createdByAdmin?: any;
+  declare createdByAdmin?: AdminUserAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     HeroImage.belongsTo(models.AdminUser, {
       foreignKey: 'createdByAdminId',
       as: 'createdByAdmin',
@@ -99,3 +99,4 @@ export const HeroImageModel = (sequelize: Sequelize) => {
 
   return HeroImage;
 };
+

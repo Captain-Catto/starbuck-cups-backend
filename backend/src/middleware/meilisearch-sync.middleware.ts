@@ -66,29 +66,29 @@ export class MeiliSearchSyncMiddleware {
       stockQuantity: product.stockQuantity,
       isActive: product.isActive,
       categories: (product.productCategories || [])
-        .filter((pc: any) => pc.category)
-        .map((pc: any) => ({
-          id: pc.category.id,
-          name: pc.category.name,
-          slug: pc.category.slug,
+        .filter((pc) => pc.category)
+        .map((pc) => ({
+          id: pc.category!.id,
+          name: pc.category!.name,
+          slug: pc.category!.slug,
         })),
       colors: (product.productColors || [])
-        .filter((pc: any) => pc.color)
-        .map((pc: any) => ({
-          id: pc.color.id,
-          name: pc.color.name,
-          slug: pc.color.slug,
-          hexCode: pc.color.hexCode,
+        .filter((pc) => pc.color)
+        .map((pc) => ({
+          id: pc.color!.id,
+          name: pc.color!.name,
+          slug: pc.color!.slug,
+          hexCode: pc.color!.hexCode,
         })),
       ...(product.capacity && {
         capacity: {
-          id: (product.capacity as any).id,
-          name: (product.capacity as any).name,
-          slug: (product.capacity as any).slug,
-          volumeMl: (product.capacity as any).volumeMl,
+          id: product.capacity.id,
+          name: product.capacity.name,
+          slug: product.capacity.slug,
+          volumeMl: product.capacity.volumeMl,
         },
       }),
-      images: (product.productImages || []).map((img: any) => img.url),
+      images: (product.productImages || []).map((img) => img.url),
       productUrl: product.productUrl || "",
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString(),
@@ -120,11 +120,11 @@ export class MeiliSearchSyncMiddleware {
       description: category.description || "",
       isActive: category.isActive,
       parentId: category.parentId || undefined,
-      parent: (category as any).parent
+      parent: category.parent
         ? {
-            id: (category as any).parent.id,
-            name: (category as any).parent.name,
-            slug: (category as any).parent.slug,
+            id: category.parent.id,
+            name: category.parent.name,
+            slug: category.parent.slug,
           }
         : undefined,
     };
@@ -204,9 +204,9 @@ export class MeiliSearchSyncMiddleware {
       return;
     }
 
-    const phones = (customer as any).customerPhones || [];
+    const phones = customer.customerPhones || [];
     const mainPhone =
-      phones.find((phone: any) => phone.isMain)?.phoneNumber ||
+      phones.find((phone) => phone.isMain)?.phoneNumber ||
       phones[0]?.phoneNumber ||
       "";
 

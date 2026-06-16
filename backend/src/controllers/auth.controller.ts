@@ -4,7 +4,6 @@ import { ResponseHelper } from "../types/api";
 import { ServiceError } from "../utils/service-error";
 import { z } from "zod";
 import * as authService from "../services/auth.service";
-import { AuthRequest } from "../middleware/auth.middleware";
 
 // ── Validation schemas ────────────────────────────────────────────────────────
 

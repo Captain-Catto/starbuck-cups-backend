@@ -1,4 +1,10 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { CapacityAttributes } from './Capacity';
+import type { CategoryAttributes } from './Category';
+import type { ColorAttributes } from './Color';
+import type { CustomerAttributes } from './Customer';
+import type { ProductAttributes } from './Product';
+import type { HeroImageAttributes } from './HeroImage';
 
 export enum AdminRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
@@ -37,15 +43,14 @@ export class AdminUser extends Model<AdminUserAttributes, AdminUserCreationAttri
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  // Associations
-  declare createdCapacities?: any[];
-  declare createdCategories?: any[];
-  declare createdColors?: any[];
-  declare createdCustomers?: any[];
-  declare deletedProducts?: any[];
-  declare createdHeroImages?: any[];
+  declare createdCapacities?: CapacityAttributes[];
+  declare createdCategories?: CategoryAttributes[];
+  declare createdColors?: ColorAttributes[];
+  declare createdCustomers?: CustomerAttributes[];
+  declare deletedProducts?: ProductAttributes[];
+  declare createdHeroImages?: HeroImageAttributes[];
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     AdminUser.hasMany(models.Capacity, {
       foreignKey: 'createdByAdminId',
       as: 'createdCapacities',
@@ -148,3 +153,4 @@ export const AdminUserModel = (sequelize: Sequelize) => {
 
   return AdminUser;
 };
+

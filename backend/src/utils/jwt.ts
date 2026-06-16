@@ -54,7 +54,7 @@ export function generateAccessToken(payload: AccessTokenPayload): string {
     } as jwt.SignOptions);
   } catch (error) {
     logger.error("Access token generation error:", error);
-    throw new Error("Failed to generate access token");
+    throw new Error("Failed to generate access token", { cause: error });
   }
 }
 
@@ -70,7 +70,7 @@ export function generateRefreshToken(payload: RefreshTokenPayload): string {
     } as jwt.SignOptions);
   } catch (error) {
     logger.error("Refresh token generation error:", error);
-    throw new Error("Failed to generate refresh token");
+    throw new Error("Failed to generate refresh token", { cause: error });
   }
 }
 
@@ -85,12 +85,12 @@ export function verifyAccessToken(token: string): DecodedAccessToken {
     }) as DecodedAccessToken;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      throw new Error("Access token expired");
+      throw new Error("Access token expired", { cause: error });
     } else if (error instanceof jwt.JsonWebTokenError) {
-      throw new Error("Invalid access token");
+      throw new Error("Invalid access token", { cause: error });
     } else {
       logger.error("Access token verification error:", error);
-      throw new Error("Token verification failed");
+      throw new Error("Token verification failed", { cause: error });
     }
   }
 }
@@ -106,12 +106,12 @@ export function verifyRefreshToken(token: string): DecodedRefreshToken {
     }) as DecodedRefreshToken;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      throw new Error("Refresh token expired");
+      throw new Error("Refresh token expired", { cause: error });
     } else if (error instanceof jwt.JsonWebTokenError) {
-      throw new Error("Invalid refresh token");
+      throw new Error("Invalid refresh token", { cause: error });
     } else {
       logger.error("Refresh token verification error:", error);
-      throw new Error("Token verification failed");
+      throw new Error("Token verification failed", { cause: error });
     }
   }
 }

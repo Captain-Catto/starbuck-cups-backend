@@ -1,7 +1,7 @@
 import { logger } from "@/utils/logger";
 import { CustomerPhone } from "../models/CustomerPhone";
 import { Customer } from "../models/Customer";
-import { Op, Transaction } from "sequelize";
+import { Op } from "sequelize";
 import { sequelize } from "../config/database";
 import { validateAndFormatPhone } from "../utils/phoneValidation";
 
@@ -34,7 +34,7 @@ export class CustomerPhoneService {
       return phones;
     } catch (error) {
       logger.error("Database error fetching customer phones:", error);
-      throw new Error("Failed to fetch customer phones from database");
+      throw new Error("Failed to fetch customer phones from database", { cause: error });
     }
   }
 

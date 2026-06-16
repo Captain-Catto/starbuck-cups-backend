@@ -66,7 +66,8 @@ import authRoutes from "./routes/auth.routes";
 import colorsRoutes from "./routes/colors.routes";
 import capacitiesRoutes from "./routes/capacities.routes";
 import categoriesRoutes from "./routes/categories.routes";
-import productsRoutes, { adminProductsRouter } from "./routes/products.routes";
+import productsRoutes from "./routes/products.public.routes";
+import adminProductsRouter from "./routes/products.admin.routes";
 import customersRoutes from "./routes/customers.routes";
 import customerPhoneRoutes from "./routes/customerPhone.routes";
 import ordersRoutes from "./routes/orders.routes";
@@ -85,7 +86,7 @@ import { searchRoutes } from "./routes/search.routes";
 import { socketService } from "./services/socket.service";
 
 // Import database connection
-import sequelize from "./config/database";
+
 import {
   initializeDatabase,
 } from "./config/database-init";
@@ -157,7 +158,7 @@ app.use(cookieParser()); // Add cookie parser middleware
 // Initialize Redis client for sessions if enabled
 const isRedisEnabled = process.env.REDIS_ENABLED === "true" || (process.env.NODE_ENV === "production" && process.env.REDIS_ENABLED !== "false");
 
-let sessionStore: any;
+let sessionStore: RedisStore | undefined;
 
 if (isRedisEnabled) {
   const redisClient = createClient({
@@ -210,7 +211,6 @@ app.use("/api/hero-images", heroImagesRoutes);
 app.use("/api/promotional-banners", promotionalBannersRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/settings", settingsRoutes);
-app.use("/api/api/settings", settingsRoutes); // Support double /api prefix from frontend
 app.use("/api/search", searchRoutes);
 
 // Public routes (for customer-facing website)

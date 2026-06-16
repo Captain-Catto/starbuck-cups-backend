@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { AdminUserAttributes } from './AdminUser';
 
 export interface PromotionalBannerAttributes {
   id: string;
@@ -44,10 +45,9 @@ export class PromotionalBanner
   declare updatedAt: Date;
   declare createdByAdminId: string;
 
-  // Associations
-  declare createdByAdmin?: any;
+  declare createdByAdmin?: AdminUserAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     PromotionalBanner.belongsTo(models.AdminUser, {
       foreignKey: "createdByAdminId",
       as: "createdByAdmin",
@@ -140,3 +140,4 @@ export const PromotionalBannerModel = (sequelize: Sequelize) => {
 
   return PromotionalBanner;
 };
+

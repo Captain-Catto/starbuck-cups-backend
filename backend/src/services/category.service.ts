@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, WhereOptions, FindOptions } from "sequelize";
 import { Category, AdminUser, ProductCategory } from "../models";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 import { ServiceError } from "../utils/service-error";
@@ -108,18 +108,18 @@ export async function findCategories(filters: CategoryFilters) {
     includeChildren = false,
   } = filters;
 
-  const where: any = {};
+  const where: WhereOptions = {};
   if (search) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${search}%` } },
       { slug: { [Op.like]: `%${search}%` } },
       { description: { [Op.like]: `%${search}%` } },
-    ];
+    ] });
   }
-  if (isActive !== undefined) where.isActive = isActive;
-  if (parentId !== undefined) where.parentId = parentId;
+  if (isActive !== undefined) (where as Record<string, unknown>)["isActive"] = isActive;
+  if (parentId !== undefined) (where as Record<string, unknown>)["parentId"] = parentId;
 
-  const queryOptions: any = {
+  const queryOptions: FindOptions = {
     where,
     order: [[sortBy, sortOrder.toUpperCase()]],
     include: [
@@ -162,14 +162,14 @@ export async function findCategories(filters: CategoryFilters) {
 }
 
 export async function buildCategoryTree(activeOnly: boolean) {
-  const where: any = activeOnly ? { isActive: true } : {};
+  const where: WhereOptions = activeOnly ? { isActive: true } : {};
   const categories = await Category.findAll({
     where,
     order: [["name", "ASC"]],
     include: [{ model: Category, as: "children" }],
   });
 
-  const buildTree = (parentId: string | null): any[] =>
+  const buildTree = (parentId: string | null): object[] =>
     categories
       .filter((cat) => cat.parentId === parentId)
       .map((cat) => ({ ...cat, children: buildTree(cat.id) }));
@@ -228,10 +228,10 @@ export async function updateCategory(id: string, data: UpdateCategoryData) {
     data.slug = await generateUniqueSlug(data.slug, id);
   }
 
-  const processedData: any = {};
+  const processedData: { name?: string; slug?: string; description?: string; parentId?: string } = {};
   if (data.name) processedData.name = data.name.trim();
   if (data.slug) processedData.slug = data.slug;
-  if (data.description !== undefined) processedData.description = data.description?.trim() || null;
+  if (data.description !== undefined) processedData.description = data.description?.trim() || undefined;
   if (data.parentId !== undefined) processedData.parentId = data.parentId;
 
   await Category.update(processedData, { where: { id } });
@@ -282,14 +282,14 @@ export async function deleteCategory(id: string) {
 }
 
 export async function searchCategories(query: string, active: boolean, parentId?: string) {
-  const where: any = { isActive: active };
+  const where: WhereOptions = { isActive: active };
   if (query) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${query}%` } },
       { slug: { [Op.like]: `%${query}%` } },
-    ];
+    ] });
   }
-  if (parentId) where.parentId = parentId;
+  if (parentId) (where as Record<string, unknown>)["parentId"] = parentId;
 
   return Category.findAll({
     where,
@@ -309,14 +309,14 @@ export async function findPublicCategories(filters: {
   sortOrder?: string;
 }) {
   const { page = 1, limit = 20, search, parentId, sortBy = "name", sortOrder = "asc" } = filters;
-  const where: any = { isActive: true };
+  const where: WhereOptions = { isActive: true };
   if (search) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${search}%` } },
       { description: { [Op.like]: `%${search}%` } },
-    ];
+    ] });
   }
-  if (parentId !== undefined) where.parentId = parentId;
+  if (parentId !== undefined) (where as Record<string, unknown>)["parentId"] = parentId;
 
   const [items, totalItems] = await Promise.all([
     Category.findAll({
@@ -352,7 +352,7 @@ export async function findPublicCategoryTree() {
   const ATTRS = ["id", "name", "slug", "description", "parentId", "isActive", "createdAt", "updatedAt"];
 
   return Category.findAll({
-    where: { isActive: true, parentId: { [Op.is]: null } } as any,
+    where: { isActive: true, parentId: { [Op.is]: null } } as WhereOptions,
     attributes: ATTRS,
     include: [
       {

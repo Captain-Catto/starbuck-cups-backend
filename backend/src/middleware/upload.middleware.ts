@@ -58,7 +58,7 @@ export const uploadFields = (
 
 // Error handler for multer errors
 export const handleMulterError = (
-  error: any,
+  error: Error & { code?: string; field?: string },
   req: Request,
   res: Response,
   next: NextFunction

@@ -20,7 +20,7 @@ export async function hashPassword(password: string): Promise<string> {
     return await bcrypt.hash(password, salt);
   } catch (error) {
     logger.error('Password hashing error:', error);
-    throw new Error('Failed to hash password');
+    throw new Error('Failed to hash password', { cause: error });
   }
 }
 
@@ -62,7 +62,7 @@ export function validatePassword(password: string): PasswordValidation {
     errors.push('Password must contain at least one number');
   }
 
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
     errors.push('Password must contain at least one special character');
   }
 

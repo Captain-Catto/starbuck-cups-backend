@@ -36,7 +36,7 @@ const coloredFormat = winston.format.printf(({ level, message, timestamp, ...met
 );
 
 class SentryTransport extends Transport {
-  log(info: any, callback: () => void) {
+  log(info: Record<string | symbol, unknown>, callback: () => void) {
     setImmediate(() => this.emit("logged", info));
 
     const splat = (info[Symbol.for("splat")] as unknown[]) ?? [];
@@ -49,7 +49,7 @@ class SentryTransport extends Transport {
       });
     } else {
       Sentry.captureMessage(
-        splat.length ? `${info.message} ${JSON.stringify(splat)}` : info.message,
+        splat.length ? `${String(info.message)} ${JSON.stringify(splat)}` : String(info.message),
         "error"
       );
     }

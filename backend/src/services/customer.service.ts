@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, WhereOptions, Order } from "sequelize";
 import { sequelize } from "../config/database";
 import { models } from "../models";
 import { ServiceError } from "../utils/service-error";
@@ -8,7 +8,7 @@ const { Customer, CustomerPhone, CustomerAddress, AdminUser, Order, OrderItem, P
 const CUSTOMER_FULL_INCLUDE = [
   { model: AdminUser, as: "createdByAdmin", attributes: ["username", "email"] },
   { model: CustomerPhone, as: "customerPhones", attributes: ["id", "phoneNumber", "isMain"] },
-  { model: CustomerAddress, as: "addresses", order: [["isDefault", "DESC"]] } as any,
+  { model: CustomerAddress, as: "addresses", order: [["isDefault", "DESC"]] as Order },
 ];
 
 export async function findCustomers(filters: {
@@ -24,28 +24,31 @@ export async function findCustomers(filters: {
   const limitNum = parseInt(String(limit));
   const offset = (pageNum - 1) * limitNum;
 
-  const where: any = {};
+  const where: WhereOptions = {};
   const hasPhoneSearch = Boolean(search);
 
   if (search) {
-    where[Op.or] = [
-      { fullName: { [Op.like]: `%${search}%` } },
-      { messengerId: { [Op.like]: `%${search}%` } },
-      { zaloId: { [Op.like]: `%${search}%` } },
-      ...(hasPhoneSearch ? [{ "$customerPhones.phoneNumber$": { [Op.like]: `%${search}%` } }] : []),
-    ];
+    Object.assign(where, {
+      [Op.or]: [
+        { fullName: { [Op.like]: `%${search}%` } },
+        { messengerId: { [Op.like]: `%${search}%` } },
+        { zaloId: { [Op.like]: `%${search}%` } },
+        ...(hasPhoneSearch ? [{ "$customerPhones.phoneNumber$": { [Op.like]: `%${search}%` } }] : []),
+      ],
+    });
   }
-  if (vipStatus === "vip") where.isVip = true;
-  else if (vipStatus === "regular") where.isVip = false;
+  if (vipStatus === "vip") (where as Record<string, unknown>)["isVip"] = true;
+  else if (vipStatus === "regular") (where as Record<string, unknown>)["isVip"] = false;
 
   if (dateFrom || dateTo) {
-    where.createdAt = {};
-    if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
+    const createdAt: WhereOptions = {};
+    if (dateFrom) Object.assign(createdAt, { [Op.gte]: new Date(dateFrom) });
     if (dateTo) {
       const end = new Date(dateTo);
       end.setDate(end.getDate() + 1);
-      where.createdAt[Op.lt] = end;
+      Object.assign(createdAt, { [Op.lt]: end });
     }
+    (where as Record<string, unknown>)["createdAt"] = createdAt;
   }
 
   const { count: totalCount, rows: customers } = await Customer.findAndCountAll({
@@ -165,7 +168,13 @@ export async function updateCustomer(id: string, data: {
   const existing = await Customer.findByPk(id);
   if (!existing) throw new ServiceError(404, "CUSTOMER_NOT_FOUND", "Customer not found");
 
-  const updateData: any = {};
+  const updateData: {
+    messengerId?: string;
+    zaloId?: string;
+    fullName?: string;
+    notes?: string;
+    isVip?: boolean;
+  } = {};
   if (data.messengerId !== undefined) updateData.messengerId = data.messengerId || undefined;
   if (data.zaloId !== undefined) updateData.zaloId = data.zaloId || undefined;
   if (data.fullName !== undefined) updateData.fullName = data.fullName;
@@ -280,8 +289,8 @@ export async function findCustomerOrders(customerId: string, filters: {
   const limitNum = parseInt(String(limit));
   const offset = (pageNum - 1) * limitNum;
 
-  const where: any = { customerId };
-  if (status !== "all") where.status = status;
+  const where: WhereOptions = { customerId };
+  if (status !== "all") (where as Record<string, unknown>)["status"] = status;
 
   const { count: totalCount, rows: orders } = await Order.findAndCountAll({
     where,
@@ -311,12 +320,14 @@ export async function findCustomerOrders(customerId: string, filters: {
 
 export async function findCustomersForSelect(search: string) {
   const hasSearch = Boolean(search);
-  const where: any = {};
+  const where: WhereOptions = {};
   if (search) {
-    where[Op.or] = [
-      { fullName: { [Op.like]: `%${search}%` } },
-      ...(hasSearch ? [{ "$customerPhones.phoneNumber$": { [Op.like]: `%${search}%` } }] : []),
-    ];
+    Object.assign(where, {
+      [Op.or]: [
+        { fullName: { [Op.like]: `%${search}%` } },
+        ...(hasSearch ? [{ "$customerPhones.phoneNumber$": { [Op.like]: `%${search}%` } }] : []),
+      ],
+    });
   }
 
   return Customer.findAll({
@@ -331,13 +342,15 @@ export async function findCustomersForSelect(search: string) {
 
 export async function searchCustomers(query: string) {
   const hasQuery = Boolean(query);
-  const where: any = {};
+  const where: WhereOptions = {};
   if (query) {
-    where[Op.or] = [
-      { fullName: { [Op.like]: `%${query}%` } },
-      { messengerId: { [Op.like]: `%${query}%` } },
-      ...(hasQuery ? [{ "$customerPhones.phoneNumber$": { [Op.like]: `%${query}%` } }] : []),
-    ];
+    Object.assign(where, {
+      [Op.or]: [
+        { fullName: { [Op.like]: `%${query}%` } },
+        { messengerId: { [Op.like]: `%${query}%` } },
+        ...(hasQuery ? [{ "$customerPhones.phoneNumber$": { [Op.like]: `%${query}%` } }] : []),
+      ],
+    });
   }
 
   return Customer.findAll({

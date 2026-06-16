@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { ProductAttributes } from './Product';
+import type { CategoryAttributes } from './Category';
 
 export interface ProductCategoryAttributes {
   id: string;
@@ -21,11 +23,10 @@ export class ProductCategory
   declare categoryId: string;
   declare createdAt: Date;
 
-  // Associations - Use declare to avoid shadowing Sequelize getters/setters
-  declare product?: any;
-  declare category?: any;
+  declare product?: ProductAttributes;
+  declare category?: CategoryAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     ProductCategory.belongsTo(models.Product, {
       foreignKey: "productId",
       as: "product",
@@ -81,3 +82,4 @@ export const ProductCategoryModel = (sequelize: Sequelize) => {
 
   return ProductCategory;
 };
+

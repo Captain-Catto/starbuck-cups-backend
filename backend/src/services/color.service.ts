@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, WhereOptions, FindAndCountOptions } from "sequelize";
 import { models } from "../models";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 import { ServiceError } from "../utils/service-error";
@@ -22,16 +22,16 @@ interface ColorFilters {
 
 function buildColorWhere(filters: ColorFilters) {
   const { search, isActive } = filters;
-  const where: any = {};
+  const where: WhereOptions = {};
   if (search) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${search}%` } },
       { slug: { [Op.like]: `%${search}%` } },
       { hexCode: { [Op.like]: `%${search}%` } },
-    ];
+    ] });
   }
   if (isActive !== undefined && isActive !== "all") {
-    where.isActive = isActive === "true" || isActive === true;
+    (where as Record<string, unknown>)["isActive"] = isActive === "true" || isActive === true;
   }
   return where;
 }
@@ -68,7 +68,7 @@ export async function findColorsForAdmin(filters: ColorFilters) {
   const where = buildColorWhere(filters);
   const offset = (page - 1) * limit;
 
-  const queryOptions: any = {
+  const queryOptions: FindAndCountOptions = {
     where,
     order: [[sortBy, sortOrder.toUpperCase()]],
     include: [
@@ -84,7 +84,7 @@ export async function findColorsForAdmin(filters: ColorFilters) {
 
   const { count: total, rows: colors } = await Color.findAndCountAll(queryOptions);
 
-  const items = colors.map((c: any) => ({
+  const items = colors.map((c) => ({
     ...c.toJSON(),
     _count: { productColors: c.productColors?.length ?? 0 },
   }));
@@ -171,22 +171,22 @@ export async function findActiveColors() {
 }
 
 export async function searchColors(query: string, active: boolean) {
-  const where: any = { isActive: active };
+  const where: WhereOptions = { isActive: active };
   if (query) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${query}%` } },
       { slug: { [Op.like]: `%${query}%` } },
       { hexCode: { [Op.like]: `%${query}%` } },
-    ];
+    ] });
   }
   return Color.findAll({ where, attributes: ["id", "name", "slug", "hexCode"], order: [["name", "ASC"]], limit: 50 });
 }
 
 export async function findPublicColorByIdOrSlug(idOrSlug: string) {
   const isUUID = UUID_RE.test(idOrSlug);
-  const where: any = { isActive: true };
+  const where: WhereOptions = { isActive: true };
   if (isUUID) {
-    where[Op.or] = [{ id: idOrSlug }, { slug: idOrSlug }];
+    Object.assign(where, { [Op.or]: [{ id: idOrSlug }, { slug: idOrSlug }] });
   } else {
     where.slug = idOrSlug;
   }
@@ -209,13 +209,13 @@ export async function findPublicColorByIdOrSlug(idOrSlug: string) {
 
 export async function findPublicColors(filters: { page?: number; limit?: number; search?: string; sortBy?: string; sortOrder?: string }) {
   const { page = 1, limit = 50, search, sortBy = "name", sortOrder = "asc" } = filters;
-  const where: any = { isActive: true };
-  if (search) where.name = { [Op.like]: `%${search}%` };
+  const where: WhereOptions = { isActive: true };
+  if (search) (where as Record<string, unknown>)["name"] = { [Op.like]: `%${search}%` };
 
   const orderField = sortBy === "createdAt" ? "createdAt" : "name";
   const ATTRS = ["id", "name", "slug", "hexCode", "isActive", "createdAt", "updatedAt"];
 
-  const queryOptions: any = {
+  const queryOptions: FindAndCountOptions = {
     where,
     attributes: ATTRS,
     include: [{

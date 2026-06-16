@@ -3,7 +3,6 @@
  */
 import { Router } from "express";
 import {
-  getColors,
   getColorsForAdmin,
   getColorById,
   createColor,

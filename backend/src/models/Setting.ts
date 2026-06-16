@@ -1,9 +1,9 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, Sequelize } from "sequelize";
 
 export interface SettingAttributes {
   id: string;
   key: string;
-  value: any;
+  value: unknown;
   description?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -20,12 +20,12 @@ export class Setting
 {
   declare id: string;
   declare key: string;
-  declare value: any;
+  declare value: unknown;
   declare description?: string;
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  static associate(models: any) {
+  static associate(_models: Record<string, unknown>) {
     // No associations needed for now
   }
 }

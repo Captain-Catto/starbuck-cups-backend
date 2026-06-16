@@ -11,8 +11,8 @@ export interface EffectSettingsDto {
   enabled: boolean;
   activeEffects: string[];
   intensity: 'low' | 'medium' | 'high';
-  redEnvelopeSettings?: any;
-  snowSettings?: any;
+  redEnvelopeSettings?: Record<string, unknown>;
+  snowSettings?: Record<string, unknown>;
   excludedPaths?: string[];
 }
 
@@ -76,11 +76,11 @@ export const getEffectSettings = async (req: Request, res: Response) => {
         ...(storedValue as EffectSettingsDto),
         redEnvelopeSettings: {
             ...DEFAULT_RED_ENVELOPE_SETTINGS,
-            ...((storedValue as any).redEnvelopeSettings || {})
+            ...((storedValue as EffectSettingsDto).redEnvelopeSettings || {})
         },
         snowSettings: {
             ...DEFAULT_SNOW_SETTINGS,
-            ...((storedValue as any).snowSettings || {})
+            ...((storedValue as EffectSettingsDto).snowSettings || {})
         }
     };
 
@@ -115,7 +115,7 @@ export const updateEffectSettings = async (req: Request, res: Response) => {
         }
     };
 
-    let setting = await Setting.findOne({
+    const setting = await Setting.findOne({
       where: { key: EFFECT_SETTINGS_KEY },
     });
 

@@ -84,7 +84,7 @@ export class ProductAnalyticsService {
       };
     } catch (error) {
       logger.error("Error incrementing product click:", error);
-      throw new Error("Failed to track product click");
+      throw new Error("Failed to track product click", { cause: error });
     }
   }
 
@@ -136,7 +136,7 @@ export class ProductAnalyticsService {
       };
     } catch (error) {
       logger.error("Error incrementing add to cart:", error);
-      throw new Error("Failed to track add to cart");
+      throw new Error("Failed to track add to cart", { cause: error });
     }
   }
 
@@ -162,7 +162,7 @@ export class ProductAnalyticsService {
 
       return {
         productId: analytics.productId,
-        productName: (analytics as any).product?.name,
+        productName: analytics.product?.name,
         clickCount: analytics.clickCount,
         addToCartCount: analytics.addToCartCount,
         lastClicked: analytics.lastClicked,
@@ -174,7 +174,7 @@ export class ProductAnalyticsService {
       };
     } catch (error) {
       logger.error("Error getting product analytics:", error);
-      throw new Error("Failed to get product analytics");
+      throw new Error("Failed to get product analytics", { cause: error });
     }
   }
 
@@ -202,8 +202,8 @@ export class ProductAnalyticsService {
       return {
         data: rows.map((analytics) => ({
           productId: analytics.productId,
-          productName: (analytics as any).product.name,
-          productSlug: (analytics as any).product.slug,
+          productName: analytics.product!.name,
+          productSlug: analytics.product!.slug,
           clickCount: analytics.clickCount,
           addToCartCount: analytics.addToCartCount,
           conversionRate:
@@ -215,7 +215,7 @@ export class ProductAnalyticsService {
       };
     } catch (error) {
       logger.error("Error getting top clicked products:", error);
-      throw new Error("Failed to get top clicked products");
+      throw new Error("Failed to get top clicked products", { cause: error });
     }
   }
 
@@ -241,8 +241,8 @@ export class ProductAnalyticsService {
 
       return topProducts.map((analytics) => ({
         productId: analytics.productId,
-        productName: (analytics as any).product.name,
-        productSlug: (analytics as any).product.slug,
+        productName: analytics.product!.name,
+        productSlug: analytics.product!.slug,
         clickCount: analytics.clickCount,
         addToCartCount: analytics.addToCartCount,
         conversionRate:
@@ -252,7 +252,7 @@ export class ProductAnalyticsService {
       }));
     } catch (error) {
       logger.error("Error getting top added to cart products:", error);
-      throw new Error("Failed to get top added to cart products");
+      throw new Error("Failed to get top added to cart products", { cause: error });
     }
   }
 
@@ -284,8 +284,8 @@ export class ProductAnalyticsService {
       return {
         data: rows.map((analytics) => ({
           productId: analytics.productId,
-          productName: (analytics as any).product.name,
-          productSlug: (analytics as any).product.slug,
+          productName: analytics.product!.name,
+          productSlug: analytics.product!.slug,
           clickCount: analytics.clickCount,
           addToCartCount: analytics.addToCartCount,
           conversionRate: analytics.addToCartCount / analytics.clickCount,
@@ -294,7 +294,7 @@ export class ProductAnalyticsService {
       };
     } catch (error) {
       logger.error("Error getting top conversion products:", error);
-      throw new Error("Failed to get top conversion products");
+      throw new Error("Failed to get top conversion products", { cause: error });
     }
   }
 
@@ -328,8 +328,8 @@ export class ProductAnalyticsService {
         overallConversionRate,
         recentActivity: recentActivity.map((analytics) => ({
           productId: analytics.productId,
-          productName: (analytics as any).product?.name,
-          productSlug: (analytics as any).product?.slug,
+          productName: analytics.product?.name,
+          productSlug: analytics.product?.slug,
           lastClicked: analytics.lastClicked,
           clickCount: analytics.clickCount,
           addToCartCount: analytics.addToCartCount,
@@ -337,7 +337,7 @@ export class ProductAnalyticsService {
       };
     } catch (error) {
       logger.error("Error getting analytics summary:", error);
-      throw new Error("Failed to get analytics summary");
+      throw new Error("Failed to get analytics summary", { cause: error });
     }
   }
 
@@ -371,7 +371,7 @@ export class ProductAnalyticsService {
       return analyticsMap;
     } catch (error) {
       logger.error("Error getting bulk product analytics:", error);
-      throw new Error("Failed to get bulk product analytics");
+      throw new Error("Failed to get bulk product analytics", { cause: error });
     }
   }
 }

@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { NewsAttributes } from './News';
 
 export type NewsLocale = "vi" | "en" | "zh";
 
@@ -35,9 +36,9 @@ export class NewsTranslation
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  declare news?: any;
+  declare news?: NewsAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     NewsTranslation.belongsTo(models.News, {
       foreignKey: "newsId",
       as: "news",
@@ -115,3 +116,4 @@ export const NewsTranslationModel = (sequelize: Sequelize) => {
 
   return NewsTranslation;
 };
+

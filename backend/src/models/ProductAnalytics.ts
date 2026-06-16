@@ -1,4 +1,5 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from "sequelize";
+import type { ProductAttributes } from './Product';
 
 export interface ProductAnalyticsAttributes {
   id: string;
@@ -28,6 +29,17 @@ export class ProductAnalytics
   declare lastAddedToCart?: Date;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
+
+  declare product?: ProductAttributes;
+
+  static associate(models: Record<string, ModelStatic<Model>>) {
+    ProductAnalytics.belongsTo(models.Product, {
+      foreignKey: "productId",
+      as: "product",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
 }
 
 export function ProductAnalyticsModel(sequelize: Sequelize) {
@@ -96,13 +108,3 @@ export function ProductAnalyticsModel(sequelize: Sequelize) {
   return ProductAnalytics;
 }
 
-// Define associations
-(ProductAnalytics as any).associate = (models: any) => {
-  // Each analytics record belongs to one product
-  ProductAnalytics.belongsTo(models.Product, {
-    foreignKey: "productId",
-    as: "product",
-    onDelete: "CASCADE",
-    onUpdate: "CASCADE",
-  });
-};

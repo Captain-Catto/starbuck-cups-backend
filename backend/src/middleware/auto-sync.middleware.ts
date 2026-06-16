@@ -10,7 +10,7 @@ interface SyncOptions {
   operation: "create" | "update" | "delete";
 }
 
-const isSuccessfulResponse = (res: Response, body: any): boolean => {
+const isSuccessfulResponse = (res: Response, body: Record<string, unknown>): boolean => {
   return (
     body?.success === true &&
     res.statusCode >= 200 &&
@@ -21,7 +21,7 @@ const isSuccessfulResponse = (res: Response, body: any): boolean => {
 const resolveEntityId = (
   entity: SyncOptions["entity"],
   req: Request,
-  body: any
+  body: Record<string, unknown>
 ): string | null => {
   if (req.params.id) {
     return String(req.params.id);
@@ -31,21 +31,22 @@ const resolveEntityId = (
     return req.params.customerId;
   }
 
-  const data = body?.data;
+  const data = body?.data as Record<string, unknown> | undefined;
   if (!data) {
     return null;
   }
 
-  if (entity === "customer" && typeof data.customerId === "string") {
-    return data.customerId;
+  if (entity === "customer" && typeof data["customerId"] === "string") {
+    return data["customerId"];
   }
 
-  if (typeof data.id === "string") {
-    return data.id;
+  if (typeof data["id"] === "string") {
+    return data["id"];
   }
 
-  if (entity === "product" && typeof data.product?.id === "string") {
-    return data.product.id;
+  const product = data["product"] as Record<string, unknown> | undefined;
+  if (entity === "product" && typeof product?.["id"] === "string") {
+    return product["id"];
   }
 
   return null;
@@ -58,7 +59,7 @@ export function syncAfterResponse(options: SyncOptions) {
   return (req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
 
-    res.json = function (body: any) {
+    res.json = function (body: Record<string, unknown>) {
       const result = originalJson(body);
 
       if (isSuccessfulResponse(res, body)) {
@@ -74,7 +75,7 @@ export function syncAfterResponse(options: SyncOptions) {
   };
 }
 
-async function syncData(options: SyncOptions, req: Request, responseBody: any) {
+async function syncData(options: SyncOptions, req: Request, responseBody: Record<string, unknown>) {
   try {
     const entityId = resolveEntityId(options.entity, req, responseBody);
     if (!entityId) {

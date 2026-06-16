@@ -92,7 +92,7 @@ async function syncMeilisearch(): Promise<void> {
     ]);
 
   const productDocuments: SearchableProduct[] = [];
-  for (const product of products as any[]) {
+  for (const product of products) {
     productDocuments.push({
       id: product.id,
       name: product.name,
@@ -101,19 +101,19 @@ async function syncMeilisearch(): Promise<void> {
       stockQuantity: product.stockQuantity,
       isActive: product.isActive,
       categories: (product.productCategories || [])
-        .filter((pc: any) => pc.category)
-        .map((pc: any) => ({
-          id: pc.category.id,
-          name: pc.category.name,
-          slug: pc.category.slug,
+        .filter((pc) => pc.category)
+        .map((pc) => ({
+          id: pc.category!.id,
+          name: pc.category!.name,
+          slug: pc.category!.slug,
         })),
       colors: (product.productColors || [])
-        .filter((pc: any) => pc.color)
-        .map((pc: any) => ({
-          id: pc.color.id,
-          name: pc.color.name,
-          slug: pc.color.slug,
-          hexCode: pc.color.hexCode,
+        .filter((pc) => pc.color)
+        .map((pc) => ({
+          id: pc.color!.id,
+          name: pc.color!.name,
+          slug: pc.color!.slug,
+          hexCode: pc.color!.hexCode,
         })),
       capacity: product.capacity
         ? {
@@ -123,7 +123,7 @@ async function syncMeilisearch(): Promise<void> {
             volumeMl: product.capacity.volumeMl,
           }
         : undefined,
-      images: (product.productImages || []).map((image: any) => image.url),
+      images: (product.productImages || []).map((image) => image.url),
       productUrl: product.productUrl || "",
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString(),
@@ -131,7 +131,7 @@ async function syncMeilisearch(): Promise<void> {
   }
 
   const categoryDocuments: SearchableCategory[] = categories.map(
-    (category: any) => ({
+    (category) => ({
       id: category.id,
       name: category.name,
       slug: category.slug,
@@ -148,7 +148,7 @@ async function syncMeilisearch(): Promise<void> {
     })
   );
 
-  const colorDocuments: SearchableColor[] = colors.map((color: any) => ({
+  const colorDocuments: SearchableColor[] = colors.map((color) => ({
     id: color.id,
     name: color.name,
     slug: color.slug,
@@ -157,7 +157,7 @@ async function syncMeilisearch(): Promise<void> {
   }));
 
   const capacityDocuments: SearchableCapacity[] = capacities.map(
-    (capacity: any) => ({
+    (capacity) => ({
       id: capacity.id,
       name: capacity.name,
       slug: capacity.slug,
@@ -167,9 +167,9 @@ async function syncMeilisearch(): Promise<void> {
   );
 
   const customerDocuments: SearchableCustomer[] = customers.map(
-    (customer: any) => {
+    (customer) => {
       const mainPhone =
-        (customer.customerPhones || []).find((phone: any) => phone.isMain) ||
+        (customer.customerPhones || []).find((phone) => phone.isMain) ||
         (customer.customerPhones || [])[0];
 
       return {

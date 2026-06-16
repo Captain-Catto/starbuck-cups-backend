@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, WhereOptions, Transaction } from "sequelize";
 import { sequelize } from "../config/database";
 import { models, OrderType, OrderStatus } from "../models";
 import { ServiceError } from "../utils/service-error";
@@ -54,7 +54,7 @@ const ORDER_WITH_FULL_CUSTOMER = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-export async function generateOrderNumber(transaction?: any): Promise<string> {
+export async function generateOrderNumber(transaction?: Transaction): Promise<string> {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
@@ -99,19 +99,20 @@ export async function findOrders(filters: {
   const limitNum = parseInt(String(limit));
   const offset = (pageNum - 1) * limitNum;
 
-  const where: any = {};
-  if (status !== "all") where.status = (status as string).toUpperCase();
-  if (customerId) where.customerId = customerId;
-  if (orderType !== "all") where.orderType = (orderType as string).toUpperCase();
-  if (search) where[Op.or] = [{ orderNumber: { [Op.like]: `%${search}%` } }];
+  const where: WhereOptions = {};
+  if (status !== "all") (where as Record<string, unknown>)["status"] = (status as string).toUpperCase();
+  if (customerId) (where as Record<string, unknown>)["customerId"] = customerId;
+  if (orderType !== "all") (where as Record<string, unknown>)["orderType"] = (orderType as string).toUpperCase();
+  if (search) Object.assign(where, { [Op.or]: [{ orderNumber: { [Op.like]: `%${search}%` } }] });
   if (dateFrom || dateTo) {
-    where.createdAt = {};
-    if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom as string);
+    const createdAt: WhereOptions = {};
+    if (dateFrom) Object.assign(createdAt, { [Op.gte]: new Date(dateFrom as string) });
     if (dateTo) {
       const endDate = new Date(dateTo as string);
       endDate.setDate(endDate.getDate() + 1);
-      where.createdAt[Op.lt] = endDate;
+      Object.assign(createdAt, { [Op.lt]: endDate });
     }
+    (where as Record<string, unknown>)["createdAt"] = createdAt;
   }
 
   const [orders, totalCount] = await Promise.all([
@@ -121,7 +122,7 @@ export async function findOrders(filters: {
 
   const totalPages = Math.ceil(totalCount / limitNum);
   const ordersWithCount = orders.map((order) => {
-    const json = order.toJSON() as any;
+    const json = order.toJSON() as unknown as Record<string, unknown> & { items?: unknown[] };
     return { ...json, _count: { items: json.items?.length ?? 0 } };
   });
 
@@ -147,7 +148,7 @@ export async function findOrderById(id: string) {
 export async function createOrder(data: {
   customerId: string;
   orderType: string;
-  deliveryAddress: object;
+  deliveryAddress: Record<string, unknown>;
   customDescription?: string;
   totalAmount?: number;
   notes?: string;
@@ -171,7 +172,7 @@ export async function createOrder(data: {
 
   const order = await sequelize.transaction(async (t) => {
     let calculatedTotalAmount = totalAmount || 0;
-    const orderItems: any[] = [];
+    const orderItems: Array<{ productId: string; quantity: number; productSnapshot: Record<string, unknown> }> = [];
 
     if (orderType === "product" && items && items.length > 0) {
       for (const item of items) {
@@ -203,8 +204,8 @@ export async function createOrder(data: {
           unitPrice,
           requestedColor: item.requestedColor,
           capacity: capacity ? { id: capacity.id, name: capacity.name, slug: capacity.slug, volumeMl: capacity.volumeMl } : null,
-          categories: productCategories.filter((pc) => pc.category).map((pc) => ({ id: pc.category.id, name: pc.category.name, slug: pc.category.slug })),
-          colors: productColors.filter((pc) => pc.color).map((pc) => ({ id: pc.color.id, name: pc.color.name, slug: pc.color.slug, hexCode: pc.color.hexCode })),
+          categories: productCategories.filter((pc) => pc.category).map((pc) => ({ id: pc.category!.id, name: pc.category!.name, slug: pc.category!.slug })),
+          colors: productColors.filter((pc) => pc.color).map((pc) => ({ id: pc.color!.id, name: pc.color!.name, slug: pc.color!.slug, hexCode: pc.color!.hexCode })),
           image: productImages.length > 0 ? { id: productImages[0].id, url: productImages[0].url, altText: productImages[0].altText } : null,
           snapshotCreatedAt: new Date().toISOString(),
         };
@@ -331,7 +332,7 @@ export async function getOrderStats(period: number) {
 
 export async function updateOrder(id: string, data: {
   notes?: string;
-  shippingAddress?: object;
+  shippingAddress?: Record<string, unknown>;
   shippingCost?: number;
   originalShippingCost?: number;
   shippingDiscount?: number;
@@ -408,11 +409,20 @@ export async function getRecentOrders(limit: number) {
     include: ORDER_WITH_CUSTOMER_AND_ITEMS,
   });
 
+  interface OrderJSON {
+    id: string;
+    items?: Array<{ productSnapshot?: { name?: string }; product?: { name?: string } }>;
+    customer?: { fullName?: string };
+    orderType?: string;
+    status?: string;
+    totalAmount?: string;
+    createdAt?: string;
+  }
   return orders.map((order) => {
-    const json = order.toJSON() as any;
+    const json = order.toJSON() as unknown as OrderJSON;
     let productName: string | null = null;
 
-    if (json.items?.length > 0) {
+    if (json.items && json.items.length > 0) {
       const first = json.items[0];
       const firstName = first?.productSnapshot?.name || first?.product?.name || "Sản phẩm";
       productName = json.items.length === 1 ? firstName : `${firstName} + ${json.items.length - 1} sản phẩm khác`;

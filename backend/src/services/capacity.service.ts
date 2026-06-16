@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, WhereOptions, FindOptions, FindAndCountOptions } from "sequelize";
 import { models } from "../models";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 import { ServiceError } from "../utils/service-error";
@@ -22,12 +22,12 @@ interface CapacityFilters {
 
 export async function findCapacities(filters: CapacityFilters) {
   const { page = 1, limit = 20, search, isActive, sortBy = "volumeMl", sortOrder = "asc" } = filters;
-  const where: any = {};
+  const where: WhereOptions = {};
   if (search) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${search}%` } },
       { slug: { [Op.like]: `%${search}%` } },
-    ];
+    ] });
   }
   if (isActive !== undefined) where.isActive = isActive;
 
@@ -52,16 +52,16 @@ export async function findCapacities(filters: CapacityFilters) {
 
 export async function findCapacitiesForAdmin(filters: CapacityFilters) {
   const { page = 1, limit = 20, search, isActive, sortBy = "volumeMl", sortOrder = "asc" } = filters;
-  const where: any = {};
+  const where: WhereOptions = {};
   if (search) {
-    where[Op.or] = [
+    Object.assign(where, { [Op.or]: [
       { name: { [Op.like]: `%${search}%` } },
       { slug: { [Op.like]: `%${search}%` } },
-    ];
+    ] });
   }
   if (isActive !== undefined) where.isActive = isActive;
 
-  const queryOptions: any = {
+  const queryOptions: FindAndCountOptions = {
     where,
     order: [[sortBy, sortOrder.toUpperCase()]],
     include: CAPACITY_ADMIN_INCLUDE,
@@ -125,10 +125,12 @@ export async function updateCapacity(id: string, data: { name?: string; slug?: s
   if (!existing) throw new ServiceError(404, "CAPACITY_NOT_FOUND", "Capacity not found");
 
   if (data.name || data.slug || data.volumeMl) {
-    const duplicateWhere: any = { id: { [Op.ne]: id }, [Op.or]: [] };
-    if (data.name) duplicateWhere[Op.or].push({ name: { [Op.like]: data.name } });
-    if (data.slug) duplicateWhere[Op.or].push({ slug: { [Op.like]: data.slug } });
-    if (data.volumeMl) duplicateWhere[Op.or].push({ volumeMl: data.volumeMl });
+    const duplicateOrConditions: WhereOptions[] = [];
+    if (data.name) duplicateOrConditions.push({ name: { [Op.like]: data.name } });
+    if (data.slug) duplicateOrConditions.push({ slug: { [Op.like]: data.slug } });
+    if (data.volumeMl) duplicateOrConditions.push({ volumeMl: data.volumeMl });
+    const duplicateWhere: WhereOptions = { id: { [Op.ne]: id } };
+    Object.assign(duplicateWhere, { [Op.or]: duplicateOrConditions });
 
     const duplicate = await Capacity.findOne({ where: duplicateWhere });
     if (duplicate) {
@@ -139,7 +141,7 @@ export async function updateCapacity(id: string, data: { name?: string; slug?: s
     }
   }
 
-  const processedData: any = {};
+  const processedData: { name?: string; slug?: string; volumeMl?: number } = {};
   if (data.name) {
     processedData.name = data.name.trim();
     if (!data.slug) processedData.slug = generateVietnameseSlug(data.name);
@@ -165,13 +167,13 @@ export async function deleteCapacity(id: string) {
 }
 
 export async function searchCapacities(query: string, active: boolean) {
-  const where: any = { isActive: active };
+  const where: WhereOptions = { isActive: active };
   if (query) {
     const numeric = Number(query);
     if (!isNaN(numeric)) {
       where.volumeMl = numeric;
     } else {
-      where[Op.or] = [{ name: { [Op.like]: `%${query}%` } }, { slug: { [Op.like]: `%${query}%` } }];
+      Object.assign(where, { [Op.or]: [{ name: { [Op.like]: `%${query}%` } }, { slug: { [Op.like]: `%${query}%` } }] });
     }
   }
   return Capacity.findAll({ where, attributes: ["id", "name", "slug", "volumeMl"], order: [["volumeMl", "ASC"]], limit: 50 });
@@ -193,10 +195,10 @@ export async function findPublicCapacityByIdOrSlug(idOrSlug: string) {
 
 export async function findPublicCapacities(filters: { page?: number; limit?: number; search?: string; sortBy?: string; sortOrder?: string }) {
   const { page = 1, limit = 50, search, sortBy = "volumeMl", sortOrder = "asc" } = filters;
-  const where: any = { isActive: true };
-  if (search) where.name = { [Op.like]: `%${search}%` };
+  const where: WhereOptions = { isActive: true };
+  if (search) (where as Record<string, unknown>)["name"] = { [Op.like]: `%${search}%` };
 
-  const queryOptions: any = {
+  const queryOptions: FindOptions = {
     where,
     attributes: ["id", "name", "slug", "volumeMl", "isActive", "createdAt", "updatedAt"],
     order: [[sortBy, sortOrder.toUpperCase()]],

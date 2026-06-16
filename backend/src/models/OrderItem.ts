@@ -1,11 +1,13 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+﻿import { DataTypes, Model, ModelStatic, Sequelize } from 'sequelize';
+import type { OrderAttributes } from './Order';
+import type { Product } from './Product';
 
 export interface OrderItemAttributes {
   id: string;
   orderId: string;
   productId: string;
   quantity: number;
-  productSnapshot: any;
+  productSnapshot: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,15 +21,14 @@ export class OrderItem extends Model<OrderItemAttributes, OrderItemCreationAttri
   declare orderId: string;
   declare productId: string;
   declare quantity: number;
-  declare productSnapshot: any;
+  declare productSnapshot: Record<string, unknown>;
   declare createdAt: Date;
   declare updatedAt: Date;
 
-  // Associations
-  declare order?: any;
-  declare product?: any;
+  declare order?: OrderAttributes;
+  declare product?: Product;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     OrderItem.belongsTo(models.Order, {
       foreignKey: 'orderId',
       as: 'order',
@@ -105,3 +106,4 @@ export const OrderItemModel = (sequelize: Sequelize) => {
 
   return OrderItem;
 };
+

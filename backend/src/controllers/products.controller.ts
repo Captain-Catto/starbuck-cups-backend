@@ -121,7 +121,7 @@ export const updateProductWithFiles = async (req: Request, res: Response) => {
   if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
     const files = (req.files as Express.Multer.File[]) || [];
-    const product = await productService.updateProductWithFiles(req.params.id, { ...validation.data, keepExistingImages: parsedBody.keepExistingImages }, files);
+    const product = await productService.updateProductWithFiles(req.params.id, { ...validation.data, keepExistingImages: parsedBody.keepExistingImages as boolean | undefined }, files);
     return res.status(200).json(ResponseHelper.success(product));
   } catch (err) {
     return handleError(res, err, "update product");

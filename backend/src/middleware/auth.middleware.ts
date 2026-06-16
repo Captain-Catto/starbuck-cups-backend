@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 /**
  * Authentication and authorization middleware
@@ -89,17 +90,18 @@ export const authenticate = async (
     };
 
     next();
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Authentication middleware error:", error);
 
     // Handle specific JWT errors
-    if (error && error.message && typeof error.message === "string") {
-      if (error.message.includes("expired")) {
+    const errorMessage = getErrorMessage(error);
+    if (errorMessage) {
+      if (errorMessage.includes("expired")) {
         res
           .status(401)
           .json(ResponseHelper.error("Token expired", "TOKEN_EXPIRED"));
         return;
-      } else if (error.message.includes("invalid")) {
+      } else if (errorMessage.includes("invalid")) {
         res
           .status(401)
           .json(ResponseHelper.error("Invalid token", "INVALID_TOKEN"));
@@ -183,7 +185,7 @@ export const optionalAuthenticate = async (
     }
 
     next();
-  } catch (error) {
+  } catch {
     // Ignore authentication errors for optional auth
     next();
   }
@@ -365,7 +367,7 @@ export const authenticateWithAutoRefresh = async (
           };
           return next();
         }
-      } catch (error) {
+      } catch {
         // Access token invalid, continue to refresh token logic
         // Fall back to refresh token flow
       }
@@ -413,7 +415,7 @@ export const authenticateWithAutoRefresh = async (
       res.setHeader("X-Refresh-Type", "silent");
 
       next();
-    } catch (refreshError) {
+    } catch {
       logger.error("Refresh token verification failed");
       return res
         .status(401)

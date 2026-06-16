@@ -1,9 +1,11 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
+
+type AuthRequest = Request & { user?: { userId: string } };
 import { PromotionalBanner, AdminUser } from "../models";
 import { z } from "zod";
 import { Op } from "sequelize";
-import { sequelize } from "../config/database";
 
 // Validation schemas
 const createPromotionalBannerSchema = z.object({
@@ -86,12 +88,12 @@ export const getActivePromotionalBanner = async (
       success: true,
       data: banner,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error fetching active promotional banner:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch promotional banner",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -122,12 +124,12 @@ export const getAdminPromotionalBanners = async (
       success: true,
       data: banners,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error fetching admin promotional banners:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch promotional banners",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -160,12 +162,12 @@ export const getPromotionalBannerById = async (req: Request, res: Response) => {
       success: true,
       data: banner,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error fetching promotional banner:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch promotional banner",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -179,7 +181,7 @@ export const createPromotionalBanner = async (req: Request, res: Response) => {
     const validatedData = createPromotionalBannerSchema.parse(req.body);
 
     // Get admin ID from request (set by auth middleware)
-    const adminId = (req as any).user?.userId;
+    const adminId = (req as AuthRequest).user?.userId;
     if (!adminId) {
       return res.status(401).json({
         success: false,
@@ -221,7 +223,7 @@ export const createPromotionalBanner = async (req: Request, res: Response) => {
       message: "Promotional banner created successfully",
       data: createdBanner,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error creating promotional banner:", error);
 
     if (error instanceof z.ZodError) {
@@ -235,7 +237,7 @@ export const createPromotionalBanner = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create promotional banner",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -261,7 +263,7 @@ export const updatePromotionalBanner = async (req: Request, res: Response) => {
     }
 
     // Prepare update data
-    const updateData: any = { ...validatedData };
+    const updateData: Record<string, unknown> = { ...validatedData };
 
     // Handle date fields
     if (validatedData.validFrom !== undefined) {
@@ -294,7 +296,7 @@ export const updatePromotionalBanner = async (req: Request, res: Response) => {
       message: "Promotional banner updated successfully",
       data: updatedBanner,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error updating promotional banner:", error);
 
     if (error instanceof z.ZodError) {
@@ -308,7 +310,7 @@ export const updatePromotionalBanner = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update promotional banner",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };
@@ -337,12 +339,12 @@ export const deletePromotionalBanner = async (req: Request, res: Response) => {
       success: true,
       message: "Promotional banner deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error deleting promotional banner:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete promotional banner",
-      error: error?.message || "Unknown error",
+      error: getErrorMessage(error) || "Unknown error",
     });
   }
 };

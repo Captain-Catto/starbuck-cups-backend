@@ -1,4 +1,12 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
+﻿import { DataTypes, Model, Sequelize, ModelStatic } from "sequelize";
+import type { ConsultationItemAttributes } from './ConsultationItem';
+import type { OrderItemAttributes } from './OrderItem';
+import type { ProductImageAttributes } from './ProductImage';
+import type { ProductCategory } from './ProductCategory';
+import type { ProductColor } from './ProductColor';
+import type { ProductTranslationAttributes } from './ProductTranslation';
+import type { CapacityAttributes } from './Capacity';
+import type { AdminUserAttributes } from './AdminUser';
 
 export interface ProductAttributes {
   id: string;
@@ -47,18 +55,17 @@ export class Product
   declare unitPrice: number;
   declare createdByAdminId: string;
 
-  // Associations - Use declare to avoid shadowing Sequelize getters/setters
-  declare consultationItems?: any[];
-  declare orderItems?: any[];
-  declare productImages?: any[];
-  declare productCategories?: any[];
-  declare productColors?: any[];
-  declare translations?: any[];
-  declare capacity?: any;
-  declare deletedByAdmin?: any;
-  declare createdByAdmin?: any;
+  declare consultationItems?: ConsultationItemAttributes[];
+  declare orderItems?: OrderItemAttributes[];
+  declare productImages?: ProductImageAttributes[];
+  declare productCategories?: ProductCategory[];
+  declare productColors?: ProductColor[];
+  declare translations?: ProductTranslationAttributes[];
+  declare capacity?: CapacityAttributes;
+  declare deletedByAdmin?: AdminUserAttributes;
+  declare createdByAdmin?: AdminUserAttributes;
 
-  static associate(models: any) {
+  static associate(models: Record<string, ModelStatic<Model>>) {
     Product.hasMany(models.ConsultationItem, {
       foreignKey: "productId",
       as: "consultationItems",
@@ -209,3 +216,4 @@ export const ProductModel = (sequelize: Sequelize) => {
 
   return Product;
 };
+

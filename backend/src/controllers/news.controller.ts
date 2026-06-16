@@ -1,12 +1,13 @@
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
-import { Op } from "sequelize";
+import { Op, WhereOptions } from "sequelize";
+
+type AdminRequest = Request & { admin?: { id: string } };
 import { News, NewsTranslation } from "../models";
 import { ResponseHelper } from "../types/api";
 import { generateVietnameseSlug } from "../utils/vietnamese-slug";
 
 const SUPPORTED_LOCALES = ["vi", "en", "zh"] as const;
-type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 type TranslationPayload = {
   title?: string;
@@ -98,8 +99,8 @@ export const getAdminNewsList = async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const search = req.query.search as string | undefined;
 
-    const where: any = { isDeleted: false };
-    if (status && ["draft", "published"].includes(status)) where.status = status;
+    const where: WhereOptions = { isDeleted: false };
+    if (status && ["draft", "published"].includes(status)) (where as Record<string, unknown>)["status"] = status;
 
     const { count, rows } = await News.findAndCountAll({
       where,
@@ -157,7 +158,7 @@ export const getAdminNewsById = async (req: Request, res: Response) => {
 export const createNews = async (req: Request, res: Response) => {
   try {
     const { thumbnail, status = "draft", publishedAt, translations = {} } = req.body;
-    const adminId = (req as any).admin?.id;
+    const adminId = (req as AdminRequest).admin?.id;
 
     if (!adminId) {
       return res.status(401).json(ResponseHelper.error("Unauthorized", "UNAUTHORIZED"));
@@ -198,7 +199,7 @@ export const createNews = async (req: Request, res: Response) => {
         content: t.content,
         metaTitle: t.metaTitle,
         metaDescription: t.metaDescription,
-      } as any);
+      });
     }
 
     const result = await News.findOne({
@@ -240,7 +241,7 @@ export const updateNews = async (req: Request, res: Response) => {
         content: t.content,
         metaTitle: t.metaTitle,
         metaDescription: t.metaDescription,
-      } as any);
+      });
     }
 
     const result = await News.findOne({
@@ -257,7 +258,7 @@ export const updateNews = async (req: Request, res: Response) => {
 
 export const deleteNews = async (req: Request, res: Response) => {
   try {
-    const adminId = (req as any).admin?.id;
+    const adminId = (req as AdminRequest).admin?.id;
     const news = await News.findOne({ where: { id: req.params.id, isDeleted: false } });
 
     if (!news) {

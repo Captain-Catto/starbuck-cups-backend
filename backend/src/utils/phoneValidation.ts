@@ -13,7 +13,7 @@ export const isValidPhoneNumber = (phone: string): boolean => {
   }
 
   // Remove common formatting characters
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+  const cleanPhone = phone.replace(/[\s\-()]/g, '');
 
   // Only check if phone has content (at least 1 character)
   return cleanPhone.length > 0;
@@ -30,7 +30,7 @@ export const cleanPhoneNumber = (phone: string): string => {
   }
 
   // Remove all non-digit and non-plus characters
-  return phone.replace(/[^\d\+]/g, '');
+  return phone.replace(/[^\d+]/g, '');
 };
 
 /**

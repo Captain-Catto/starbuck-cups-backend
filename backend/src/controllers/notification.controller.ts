@@ -2,10 +2,9 @@ import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
 import { models } from "../models";
 import { ConsultationStatus } from "../models/Consultation";
-import { OrderStatus } from "../models/Order";
 import { socketService } from "../services/socket.service";
 
-const { Order, Consultation, Customer, Product, ConsultationItem } = models;
+const { Consultation, ConsultationItem } = models;
 
 
 

@@ -6,6 +6,11 @@ import { Request, Response } from "express";
 import {
   meilisearchService,
   type SearchOptions,
+  type SearchableProduct,
+  type SearchableCategory,
+  type SearchableColor,
+  type SearchableCapacity,
+  type SearchableCustomer,
 } from "../services/meilisearch.service";
 
 const parseIdList = (value: unknown): string[] => {
@@ -131,7 +136,7 @@ export class SearchController {
 
       res.json({
         success: true,
-        data: results.hits.map((hit: any) => ({
+        data: results.hits.map((hit: SearchableProduct) => ({
           id: hit.id,
           name: hit.name,
           slug: hit.slug,
@@ -225,7 +230,7 @@ export class SearchController {
 
       res.json({
         success: true,
-        data: results.hits.map((hit: any) => ({
+        data: results.hits.map((hit: SearchableCategory) => ({
           id: hit.id,
           name: hit.name,
           slug: hit.slug,
@@ -288,7 +293,7 @@ export class SearchController {
 
       res.json({
         success: true,
-        data: results.hits.map((hit: any) => ({
+        data: results.hits.map((hit: SearchableColor) => ({
           id: hit.id,
           name: hit.name,
           slug: hit.slug,
@@ -355,7 +360,7 @@ export class SearchController {
 
       res.json({
         success: true,
-        data: results.hits.map((hit: any) => ({
+        data: results.hits.map((hit: SearchableCapacity) => ({
           id: hit.id,
           name: hit.name,
           slug: hit.slug,
@@ -418,7 +423,7 @@ export class SearchController {
 
       res.json({
         success: true,
-        data: results.hits.map((hit: any) => ({
+        data: results.hits.map((hit: SearchableCustomer) => ({
           id: hit.id,
           fullName: hit.fullName,
           phone: hit.phone,

@@ -1,6 +1,7 @@
+import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
 import { Request, Response } from "express";
-import { models, ConsultationStatus } from "../models";
+import { ConsultationStatus } from "../models";
 import { ConsultationService } from "../services/consultation.service";
 import { ApiResponse, ResponseHelper } from "../types/api";
 import { validateAndFormatPhone } from "../utils/phoneValidation";
@@ -85,17 +86,18 @@ export const createConsultation = async (req: Request, res: Response) => {
     };
 
     res.status(201).json(response);
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Error creating consultation:", error);
 
     // Return validation errors with 400 status
-    const isValidationError = error.message?.startsWith("Products not found");
+    const errorMessage = getErrorMessage(error);
+    const isValidationError = errorMessage.startsWith("Products not found");
     const response: ApiResponse = {
       success: false,
       data: null,
       meta: { timestamp: new Date().toISOString() },
       error: {
-        message: isValidationError ? error.message : "Failed to create consultation order",
+        message: isValidationError ? errorMessage : "Failed to create consultation order",
         code: isValidationError ? "INVALID_PRODUCTS" : "CONSULTATION_CREATE_ERROR",
       },
     };
