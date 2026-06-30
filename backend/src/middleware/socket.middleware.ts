@@ -43,7 +43,11 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: Error) => void
 
     next();
   } catch (error) {
-    logger.error('Socket authentication error:', error);
+    if (error instanceof Error && error.name === 'TokenExpiredError') {
+      logger.warn('Socket authentication: token expired');
+    } else {
+      logger.error('Socket authentication error:', error);
+    }
     next(new Error('Authentication error: Invalid token'));
   }
 };

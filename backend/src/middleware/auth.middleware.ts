@@ -91,7 +91,11 @@ export const authenticate = async (
 
     next();
   } catch (error) {
-    logger.error("Authentication middleware error:", error);
+    if (error instanceof Error && error.name === 'TokenExpiredError') {
+      logger.warn("Authentication middleware: access token expired");
+    } else {
+      logger.error("Authentication middleware error:", error);
+    }
 
     // Handle specific JWT errors
     const errorMessage = getErrorMessage(error);
