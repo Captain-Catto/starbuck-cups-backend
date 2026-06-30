@@ -4,7 +4,7 @@ import { createClient } from "redis";
 
 const isRedisEnabled = process.env.REDIS_ENABLED === "true" || (process.env.NODE_ENV === "production" && process.env.REDIS_ENABLED !== "false");
 
-let redisClient: ReturnType<typeof createClient> | null = null;
+export let redisClient: ReturnType<typeof createClient> | null = null;
 
 if (isRedisEnabled) {
   redisClient = createClient({

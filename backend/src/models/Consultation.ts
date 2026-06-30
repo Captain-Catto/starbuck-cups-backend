@@ -99,6 +99,10 @@ export const ConsultationModel = (sequelize: Sequelize) => {
       timestamps: true,
       createdAt: 'createdAt',
       updatedAt: 'updatedAt',
+      indexes: [
+        { name: "idx_consultations_status", fields: ["status"] },
+        { name: "idx_consultations_created_at", fields: ["created_at"] },
+      ],
     }
   );
 

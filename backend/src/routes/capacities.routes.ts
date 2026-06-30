@@ -18,6 +18,7 @@ import {
   requireAdmin,
 } from "../middleware/auth.middleware";
 import { syncCapacity } from "../middleware/auto-sync.middleware";
+import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ const router = Router();
  *       200:
  *         description: Capacities retrieved successfully
  */
-router.get("/public", getPublicCapacities);
+router.get("/public", redisCacheMiddleware(900), getPublicCapacities);
 
 /**
  * @swagger
@@ -53,7 +54,7 @@ router.get("/public", getPublicCapacities);
  *       404:
  *         description: Capacity not found
  */
-router.get("/public/:id", getPublicCapacityById);
+router.get("/public/:id", redisCacheMiddleware(900), getPublicCapacityById);
 
 /**
  * @swagger

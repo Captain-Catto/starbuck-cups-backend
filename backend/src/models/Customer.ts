@@ -120,6 +120,12 @@ export const CustomerModel = (sequelize: Sequelize) => {
       timestamps: true,
       createdAt: 'createdAt',
       updatedAt: 'updatedAt',
+      indexes: [
+        { name: "idx_customers_is_vip", fields: ["is_vip"] },
+        { name: "idx_customers_created_at", fields: ["created_at"] },
+        { name: "idx_customers_messenger_id", fields: ["messenger_id"] },
+        { name: "idx_customers_zalo_id", fields: ["zalo_id"] },
+      ],
     }
   );
 

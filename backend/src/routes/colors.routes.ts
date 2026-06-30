@@ -18,6 +18,7 @@ import {
   requireAdmin,
 } from "../middleware/auth.middleware";
 import { syncColor } from "../middleware/auto-sync.middleware";
+import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ const router = Router();
  *       200:
  *         description: Colors retrieved successfully
  */
-router.get("/public", getPublicColors);
+router.get("/public", redisCacheMiddleware(900), getPublicColors);
 
 /**
  * @swagger
@@ -53,7 +54,7 @@ router.get("/public", getPublicColors);
  *       404:
  *         description: Color not found
  */
-router.get("/public/:id", getPublicColorById);
+router.get("/public/:id", redisCacheMiddleware(900), getPublicColorById);
 
 /**
  * @swagger

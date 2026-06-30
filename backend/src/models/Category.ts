@@ -113,6 +113,10 @@ export const CategoryModel = (sequelize: Sequelize) => {
       timestamps: true,
       createdAt: "createdAt",
       updatedAt: "updatedAt",
+      indexes: [
+        { name: "idx_categories_parent_id", fields: ["parent_id"] },
+        { name: "idx_categories_is_active", fields: ["is_active"] },
+      ],
     }
   );
 

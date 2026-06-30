@@ -211,6 +211,12 @@ export const ProductModel = (sequelize: Sequelize) => {
       timestamps: true,
       createdAt: "createdAt",
       updatedAt: "updatedAt",
+      indexes: [
+        { name: "idx_products_active_deleted", fields: ["is_active", "is_deleted"] },
+        { name: "idx_products_featured_active_deleted", fields: ["is_featured", "is_active", "is_deleted"] },
+        { name: "idx_products_capacity_id", fields: ["capacity_id"] },
+        { name: "idx_products_created_at", fields: ["created_at"] },
+      ],
     }
   );
 

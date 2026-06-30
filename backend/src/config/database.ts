@@ -19,9 +19,21 @@ const dbPoolIdle = parsePoolNumber(process.env.DB_POOL_IDLE_MS, 10000);
 
 const dbSchema = process.env.DB_SCHEMA;
 
+const slowQueryMs = parseInt(process.env.SLOW_QUERY_LOG_MS || "0", 10);
+
 const baseConfig: Options = {
   dialect: "postgres",
-  logging: process.env.NODE_ENV === "development" ? (msg: string) => logger.info(msg) : false,
+  logging:
+    slowQueryMs > 0
+      ? (msg: string, timing?: number) => {
+          if (timing && timing >= slowQueryMs) {
+            logger.warn(`SLOW QUERY (${timing}ms): ${msg}`);
+          }
+        }
+      : process.env.NODE_ENV === "development"
+      ? (msg: string) => logger.info(msg)
+      : false,
+  benchmark: slowQueryMs > 0,
   pool: {
     max: dbPoolMax,
     min: dbPoolMin,

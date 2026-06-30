@@ -1,5 +1,6 @@
 import { getErrorMessage } from "@/utils/error-helpers";
 import { logger } from "@/utils/logger";
+import { redisClient } from "./redis-cache.middleware";
 /**
  * Authentication and authorization middleware
  */
@@ -63,11 +64,24 @@ export const authenticate = async (
     // Verify token
     const decoded = verifyAccessToken(token);
 
-    // Check if user exists and is active
-    const user = await AdminUser.findOne({
-      where: { id: decoded.userId },
-      attributes: ["id", "email", "role", "isActive"],
-    });
+    // Check if user exists and is active (Redis-cached for 5 min)
+    const cacheKey = `admin_user:${decoded.userId}`;
+    let user: AdminUser | null = null;
+
+    if (redisClient?.isReady) {
+      const cached = await redisClient.get(cacheKey).catch(() => null);
+      if (cached) user = JSON.parse(cached) as AdminUser;
+    }
+
+    if (!user) {
+      user = await AdminUser.findOne({
+        where: { id: decoded.userId },
+        attributes: ["id", "email", "role", "isActive"],
+      });
+      if (user && redisClient?.isReady) {
+        redisClient.setEx(cacheKey, 300, JSON.stringify(user)).catch(() => {});
+      }
+    }
 
     if (!user || !user.isActive) {
       res
