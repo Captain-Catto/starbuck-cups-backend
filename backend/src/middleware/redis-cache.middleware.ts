@@ -15,6 +15,35 @@ if (isRedisEnabled) {
   redisClient.connect().catch(logger.error);
 }
 
+// Cache entry format: "<staleAtMs>|<raw JSON body string>".
+// Storing the body as a pre-serialized string means a HIT costs one
+// slice + Number() instead of JSON.parse-ing the whole response tree
+// and re-stringifying it in res.send.
+function encodeEntry(staleAt: number, body: unknown): string {
+  return `${staleAt}|${JSON.stringify(body)}`;
+}
+
+function decodeEntry(raw: string): { staleAt: number; body: string } | null {
+  const sep = raw.indexOf("|");
+  if (sep <= 0) return null;
+  const staleAt = Number(raw.slice(0, sep));
+  if (!Number.isFinite(staleAt)) return null; // legacy/corrupt entry
+  return { staleAt, body: raw.slice(sep + 1) };
+}
+
+function sendCachedBody(
+  res: Response,
+  body: string,
+  cacheStatus: string,
+  maxAgeSec: number,
+  swrSec: number
+): void {
+  res.setHeader("X-Cache", cacheStatus);
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", `public, max-age=${maxAgeSec}, stale-while-revalidate=${swrSec}`);
+  res.send(body);
+}
+
 /**
  * Middleware to cache API responses in Redis with Stale-While-Revalidate.
  * @param durationInSeconds How long to keep the cache fresh. Default: 300s (5 minutes)
@@ -36,32 +65,26 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
     }
 
     const key = `api_cache:${req.originalUrl || req.url}`;
+    const lockKey = `lock:${key}`;
+    const swrSec = durationInSeconds * 10;
 
     try {
       const cachedString = await redisClient.get(key);
+      const cached = cachedString ? decodeEntry(cachedString) : null;
 
-      if (cachedString) {
-        const cached = JSON.parse(cachedString);
+      if (cached) {
         const now = Date.now();
 
         // 1. Fresh cache -> Return immediately
-        if (cached._staleAt > now) {
-          res.setHeader("X-Cache", "HIT");
-          res.setHeader("Content-Type", "application/json");
-          const remainingSec = Math.floor((cached._staleAt - now) / 1000);
-          res.setHeader("Cache-Control", `public, max-age=${remainingSec}, stale-while-revalidate=${durationInSeconds * 10}`);
-          res.send(cached.data);
+        if (cached.staleAt > now) {
+          sendCachedBody(res, cached.body, "HIT", Math.floor((cached.staleAt - now) / 1000), swrSec);
           return;
         }
 
         // 2. Stale cache -> SWR: serve immediately, refresh in background
-        res.setHeader("X-Cache", "STALE");
-        res.setHeader("Content-Type", "application/json");
-        res.setHeader("Cache-Control", `public, max-age=0, stale-while-revalidate=${durationInSeconds * 10}`);
-        res.send(cached.data);
+        sendCachedBody(res, cached.body, "STALE", 0, swrSec);
 
         // Only allow one background refresh at a time per cache key
-        const lockKey = `lock:${key}`;
         const acquired = await redisClient.set(lockKey, "1", { NX: true, EX: 30 });
         if (!acquired) return;
 
@@ -73,11 +96,7 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
         res.json = (body: unknown) => {
           const b = body as Record<string, unknown>;
           if (b && b["success"] === true) {
-            const cacheData = {
-              _staleAt: Date.now() + durationInSeconds * 1000,
-              data: b,
-            };
-            redisClient!.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData))
+            redisClient!.setEx(key, swrSec, encodeEntry(Date.now() + durationInSeconds * 1000, b))
               .then(() => redisClient!.del(lockKey))
               .catch((err: unknown) => logger.error("Redis Cache SWR Set Error:", err));
           } else {
@@ -90,21 +109,44 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
         return;
       }
 
-      // 3. Cache MISS -> Wait for controller, then cache
+      // 3. Cache MISS -> single-flight: first request computes, concurrent
+      // requests briefly poll for the filled cache instead of all hitting
+      // the database at once (stampede after invalidation/cold start).
+      const missLockAcquired = await redisClient.set(lockKey, "1", { NX: true, EX: 10 });
+      if (!missLockAcquired) {
+        for (let i = 0; i < 3; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          const filledRaw = await redisClient.get(key);
+          const filled = filledRaw ? decodeEntry(filledRaw) : null;
+          if (filled) {
+            const now = Date.now();
+            sendCachedBody(
+              res,
+              filled.body,
+              "HIT",
+              Math.max(0, Math.floor((filled.staleAt - now) / 1000)),
+              swrSec
+            );
+            return;
+          }
+        }
+        // Cache still empty after waiting — fall through and compute anyway
+        // rather than hard-blocking the user.
+      }
+
       res.setHeader("X-Cache", "MISS");
 
       const originalJson = res.json.bind(res);
       res.json = (body: unknown) => {
         const b = body as Record<string, unknown>;
         if (b && b["success"] === true) {
-          const cacheData = {
-            _staleAt: Date.now() + durationInSeconds * 1000,
-            data: b,
-          };
-          redisClient!.setEx(key, durationInSeconds * 10, JSON.stringify(cacheData)).catch((err: unknown) => {
+          redisClient!.setEx(key, swrSec, encodeEntry(Date.now() + durationInSeconds * 1000, b)).catch((err: unknown) => {
             logger.error("Redis Cache Set Error:", err);
           });
-          res.setHeader("Cache-Control", `public, max-age=${durationInSeconds}, stale-while-revalidate=${durationInSeconds * 10}`);
+          res.setHeader("Cache-Control", `public, max-age=${durationInSeconds}, stale-while-revalidate=${swrSec}`);
+        }
+        if (missLockAcquired) {
+          redisClient!.del(lockKey).catch(() => {});
         }
         return originalJson(body);
       };
@@ -114,6 +156,27 @@ export const redisCacheMiddleware = (durationInSeconds: number = 300) => {
       logger.error("Redis Cache Middleware Error:", error);
       next();
     }
+  };
+};
+
+/**
+ * Route middleware: after a successful mutation response, clear the cached
+ * GET responses for the given URL prefixes so public pages see the change
+ * without waiting for TTL expiry.
+ */
+export const invalidateCachePrefixOnSuccess = (...prefixes: string[]) => {
+  return (_req: Request, res: Response, next: NextFunction): void => {
+    const originalJson = res.json.bind(res);
+    res.json = (body: unknown) => {
+      const b = body as Record<string, unknown>;
+      if (b && b["success"] === true) {
+        for (const prefix of prefixes) {
+          clearCachePrefix(prefix).catch(() => {});
+        }
+      }
+      return originalJson(body);
+    };
+    next();
   };
 };
 

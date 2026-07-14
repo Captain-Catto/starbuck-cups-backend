@@ -334,6 +334,32 @@ export const rateLimitAnalytics = rateLimit({
 });
 
 /**
+ * Rate limiting for unauthenticated, uncached read endpoints (search).
+ * Protects MeiliSearch from unthrottled public traffic.
+ */
+export const rateLimitPublicRead = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute per IP
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  passOnStoreError: true,
+  store: createRateLimitStore("public_read_rate_limit:"),
+  keyGenerator: (req: Request): string =>
+    ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown"),
+  handler: (_req, res) => {
+    return res
+      .status(429)
+      .json(
+        ResponseHelper.error(
+          "Too many requests. Please try again later.",
+          "RATE_LIMIT_EXCEEDED",
+          { retryAfter: 60 }
+        )
+      );
+  },
+});
+
+/**
  * Admin session middleware - tracks admin activity
  */
 export const trackAdminActivity = async (

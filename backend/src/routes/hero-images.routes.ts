@@ -13,20 +13,26 @@ import {
   authenticateWithAutoRefresh,
   requireAdmin,
 } from "../middleware/auth.middleware";
+import {
+  redisCacheMiddleware,
+  invalidateCachePrefixOnSuccess,
+} from "../middleware/redis-cache.middleware";
 
 const router = Router();
 
+const invalidateHeroCache = invalidateCachePrefixOnSuccess("/api/hero-images");
+
 // Public routes
-router.get("/public", getHeroImages);
+router.get("/public", redisCacheMiddleware(300), getHeroImages);
 
 // Admin routes (require authentication)
 router.use(authenticateWithAutoRefresh);
 
 router.get("/", getAdminHeroImages);
 router.get("/:id", getHeroImageById);
-router.post("/", requireAdmin, uploadMiddleware, createHeroImage);
-router.put("/:id", requireAdmin, uploadMiddleware, updateHeroImage);
-router.delete("/:id", requireAdmin, deleteHeroImage);
-router.post("/reorder", requireAdmin, reorderHeroImages);
+router.post("/", requireAdmin, uploadMiddleware, invalidateHeroCache, createHeroImage);
+router.put("/:id", requireAdmin, uploadMiddleware, invalidateHeroCache, updateHeroImage);
+router.delete("/:id", requireAdmin, invalidateHeroCache, deleteHeroImage);
+router.post("/reorder", requireAdmin, invalidateHeroCache, reorderHeroImages);
 
 export default router;

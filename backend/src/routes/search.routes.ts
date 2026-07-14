@@ -6,9 +6,14 @@ import { searchController } from "../controllers/search.controller";
 import {
   authenticateWithAutoRefresh,
   requireAdmin,
+  rateLimitPublicRead,
 } from "../middleware/auth.middleware";
 
 const searchRoutes = Router();
+
+// Every search endpoint hits MeiliSearch directly and is uncached — throttle
+// per IP so public traffic can't overwhelm it.
+searchRoutes.use(rateLimitPublicRead);
 
 // ==================== PRODUCT SEARCH ====================
 /**

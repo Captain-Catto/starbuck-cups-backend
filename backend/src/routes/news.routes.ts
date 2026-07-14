@@ -10,19 +10,26 @@ import {
   toggleNewsStatus,
 } from "../controllers/news.controller";
 import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import {
+  redisCacheMiddleware,
+  invalidateCachePrefixOnSuccess,
+} from "../middleware/redis-cache.middleware";
 
 const router = Router();
 
-// Public
-router.get("/public", getPublicNewsList);
-router.get("/public/:slug", getPublicNewsBySlug);
+const invalidateNewsCache = invalidateCachePrefixOnSuccess("/api/news");
+
+// Public — note: caching the slug route makes the views counter approximate,
+// which it already is (the Next.js layer caches this endpoint for 10 minutes).
+router.get("/public", redisCacheMiddleware(600), getPublicNewsList);
+router.get("/public/:slug", redisCacheMiddleware(600), getPublicNewsBySlug);
 
 // Admin (protected)
 router.get("/admin", authenticateWithAutoRefresh, requireAdmin, getAdminNewsList);
 router.get("/admin/:id", authenticateWithAutoRefresh, requireAdmin, getAdminNewsById);
-router.post("/admin", authenticateWithAutoRefresh, requireAdmin, createNews);
-router.put("/admin/:id", authenticateWithAutoRefresh, requireAdmin, updateNews);
-router.delete("/admin/:id", authenticateWithAutoRefresh, requireAdmin, deleteNews);
-router.patch("/admin/:id/status", authenticateWithAutoRefresh, requireAdmin, toggleNewsStatus);
+router.post("/admin", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, createNews);
+router.put("/admin/:id", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, updateNews);
+router.delete("/admin/:id", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, deleteNews);
+router.patch("/admin/:id/status", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, toggleNewsStatus);
 
 export default router;

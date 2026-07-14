@@ -13,7 +13,8 @@ const parsePoolNumber = (rawValue: string | undefined, fallback: number): number
 };
 
 const dbPoolMax = parsePoolNumber(process.env.DB_POOL_MAX, 20);
-const dbPoolMin = parsePoolNumber(process.env.DB_POOL_MIN, 0);
+// Keep a couple of warm connections so post-idle bursts don't pay reconnect latency
+const dbPoolMin = parsePoolNumber(process.env.DB_POOL_MIN, 2);
 const dbPoolAcquire = parsePoolNumber(process.env.DB_POOL_ACQUIRE_MS, 30000);
 const dbPoolIdle = parsePoolNumber(process.env.DB_POOL_IDLE_MS, 10000);
 

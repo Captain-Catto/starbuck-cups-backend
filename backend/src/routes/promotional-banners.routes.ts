@@ -11,15 +11,23 @@ import {
   authenticateWithAutoRefresh,
   requireAdmin,
 } from "../middleware/auth.middleware";
+import {
+  redisCacheMiddleware,
+  invalidateCachePrefixOnSuccess,
+} from "../middleware/redis-cache.middleware";
 
 const router = Router();
+
+const invalidateBannerCache = invalidateCachePrefixOnSuccess(
+  "/api/promotional-banners"
+);
 
 /**
  * Public Routes
  */
 
 // GET /api/promotional-banners - Get active promotional banner
-router.get("/", getActivePromotionalBanner);
+router.get("/", redisCacheMiddleware(300), getActivePromotionalBanner);
 
 /**
  * Admin Routes (Protected)
@@ -46,6 +54,7 @@ router.post(
   "/admin",
   authenticateWithAutoRefresh,
   requireAdmin,
+  invalidateBannerCache,
   createPromotionalBanner
 );
 
@@ -54,6 +63,7 @@ router.put(
   "/admin/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
+  invalidateBannerCache,
   updatePromotionalBanner
 );
 
@@ -62,6 +72,7 @@ router.delete(
   "/admin/:id",
   authenticateWithAutoRefresh,
   requireAdmin,
+  invalidateBannerCache,
   deletePromotionalBanner
 );
 

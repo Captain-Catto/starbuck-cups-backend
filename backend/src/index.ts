@@ -20,8 +20,8 @@ Sentry.init({
   integrations: [
     nodeProfilingIntegration(),
   ],
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
-  profilesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.05 : 1.0,
+  profilesSampleRate: process.env.NODE_ENV === "production" ? 0.05 : 1.0,
   beforeSend(event, hint) {
     const url = event.request?.url ?? "";
     const method = event.request?.method ?? "";

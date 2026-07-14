@@ -117,6 +117,8 @@ class MeilisearchService {
     this.client = new MeiliSearch({
       host,
       apiKey,
+      // Fail fast instead of hanging requests when Meili is slow/unreachable
+      timeout: 3000,
     });
 
     // Initialize indexes

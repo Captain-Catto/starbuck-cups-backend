@@ -644,14 +644,17 @@ export async function findPublicProducts(filters: PublicProductFilters) {
   const capacityWhere = capacitySlugValue ? { slug: capacitySlugValue } : buildCapacityWhere(minCapacity, maxCapacity);
 
   const countInclude = buildCountInclude(categoryWhere, colorWhere, capacityWhere);
-  const totalCount = await Product.count({ where, include: countInclude, distinct: true, col: "id" });
 
   const orderClauses: Order = [
     ...(sortByNorm === "isFeatured" && isFeatured !== "true" ? [["isFeatured", sortOrderNorm.toUpperCase()]] : isFeatured === "true" ? [["isFeatured", "DESC"]] : []),
     ...(sortByNorm === "isFeatured" ? [["createdAt", "DESC"]] : [[sortByNorm, sortOrderNorm.toUpperCase()]]),
   ] as Order;
 
-  const idRows = await Product.findAll({ where, include: countInclude, attributes: ["id"], order: orderClauses, group: ["Product.id"], offset, limit: limitNum, raw: true, subQuery: false });
+  // Count and id-page queries are independent — run them in parallel
+  const [totalCount, idRows] = await Promise.all([
+    Product.count({ where, include: countInclude, distinct: true, col: "id" }),
+    Product.findAll({ where, include: countInclude, attributes: ["id"], order: orderClauses, group: ["Product.id"], offset, limit: limitNum, raw: true, subQuery: false }),
+  ]);
   const paginatedIds = (idRows as Array<{ id: string }>).map((r) => r.id);
 
   const productsUnsorted = await Product.findAll({
@@ -661,9 +664,11 @@ export async function findPublicProducts(filters: PublicProductFilters) {
       { model: ProductCategory, as: "productCategories", include: [{ model: Category, as: "category", where: Object.keys(categoryWhere).length > 0 ? categoryWhere : undefined, required: Object.keys(categoryWhere).length > 0, attributes: ["id", "name", "slug"] }] },
       { model: ProductColor, as: "productColors", include: [{ model: Color, as: "color", where: Object.keys(colorWhere).length > 0 ? colorWhere : undefined, required: Object.keys(colorWhere).length > 0, attributes: ["id", "name", "slug", "hexCode"] }] },
       { model: ProductImage, as: "productImages", attributes: ["id", "url", "altText", "order"] },
-      { model: ProductTranslation, as: "translations", attributes: ["locale", "name", "description", "metaTitle", "metaDescription"], required: false, where: { locale: { [Op.in]: getSearchableLocales(requestedLocale) } } },
+      // List view: only locale + name. description/meta are heavy TEXT fields
+      // a product card never renders — they stay on the detail endpoint.
+      { model: ProductTranslation, as: "translations", attributes: ["locale", "name"], required: false, where: { locale: { [Op.in]: getSearchableLocales(requestedLocale) } } },
     ],
-    attributes: ["id", "name", "slug", "description", "stockQuantity", "unitPrice", "productUrl", "isVip", "isFeatured", "createdAt"],
+    attributes: ["id", "name", "slug", "stockQuantity", "unitPrice", "productUrl", "isVip", "isFeatured", "createdAt"],
     order: [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]],
   });
 

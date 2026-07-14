@@ -66,18 +66,16 @@ export class ConsultationService {
         status: ConsultationStatus.PENDING,
       });
 
-      // Create consultation items
-      await Promise.all(
-        data.items.map((item) =>
-          ConsultationItem.create({
-            consultationId: consultation.id,
-            productId: item.productId,
-            productName: item.productName,
-            color: item.color,
-            capacity: item.capacity,
-            category: item.category,
-          })
-        )
+      // Create consultation items in one INSERT instead of one per item
+      await ConsultationItem.bulkCreate(
+        data.items.map((item) => ({
+          consultationId: consultation.id,
+          productId: item.productId,
+          productName: item.productName,
+          color: item.color,
+          capacity: item.capacity,
+          category: item.category,
+        }))
       );
 
       // Return consultation with items
