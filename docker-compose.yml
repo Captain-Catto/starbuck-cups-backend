@@ -122,7 +122,11 @@ services:
       GOOGLE_DRIVE_REFRESH_TOKEN: ${GOOGLE_DRIVE_REFRESH_TOKEN:-}
       GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID:-}
       MAX_FILE_SIZE: "10485760"
-      MAX_REQUEST_SIZE: "52428800"
+      # Matches nginx client_max_body_size and the Next.js proxy cap — admin
+      # uploads allow up to 10 files at 10MB each (MAX_FILE_SIZE), so this
+      # global total-request-size gate has to cover that combined worst case
+      # too, or it silently becomes the earliest rejection point.
+      MAX_REQUEST_SIZE: "125829120"
     volumes:
       - ./backend/uploads:/app/uploads
     healthcheck:

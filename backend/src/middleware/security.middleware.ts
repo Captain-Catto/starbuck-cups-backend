@@ -142,7 +142,7 @@ export const requestSizeLimit = (
   res: Response,
   next: NextFunction
 ): void => {
-  const maxSize = parseInt(process.env.MAX_REQUEST_SIZE || "10485760"); // 10MB default
+  const maxSize = parseInt(process.env.MAX_REQUEST_SIZE || "125829120"); // 120MB default — see docker-compose.yml comment
 
   if (req.headers["content-length"]) {
     const contentLength = parseInt(req.headers["content-length"]);
