@@ -194,19 +194,14 @@ export const apiVersioning = (
 };
 
 /**
- * Health check endpoint
+ * Health check endpoint — unauthenticated (used by Docker/PM2 liveness
+ * checks and uptime monitors), so it intentionally returns only enough to
+ * confirm the process is up. Memory/uptime/environment used to be included
+ * here but that's infrastructure fingerprinting handed to anyone scanning
+ * this path; consumers here only check the HTTP status code, not the body.
  */
 export const healthCheck = (req: Request, res: Response) => {
-  const healthData = {
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    version: process.env.npm_package_version || "1.0.0",
-    environment: process.env.NODE_ENV || "development",
-  };
-
-  res.status(200).json(ResponseHelper.success(healthData));
+  res.status(200).json(ResponseHelper.success({ status: "healthy" }));
 };
 
 /**

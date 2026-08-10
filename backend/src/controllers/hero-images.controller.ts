@@ -14,7 +14,7 @@ import { processImage, IMAGE_PRESETS } from "../services/image-processing.servic
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || "5242880"), // 5MB default
+    fileSize: parseInt(process.env.MAX_FILE_SIZE || "10485760"), // 10MB default, per file
   },
   fileFilter: (req, file, cb) => {
     if (!googleDriveService.isValidImageType(file.originalname)) {

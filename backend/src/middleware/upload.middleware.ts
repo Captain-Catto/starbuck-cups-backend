@@ -10,14 +10,23 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  // Check file type
+  // Check file type. This only filters on the client-supplied Content-Type,
+  // which is trivially spoofable — the real validation is that every
+  // uploaded file is re-encoded through sharp (see image-processing.service)
+  // before it's ever persisted or served, so this filter is a first-pass
+  // reject, not the security boundary.
+  //
+  // SVG is deliberately excluded: it's XML, not a raster format, and its
+  // only use as an XSS vector (embedded <script>/event handlers surviving
+  // to be served) matters even though sharp re-rasterizes uploads, because
+  // it also expands the attack surface to librsvg's XML/SVG parser for a
+  // format this product-photo catalog never actually needs.
   const allowedMimes = [
     "image/jpeg",
     "image/png",
     "image/gif",
     "image/webp",
     "image/avif",
-    "image/svg+xml",
   ];
 
   if (allowedMimes.includes(file.mimetype)) {
@@ -25,7 +34,7 @@ const fileFilter = (
   } else {
     cb(
       new Error(
-        "Invalid file type. Only JPEG, PNG, GIF, WebP and SVG are allowed."
+        "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed."
       )
     );
   }
@@ -36,7 +45,7 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || "5242880"), // 5MB default
+    fileSize: parseInt(process.env.MAX_FILE_SIZE || "10485760"), // 10MB default, per file
     files: 10, // Maximum 10 files per request
   },
 });
@@ -68,7 +77,7 @@ export const handleMulterError = (
       case "LIMIT_FILE_SIZE":
         res.status(400).json({
           success: false,
-          message: "File too large. Maximum size is 5MB.",
+          message: "One of the selected images is too large. Maximum size is 10MB per image.",
           error: "FILE_TOO_LARGE",
         });
         return;

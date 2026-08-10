@@ -1,5 +1,5 @@
 import { logger } from "@/utils/logger";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import fs from "fs";
 import path from "path";
 
@@ -152,7 +152,7 @@ const buildWatermarkSvg = async (
     `.trim();
 
     // 4. Composite the layers together
-    const composites: sharp.OverlayOptions[] = [
+    const composites: OverlayOptions[] = [
       { input: rectBuffer, left: 0, top: 0 },
     ];
 

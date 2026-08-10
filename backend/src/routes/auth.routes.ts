@@ -173,7 +173,7 @@ router.post("/admin/login", rateLimitAuth, adminLogin);
  *       401:
  *         description: Invalid or expired refresh token
  */
-router.post("/refresh", refreshToken);
+router.post("/refresh", rateLimitAuth, refreshToken);
 
 /**
  * @swagger
@@ -370,7 +370,7 @@ router.get("/admin/verify", authenticateWithAutoRefresh, adminVerifyToken);
  *       401:
  *         description: Invalid refresh token
  */
-router.post("/admin/refresh", adminRefreshToken);
+router.post("/admin/refresh", rateLimitAuth, adminRefreshToken);
 
 /**
  * @swagger
@@ -401,7 +401,9 @@ router.post("/admin/logout", authenticateWithAutoRefresh, adminLogout);
  *         description: No valid session found
  */
 // No auth middleware here — adminSessionCheck reads the refresh cookie to RESTORE a session
-// Adding authenticateWithAutoRefresh would block this route when the access token is expired
-router.get("/admin/session", adminSessionCheck);
+// Adding authenticateWithAutoRefresh would block this route when the access token is expired.
+// rateLimitAuth only counts failed attempts (skipSuccessfulRequests), so it throttles
+// invalid-cookie spam without affecting legitimate session checks.
+router.get("/admin/session", rateLimitAuth, adminSessionCheck);
 
 export default router;
