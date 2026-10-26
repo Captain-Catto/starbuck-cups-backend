@@ -17,32 +17,36 @@ import {
   getLowStockProducts,
   reorderProductImages,
   getFeaturedProductsStats,
+  pinProduct,
+  unpinProduct,
+  getPinnedProductsCount,
 } from "../controllers/products.controller";
 import {
   authenticateWithAutoRefresh,
-  requireAdmin,
-  requireStaff,
+  requirePermission,
 } from "../middleware/auth.middleware";
 import {
   uploadMultiple,
   handleMulterError,
 } from "../middleware/upload.middleware";
 import { syncProduct } from "../middleware/auto-sync.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
 // Static paths must be registered before the /:id catch-all
-router.get("/", authenticateWithAutoRefresh, getProducts);
-router.get("/low-stock", authenticateWithAutoRefresh, getLowStockProducts);
-router.get("/search", authenticateWithAutoRefresh, searchProducts);
-router.get("/stats/featured", authenticateWithAutoRefresh, getFeaturedProductsStats);
-router.get("/:id", authenticateWithAutoRefresh, getProductById);
+router.get("/", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.PRODUCTS_VIEW), getProducts);
+router.get("/low-stock", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.PRODUCTS_VIEW), getLowStockProducts);
+router.get("/search", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.PRODUCTS_VIEW), searchProducts);
+router.get("/stats/featured", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.PRODUCTS_VIEW), getFeaturedProductsStats);
+router.get("/stats/pinned", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.PRODUCTS_VIEW), getPinnedProductsCount);
+router.get("/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.PRODUCTS_VIEW), getProductById);
 
 // Create product with image upload (multipart/form-data, max 10 images)
 router.post(
   "/",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   uploadMultiple("images", 10),
   handleMulterError,
   syncProduct.create(),
@@ -52,7 +56,7 @@ router.post(
 router.put(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   syncProduct.update(),
   updateProduct
 );
@@ -61,7 +65,7 @@ router.put(
 router.put(
   "/:id/upload",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   uploadMultiple("images", 10),
   handleMulterError,
   syncProduct.update(),
@@ -72,7 +76,7 @@ router.put(
 router.patch(
   "/:id/stock",
   authenticateWithAutoRefresh,
-  requireStaff,
+  requirePermission(PERMISSIONS.PRODUCTS_STOCK),
   syncProduct.update(),
   updateProductStock
 );
@@ -80,7 +84,7 @@ router.patch(
 router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   syncProduct.update(),
   toggleProductStatus
 );
@@ -89,7 +93,7 @@ router.patch(
 router.patch(
   "/:id/reactivate",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   syncProduct.update(),
   reactivateProduct
 );
@@ -98,7 +102,7 @@ router.patch(
 router.delete(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   syncProduct.delete(),
   deleteProduct
 );
@@ -106,9 +110,25 @@ router.delete(
 router.patch(
   "/:id/reorder-images",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   syncProduct.update(),
   reorderProductImages
+);
+
+router.patch(
+  "/:id/pin",
+  authenticateWithAutoRefresh,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
+  syncProduct.update(),
+  pinProduct
+);
+
+router.patch(
+  "/:id/unpin",
+  authenticateWithAutoRefresh,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
+  syncProduct.update(),
+  unpinProduct
 );
 
 export default router;

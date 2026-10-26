@@ -91,6 +91,7 @@ export interface ProductUpdateData {
   productUrl?: string;
   isVip?: boolean;
   isFeatured?: boolean;
+  isPinned?: boolean;
   isActive?: boolean;
   categoryIds?: string[];
   colorIds?: string[];
@@ -104,6 +105,10 @@ export interface ProductUpdateWithFilesData extends ProductUpdateData {
 
 const ADMIN_SORT_FIELDS = new Set(["name", "stockQuantity", "createdAt", "updatedAt", "isFeatured"]);
 const PUBLIC_SORT_FIELDS = new Set(["name", "createdAt", "isFeatured"]);
+
+export const MAX_PINNED_PRODUCTS = 10;
+// Pinned products first (most recently pinned on top), unpinned after
+const PINNED_FIRST_ORDER = sequelize.literal('"Product"."pinned_at" DESC NULLS LAST');
 
 // ── Shared include config ─────────────────────────────────────────────────────
 
@@ -297,15 +302,27 @@ async function upsertTranslations(
     if (!hasData) continue;
 
     const current = existingMap.get(locale);
+
+    // An explicit empty name on a non-default locale clears that translation
+    // (reads then fall back to the default locale).
+    if (locale !== "vi" && incoming.name === "") {
+      if (current) await current.destroy({ transaction: t });
+      continue;
+    }
+
     const nextName = incoming.name?.trim() || current?.name || finalName;
     const nextDescription = incoming.description !== undefined ? incoming.description : current?.description || (locale === "vi" ? finalDescription : undefined);
-    const nextMetaTitle = incoming.metaTitle !== undefined ? incoming.metaTitle?.trim() || undefined : current?.metaTitle;
-    const nextMetaDescription = incoming.metaDescription !== undefined ? incoming.metaDescription?.trim() || undefined : current?.metaDescription;
+    // null (not undefined) so Sequelize actually writes NULL when a field is cleared.
+    const nextMetaTitle = incoming.metaTitle !== undefined ? incoming.metaTitle.trim() || null : current?.metaTitle;
+    const nextMetaDescription = incoming.metaDescription !== undefined ? incoming.metaDescription.trim() || null : current?.metaDescription;
+
+    // The model types these as optional strings, but NULL is what must be written to clear them.
+    const meta = { metaTitle: nextMetaTitle, metaDescription: nextMetaDescription } as { metaTitle?: string; metaDescription?: string };
 
     if (current) {
-      await current.update({ name: nextName, description: nextDescription, metaTitle: nextMetaTitle, metaDescription: nextMetaDescription }, { transaction: t });
+      await current.update({ name: nextName, description: nextDescription, ...meta }, { transaction: t });
     } else {
-      await ProductTranslation.create({ productId, locale, name: nextName, description: nextDescription, metaTitle: nextMetaTitle, metaDescription: nextMetaDescription }, { transaction: t });
+      await ProductTranslation.create({ productId, locale, name: nextName, description: nextDescription, ...meta }, { transaction: t });
     }
   }
 }
@@ -423,27 +440,46 @@ export async function createProduct(data: {
   return applyLocaleToProduct(created!, "vi", true);
 }
 
+// Shared by both update paths so renaming a product keeps its slug in sync either way.
+async function resolveUpdatedSlug(existing: Product, finalName: string, requested: string | undefined, t: Transaction): Promise<string> {
+  const requestedSlug = requested?.trim();
+  if (!requestedSlug && finalName === existing.name) return existing.slug;
+
+  const slug = requestedSlug || generateVietnameseSlug(finalName) || existing.slug;
+  const conflict = await Product.findOne({ where: { slug, id: { [Op.ne]: existing.id } }, transaction: t });
+  if (conflict) throw new ServiceError(409, "DUPLICATE_SLUG", `Sản phẩm với tên này đã tồn tại (slug: "${slug}"). Vui lòng đổi tên sản phẩm.`);
+  return slug;
+}
+
+// Maps the form's isPinned flag to a pinnedAt patch ({} = leave untouched), enforcing the pin limit.
+async function resolvePinnedAt(existing: Product, isPinned: boolean | undefined, t: Transaction): Promise<{ pinnedAt?: Date | null }> {
+  if (isPinned === undefined) return {};
+  if (!isPinned) return existing.pinnedAt ? { pinnedAt: null } : {};
+  if (existing.pinnedAt) return {};
+
+  const pinnedCount = await Product.count({ where: { isDeleted: false, pinnedAt: { [Op.ne]: null } }, transaction: t });
+  if (pinnedCount >= MAX_PINNED_PRODUCTS) {
+    throw new ServiceError(400, "PIN_LIMIT_REACHED", `Chỉ được ghim tối đa ${MAX_PINNED_PRODUCTS} sản phẩm`);
+  }
+  return { pinnedAt: new Date() };
+}
+
 export async function updateProduct(id: string, data: ProductUpdateData) {
   const existing = await Product.findByPk(id);
   if (!existing || existing.isDeleted) throw new ServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
 
   const parsedTranslations = parseTranslationPayload(data.translations);
-  const { categoryIds, colorIds, productImages, translations: _t, ...baseData } = data;
+  const { categoryIds, colorIds, productImages, translations: _t, isPinned, ...baseData } = data;
 
   const updated = await sequelize.transaction(async (t) => {
+    const pinnedAt = await resolvePinnedAt(existing, isPinned, t);
     const viTranslation = parsedTranslations.vi;
     const finalName = viTranslation?.name?.trim() || data.name?.trim() || existing.name;
     const finalDescription = viTranslation?.description !== undefined ? viTranslation.description : data.description !== undefined ? data.description.trim() : existing.description;
 
-    let finalSlug = existing.slug;
-    const requestedSlug = data.slug?.trim();
-    if (requestedSlug || finalName !== existing.name) {
-      finalSlug = requestedSlug || generateVietnameseSlug(finalName) || existing.slug;
-      const conflict = await Product.findOne({ where: { slug: finalSlug, id: { [Op.ne]: id } }, transaction: t });
-      if (conflict) throw new ServiceError(409, "DUPLICATE_SLUG", `Sản phẩm với tên này đã tồn tại (slug: "${finalSlug}"). Vui lòng đổi tên sản phẩm.`);
-    }
+    const finalSlug = await resolveUpdatedSlug(existing, finalName, data.slug, t);
 
-    await existing.update({ ...baseData, slug: finalSlug, name: finalName, description: finalDescription }, { transaction: t });
+    await existing.update({ ...baseData, ...pinnedAt, slug: finalSlug, name: finalName, description: finalDescription }, { transaction: t });
 
     if (categoryIds) {
       const cats = await Category.findAll({ where: { id: { [Op.in]: categoryIds }, isActive: true }, transaction: t });
@@ -479,9 +515,10 @@ export async function updateProductWithFiles(id: string, data: ProductUpdateWith
   if (!existing || existing.isDeleted) throw new ServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
 
   const parsedTranslations = parseTranslationPayload(data.translations);
-  const { categoryIds, colorIds, productImages, translations: _t, keepExistingImages = true, ...baseData } = data;
+  const { categoryIds, colorIds, productImages, translations: _t, keepExistingImages = true, isPinned, ...baseData } = data;
 
   const updated = await sequelize.transaction(async (t) => {
+    const pinnedAt = await resolvePinnedAt(existing, isPinned, t);
     const viTranslation = parsedTranslations.vi;
     const finalName = viTranslation?.name?.trim() || data.name?.trim() || existing.name;
     const finalDescription = viTranslation?.description !== undefined ? viTranslation.description : data.description !== undefined ? data.description.trim() : existing.description;
@@ -513,7 +550,8 @@ export async function updateProductWithFiles(id: string, data: ProductUpdateWith
       await ProductImage.bulkCreate(sorted.map((url: string, i: number) => ({ productId: id, url, altText: finalName, order: i })), { transaction: t });
     }
 
-    await existing.update({ ...baseData, name: finalName, description: finalDescription }, { transaction: t });
+    const finalSlug = await resolveUpdatedSlug(existing, finalName, data.slug, t);
+    await existing.update({ ...baseData, ...pinnedAt, slug: finalSlug, name: finalName, description: finalDescription }, { transaction: t });
 
     if (categoryIds) {
       const cats = await Category.findAll({ where: { id: { [Op.in]: categoryIds }, isActive: true }, transaction: t });
@@ -569,6 +607,34 @@ export async function toggleProductStatus(id: string) {
   await product.update({ isActive: !product.isActive });
   invalidateProductCaches(product.slug);
   return { message: `Product ${product.isActive ? "activated" : "deactivated"} successfully`, isActive: product.isActive };
+}
+
+export async function pinProduct(id: string) {
+  const product = await Product.findByPk(id);
+  if (!product || product.isDeleted) throw new ServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
+  if (product.pinnedAt) return { message: "Product already pinned", pinnedAt: product.pinnedAt };
+
+  const pinnedCount = await Product.count({ where: { isDeleted: false, pinnedAt: { [Op.ne]: null } } });
+  if (pinnedCount >= MAX_PINNED_PRODUCTS) {
+    throw new ServiceError(400, "PIN_LIMIT_REACHED", `Chỉ được ghim tối đa ${MAX_PINNED_PRODUCTS} sản phẩm`);
+  }
+
+  await product.update({ pinnedAt: new Date() });
+  invalidateProductCaches(product.slug);
+  return { message: "Product pinned successfully", pinnedAt: product.pinnedAt };
+}
+
+export async function unpinProduct(id: string) {
+  const product = await Product.findByPk(id);
+  if (!product || product.isDeleted) throw new ServiceError(404, "PRODUCT_NOT_FOUND", "Product not found");
+  await product.update({ pinnedAt: null });
+  invalidateProductCaches(product.slug);
+  return { message: "Product unpinned successfully", pinnedAt: null };
+}
+
+export async function getPinnedCount() {
+  const count = await Product.count({ where: { isDeleted: false, pinnedAt: { [Op.ne]: null } } });
+  return { count, max: MAX_PINNED_PRODUCTS };
 }
 
 export async function searchProducts(filters: SearchFilters) {
@@ -646,6 +712,7 @@ export async function findPublicProducts(filters: PublicProductFilters) {
   const countInclude = buildCountInclude(categoryWhere, colorWhere, capacityWhere);
 
   const orderClauses: Order = [
+    ...(sortByNorm === "isFeatured" ? [PINNED_FIRST_ORDER] : []),
     ...(sortByNorm === "isFeatured" && isFeatured !== "true" ? [["isFeatured", sortOrderNorm.toUpperCase()]] : isFeatured === "true" ? [["isFeatured", "DESC"]] : []),
     ...(sortByNorm === "isFeatured" ? [["createdAt", "DESC"]] : [[sortByNorm, sortOrderNorm.toUpperCase()]]),
   ] as Order;
@@ -668,7 +735,7 @@ export async function findPublicProducts(filters: PublicProductFilters) {
       // a product card never renders — they stay on the detail endpoint.
       { model: ProductTranslation, as: "translations", attributes: ["locale", "name"], required: false, where: { locale: { [Op.in]: getSearchableLocales(requestedLocale) } } },
     ],
-    attributes: ["id", "name", "slug", "stockQuantity", "unitPrice", "productUrl", "isVip", "isFeatured", "createdAt"],
+    attributes: ["id", "name", "slug", "stockQuantity", "unitPrice", "productUrl", "isVip", "isFeatured", "pinnedAt", "createdAt"],
     order: [[{ model: ProductImage, as: "productImages" }, "order", "ASC"]],
   });
 

@@ -9,12 +9,13 @@ import {
 } from "../controllers/promotional-banners.controller";
 import {
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission,
 } from "../middleware/auth.middleware";
 import {
   redisCacheMiddleware,
   invalidateCachePrefixOnSuccess,
 } from "../middleware/redis-cache.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -37,7 +38,7 @@ router.get("/", redisCacheMiddleware(300), getActivePromotionalBanner);
 router.get(
   "/admin",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.BANNERS_VIEW),
   getAdminPromotionalBanners
 );
 
@@ -45,7 +46,7 @@ router.get(
 router.get(
   "/admin/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.BANNERS_VIEW),
   getPromotionalBannerById
 );
 
@@ -53,7 +54,7 @@ router.get(
 router.post(
   "/admin",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.BANNERS_MANAGE),
   invalidateBannerCache,
   createPromotionalBanner
 );
@@ -62,7 +63,7 @@ router.post(
 router.put(
   "/admin/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.BANNERS_MANAGE),
   invalidateBannerCache,
   updatePromotionalBanner
 );
@@ -71,7 +72,7 @@ router.put(
 router.delete(
   "/admin/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.BANNERS_MANAGE),
   invalidateBannerCache,
   deletePromotionalBanner
 );

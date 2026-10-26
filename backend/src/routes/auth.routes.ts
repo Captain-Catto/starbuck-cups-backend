@@ -15,7 +15,7 @@ import {
   adminLogout,
   adminSessionCheck,
 } from "../controllers/auth.controller";
-import { rateLimitAuth, authenticateWithAutoRefresh } from "../middleware/auth.middleware";
+import { rateLimitAuth, rateLimitSession, authenticateWithAutoRefresh } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -173,7 +173,7 @@ router.post("/admin/login", rateLimitAuth, adminLogin);
  *       401:
  *         description: Invalid or expired refresh token
  */
-router.post("/refresh", rateLimitAuth, refreshToken);
+router.post("/refresh", rateLimitSession, refreshToken);
 
 /**
  * @swagger
@@ -370,7 +370,7 @@ router.get("/admin/verify", authenticateWithAutoRefresh, adminVerifyToken);
  *       401:
  *         description: Invalid refresh token
  */
-router.post("/admin/refresh", rateLimitAuth, adminRefreshToken);
+router.post("/admin/refresh", rateLimitSession, adminRefreshToken);
 
 /**
  * @swagger
@@ -404,6 +404,6 @@ router.post("/admin/logout", authenticateWithAutoRefresh, adminLogout);
 // Adding authenticateWithAutoRefresh would block this route when the access token is expired.
 // rateLimitAuth only counts failed attempts (skipSuccessfulRequests), so it throttles
 // invalid-cookie spam without affecting legitimate session checks.
-router.get("/admin/session", rateLimitAuth, adminSessionCheck);
+router.get("/admin/session", rateLimitSession, adminSessionCheck);
 
 export default router;

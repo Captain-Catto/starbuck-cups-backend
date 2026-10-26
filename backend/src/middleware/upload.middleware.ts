@@ -27,14 +27,24 @@ const fileFilter = (
     "image/gif",
     "image/webp",
     "image/avif",
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
   ];
 
-  if (allowedMimes.includes(file.mimetype)) {
+  // Some mobile browsers send HEIC with an empty or generic Content-Type,
+  // so fall back to the file extension in that case. The real format is
+  // verified by magic bytes + sharp re-encoding in image-processing.service.
+  const isGenericMime = !file.mimetype || file.mimetype === "application/octet-stream";
+  const hasHeicExtension = /\.(heic|heif)$/i.test(file.originalname);
+
+  if (allowedMimes.includes(file.mimetype) || (isGenericMime && hasHeicExtension)) {
     cb(null, true);
   } else {
     cb(
       new Error(
-        "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed."
+        "Invalid file type. Only JPEG, PNG, GIF, WebP, AVIF, and HEIC are allowed."
       )
     );
   }

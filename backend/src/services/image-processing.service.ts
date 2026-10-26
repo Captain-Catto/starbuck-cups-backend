@@ -2,6 +2,7 @@ import { logger } from "@/utils/logger";
 import sharp, { type OverlayOptions } from "sharp";
 import fs from "fs";
 import path from "path";
+import convert from "heic-convert";
 
 // Load logo buffer
 let logoBuffer: Buffer | null = null;
@@ -173,6 +174,30 @@ const buildWatermarkSvg = async (
 };
 
 /**
+ * Detects HEIC/HEIF by magic bytes (ISO-BMFF "ftyp" box with a HEIF brand).
+ * sharp's prebuilt libvips cannot decode HEVC, so these must be converted first.
+ * AVIF also uses "ftyp" but with the "avif"/"avis" brand, which sharp handles natively.
+ */
+const HEIF_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"]);
+
+const isHeic = (buffer: Buffer): boolean => {
+  if (buffer.length < 12 || buffer.toString("ascii", 4, 8) !== "ftyp") return false;
+  return HEIF_BRANDS.has(buffer.toString("ascii", 8, 12));
+};
+
+/** Converts HEIC/HEIF (e.g. iPhone photos) to JPEG so the sharp pipeline can read it. */
+async function normalizeInput(buffer: Buffer, filename: string): Promise<Buffer> {
+  if (!isHeic(buffer)) return buffer;
+  try {
+    const converted = await convert({ buffer, format: "JPEG", quality: 0.95 });
+    return Buffer.from(converted);
+  } catch (err) {
+    logger.error(`HEIC conversion failed for ${filename}:`, err);
+    throw new Error("Invalid file type. Could not read this HEIC/HEIF image.");
+  }
+}
+
+/**
  * Process (resize + convert) an image buffer before upload.
  * - Resizes to maxWidth if the image is larger (maintains aspect ratio)
  * - Converts to AVIF for best compression
@@ -186,6 +211,8 @@ export async function processImage(
   options: ImageProcessingOptions
 ): Promise<{ buffer: Buffer; filename: string; format: string }> {
   const { maxWidth, quality = 80, format = "avif", watermark } = options;
+
+  buffer = await normalizeInput(buffer, filename);
 
   // Get metadata first to decide if resize is needed
   const metadata = await sharp(buffer).metadata();

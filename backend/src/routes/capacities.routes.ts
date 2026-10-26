@@ -15,10 +15,11 @@ import {
 } from "../controllers/capacities.controller";
 import {
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission,
 } from "../middleware/auth.middleware";
 import { syncCapacity } from "../middleware/auto-sync.middleware";
 import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -166,7 +167,7 @@ router.get("/public/:id", redisCacheMiddleware(900), getPublicCapacityById);
  *       200:
  *         description: Capacities retrieved successfully
  */
-router.get("/", authenticateWithAutoRefresh, getCapacitiesForAdmin);
+router.get("/", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getCapacitiesForAdmin);
 
 /**
  * @swagger
@@ -191,7 +192,7 @@ router.get("/", authenticateWithAutoRefresh, getCapacitiesForAdmin);
  *       200:
  *         description: Capacities found
  */
-router.get("/search", authenticateWithAutoRefresh, searchCapacities);
+router.get("/search", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), searchCapacities);
 
 /**
  * @swagger
@@ -214,7 +215,7 @@ router.get("/search", authenticateWithAutoRefresh, searchCapacities);
  *       404:
  *         description: Capacity not found
  */
-router.get("/:id", authenticateWithAutoRefresh, getCapacityById);
+router.get("/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getCapacityById);
 
 /**
  * @swagger
@@ -239,7 +240,7 @@ router.get("/:id", authenticateWithAutoRefresh, getCapacityById);
 router.post(
   "/",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCapacity.create(),
   createCapacity
 );
@@ -276,7 +277,7 @@ router.post(
 router.put(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCapacity.update(),
   updateCapacity
 );
@@ -307,7 +308,7 @@ router.put(
 router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCapacity.update(),
   toggleCapacityStatus
 );
@@ -338,7 +339,7 @@ router.patch(
 router.delete(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCapacity.delete(),
   deleteCapacity
 );

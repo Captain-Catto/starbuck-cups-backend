@@ -15,10 +15,11 @@ import {
 } from "../controllers/colors.controller";
 import {
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission,
 } from "../middleware/auth.middleware";
 import { syncColor } from "../middleware/auto-sync.middleware";
 import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -182,7 +183,7 @@ router.get("/public/:id", redisCacheMiddleware(900), getPublicColorById);
  *                         pagination:
  *                           $ref: '#/components/schemas/PaginationMeta'
  */
-router.get("/", authenticateWithAutoRefresh, getColorsForAdmin);
+router.get("/", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getColorsForAdmin);
 
 /**
  * @swagger
@@ -207,7 +208,7 @@ router.get("/", authenticateWithAutoRefresh, getColorsForAdmin);
  *       200:
  *         description: Colors found
  */
-router.get("/search", authenticateWithAutoRefresh, searchColors);
+router.get("/search", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), searchColors);
 
 /**
  * @swagger
@@ -239,7 +240,7 @@ router.get("/search", authenticateWithAutoRefresh, searchColors);
  *       404:
  *         description: Color not found
  */
-router.get("/:id", authenticateWithAutoRefresh, getColorById);
+router.get("/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getColorById);
 
 /**
  * @swagger
@@ -273,7 +274,7 @@ router.get("/:id", authenticateWithAutoRefresh, getColorById);
 router.post(
   "/",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncColor.create(),
   createColor
 );
@@ -310,7 +311,7 @@ router.post(
 router.put(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncColor.update(),
   updateColor
 );
@@ -341,7 +342,7 @@ router.put(
 router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncColor.update(),
   toggleColorStatus
 );
@@ -372,7 +373,7 @@ router.patch(
 router.delete(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncColor.delete(),
   deleteColor
 );

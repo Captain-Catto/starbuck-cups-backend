@@ -16,6 +16,8 @@ import {
   extractTokenFromHeader,
 } from "../utils/jwt";
 import { ResponseHelper } from "../types/api";
+import { resolvePermissions } from "../services/admin-role.service";
+import { adminUserCacheKey, ADMIN_USER_CACHE_TTL_SECONDS } from "../utils/admin-user-cache";
 
 // Extend Express Request interface to include user
 declare global {
@@ -25,6 +27,7 @@ declare global {
         userId: string;
         email: string;
         role: AdminRole;
+        roleId?: string | null;
         username: string;
       };
     }
@@ -36,8 +39,32 @@ export interface AuthRequest extends Request {
     userId: string;
     email: string;
     role: AdminRole;
+    roleId?: string | null;
     username: string;
   };
+}
+
+// Accounts with a temporary password may only reach these until they set their own password
+const PASSWORD_CHANGE_ALLOWED_PATHS = [
+  "/api/auth/change-password",
+  "/api/auth/admin/verify",
+  "/api/auth/admin/refresh",
+  "/api/auth/admin/session",
+  "/api/auth/admin/logout",
+  "/api/auth/logout",
+  "/api/auth/profile",
+];
+
+function isPasswordChangeAllowedPath(req: Request): boolean {
+  const path = req.originalUrl.split("?")[0];
+  return PASSWORD_CHANGE_ALLOWED_PATHS.includes(path);
+}
+
+function passwordChangeRequiredResponse() {
+  return ResponseHelper.error(
+    "You must change your temporary password before continuing",
+    "PASSWORD_CHANGE_REQUIRED"
+  );
 }
 
 /**
@@ -65,7 +92,7 @@ export const authenticate = async (
     const decoded = verifyAccessToken(token);
 
     // Check if user exists and is active (Redis-cached for 5 min)
-    const cacheKey = `admin_user:${decoded.userId}`;
+    const cacheKey = adminUserCacheKey(decoded.userId);
     let user: AdminUser | null = null;
 
     if (redisClient?.isReady) {
@@ -76,10 +103,10 @@ export const authenticate = async (
     if (!user) {
       user = await AdminUser.findOne({
         where: { id: decoded.userId },
-        attributes: ["id", "email", "role", "isActive"],
+        attributes: ["id", "email", "role", "roleId", "isActive", "mustChangePassword"],
       });
       if (user && redisClient?.isReady) {
-        redisClient.setEx(cacheKey, 300, JSON.stringify(user)).catch(() => {});
+        redisClient.setEx(cacheKey, ADMIN_USER_CACHE_TTL_SECONDS, JSON.stringify(user)).catch(() => {});
       }
     }
 
@@ -95,11 +122,19 @@ export const authenticate = async (
       return;
     }
 
+    if (user.mustChangePassword && !isPasswordChangeAllowedPath(req)) {
+      res
+        .status(403)
+        .json(passwordChangeRequiredResponse());
+      return;
+    }
+
     // Add user to request object
     req.user = {
       userId: user.id,
       email: user.email,
       role: user.role,
+      roleId: user.roleId,
       username: decoded.username,
     };
 
@@ -158,6 +193,37 @@ export const authorize = (...allowedRoles: AdminRole[]) => {
     }
 
     next();
+  };
+};
+
+/**
+ * Permission middleware factory - passes when the account's role holds ANY of the given
+ * permissions. Permissions are read from the role (Redis-cached), never from the token.
+ */
+export const requirePermission = (...required: string[]) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      res
+        .status(401)
+        .json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
+      return;
+    }
+
+    try {
+      const granted = await resolvePermissions(req.user.roleId, req.user.role);
+      if (required.some((permission) => granted.includes(permission))) {
+        next();
+        return;
+      }
+      res.status(403).json(
+        ResponseHelper.error("Insufficient permissions", "FORBIDDEN", { required })
+      );
+    } catch (error) {
+      logger.error("Permission check error:", error);
+      res
+        .status(500)
+        .json(ResponseHelper.error("Authorization error", "AUTHORIZATION_ERROR"));
+    }
   };
 };
 
@@ -258,28 +324,41 @@ const createRateLimitStore = (prefix: string): RedisStore | undefined => {
   });
 };
 
-export const rateLimitAuth = rateLimit({
-  windowMs: BLOCK_DURATION,
-  max: MAX_LOGIN_ATTEMPTS,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  passOnStoreError: true,
-  store: createRateLimitStore("auth_rate_limit:"),
-  keyGenerator: (req: Request): string =>
-    ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown"),
-  handler: (_req, res) => {
-    return res
-      .status(429)
-      .json(
-        ResponseHelper.error(
-          "Too many login attempts. Please try again later.",
-          "RATE_LIMIT_EXCEEDED",
-          { retryAfter: Math.ceil(BLOCK_DURATION / 1000) }
-        )
-      );
-  },
-});
+const createAuthLimiter = (prefix: string, max: number) =>
+  rateLimit({
+    windowMs: BLOCK_DURATION,
+    max,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    passOnStoreError: true,
+    store: createRateLimitStore(prefix),
+    keyGenerator: (req: Request): string =>
+      ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown"),
+    handler: (_req, res) => {
+      return res
+        .status(429)
+        .json(
+          ResponseHelper.error(
+            "Too many login attempts. Please try again later.",
+            "RATE_LIMIT_EXCEEDED",
+            { retryAfter: Math.ceil(BLOCK_DURATION / 1000) }
+          )
+        );
+    },
+  });
+
+/** Credential endpoints (login): strict, counts failed password attempts. */
+export const rateLimitAuth = createAuthLimiter("auth_rate_limit:", MAX_LOGIN_ATTEMPTS);
+
+/**
+ * Session restore / token refresh. Routine expired-session 401s from browsers must not
+ * exhaust the login bucket, so they get their own, more lenient counter.
+ */
+export const rateLimitSession = createAuthLimiter(
+  "auth_session_rate_limit:",
+  parseInt(process.env.RATE_LIMIT_SESSION_MAX_ATTEMPTS || "30")
+);
 
 /**
  * Rate limiting for public form submission endpoints (consultations, etc.)
@@ -399,14 +478,18 @@ export const authenticateWithAutoRefresh = async (
         const decoded = verifyAccessToken(token);
         const user = await AdminUser.findOne({
           where: { id: decoded.userId },
-          attributes: ["id", "email", "role", "isActive"],
+          attributes: ["id", "email", "role", "roleId", "isActive", "mustChangePassword"],
         });
 
         if (user && user.isActive) {
+          if (user.mustChangePassword && !isPasswordChangeAllowedPath(req)) {
+            return res.status(403).json(passwordChangeRequiredResponse());
+          }
           req.user = {
             userId: user.id,
             email: user.email,
             role: user.role,
+            roleId: user.roleId,
             username: decoded.username,
           };
           return next();
@@ -435,7 +518,7 @@ export const authenticateWithAutoRefresh = async (
       const refreshPayload = verifyRefreshToken(refreshToken);
       const user = await AdminUser.findOne({
         where: { id: refreshPayload.userId },
-        attributes: ["id", "email", "role", "isActive", "username"],
+        attributes: ["id", "email", "role", "roleId", "isActive", "username", "mustChangePassword"],
       });
 
       if (!user || !user.isActive) {
@@ -446,11 +529,16 @@ export const authenticateWithAutoRefresh = async (
           );
       }
 
+      if (user.mustChangePassword && !isPasswordChangeAllowedPath(req)) {
+        return res.status(403).json(passwordChangeRequiredResponse());
+      }
+
       // Set user for current request
       req.user = {
         userId: user.id,
         email: user.email,
         role: user.role,
+        roleId: user.roleId,
         username: user.username,
       };
 

@@ -2,6 +2,8 @@
 
 // Import all models
 import { AdminUser, AdminUserModel, AdminRole } from "./AdminUser";
+import { AdminRefreshToken, AdminRefreshTokenModel } from "./AdminRefreshToken";
+import { AdminRole as AdminRoleEntity, AdminRolePermission, AdminRoleModel, AdminRolePermissionModel } from "./AdminRole";
 import { Customer, CustomerModel } from "./Customer";
 import { CustomerAddress, CustomerAddressModel } from "./CustomerAddress";
 import { CustomerPhone, CustomerPhoneModel } from "./CustomerPhone";
@@ -31,6 +33,9 @@ import { NewsTranslation, NewsTranslationModel, NewsLocale } from "./NewsTransla
 // Initialize all models
 const models = {
   AdminUser: AdminUserModel(sequelize),
+  AdminRefreshToken: AdminRefreshTokenModel(sequelize),
+  AdminRole: AdminRoleModel(sequelize),
+  AdminRolePermission: AdminRolePermissionModel(sequelize),
   Customer: CustomerModel(sequelize),
   CustomerAddress: CustomerAddressModel(sequelize),
   CustomerPhone: CustomerPhoneModel(sequelize),
@@ -68,6 +73,9 @@ export {
   models,
   AdminUser,
   AdminRole,
+  AdminRefreshToken,
+  AdminRoleEntity,
+  AdminRolePermission,
   Customer,
   CustomerAddress,
   CustomerPhone,

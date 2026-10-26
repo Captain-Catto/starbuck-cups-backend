@@ -9,11 +9,12 @@ import {
   deleteNews,
   toggleNewsStatus,
 } from "../controllers/news.controller";
-import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requirePermission } from "../middleware/auth.middleware";
 import {
   redisCacheMiddleware,
   invalidateCachePrefixOnSuccess,
 } from "../middleware/redis-cache.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -25,11 +26,11 @@ router.get("/public", redisCacheMiddleware(600), getPublicNewsList);
 router.get("/public/:slug", redisCacheMiddleware(600), getPublicNewsBySlug);
 
 // Admin (protected)
-router.get("/admin", authenticateWithAutoRefresh, requireAdmin, getAdminNewsList);
-router.get("/admin/:id", authenticateWithAutoRefresh, requireAdmin, getAdminNewsById);
-router.post("/admin", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, createNews);
-router.put("/admin/:id", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, updateNews);
-router.delete("/admin/:id", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, deleteNews);
-router.patch("/admin/:id/status", authenticateWithAutoRefresh, requireAdmin, invalidateNewsCache, toggleNewsStatus);
+router.get("/admin", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.NEWS_VIEW), getAdminNewsList);
+router.get("/admin/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.NEWS_VIEW), getAdminNewsById);
+router.post("/admin", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.NEWS_MANAGE), invalidateNewsCache, createNews);
+router.put("/admin/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.NEWS_MANAGE), invalidateNewsCache, updateNews);
+router.delete("/admin/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.NEWS_MANAGE), invalidateNewsCache, deleteNews);
+router.patch("/admin/:id/status", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.NEWS_MANAGE), invalidateNewsCache, toggleNewsStatus);
 
 export default router;

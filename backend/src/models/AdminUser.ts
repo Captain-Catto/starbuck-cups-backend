@@ -19,6 +19,8 @@ export interface AdminUserAttributes {
   email: string;
   role: AdminRole;
   isActive: boolean;
+  mustChangePassword: boolean;
+  roleId?: string | null;
   lastLoginAt?: Date;
   refreshTokenHash?: string;
   refreshTokenExpiresAt?: Date;
@@ -37,6 +39,9 @@ export class AdminUser extends Model<AdminUserAttributes, AdminUserCreationAttri
   declare email: string;
   declare role: AdminRole;
   declare isActive: boolean;
+  declare mustChangePassword: boolean;
+  declare roleId?: string | null;
+  declare adminRole?: { id: string; key: string | null; name: string };
   declare lastLoginAt?: Date;
   declare refreshTokenHash?: string;
   declare refreshTokenExpiresAt?: Date;
@@ -51,6 +56,10 @@ export class AdminUser extends Model<AdminUserAttributes, AdminUserCreationAttri
   declare createdHeroImages?: HeroImageAttributes[];
 
   static associate(models: Record<string, ModelStatic<Model>>) {
+    AdminUser.belongsTo(models.AdminRole, {
+      foreignKey: 'roleId',
+      as: 'adminRole',
+    });
     AdminUser.hasMany(models.Capacity, {
       foreignKey: 'createdByAdminId',
       as: 'createdCapacities',
@@ -114,6 +123,17 @@ export const AdminUserModel = (sequelize: Sequelize) => {
         allowNull: false,
         defaultValue: true,
         field: 'is_active',
+      },
+      roleId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        field: 'role_id',
+      },
+      mustChangePassword: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: 'must_change_password',
       },
       lastLoginAt: {
         type: DataTypes.DATE,

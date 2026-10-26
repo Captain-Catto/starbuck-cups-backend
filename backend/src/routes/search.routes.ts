@@ -5,9 +5,10 @@ import { Router } from "express";
 import { searchController } from "../controllers/search.controller";
 import {
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission,
   rateLimitPublicRead,
 } from "../middleware/auth.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const searchRoutes = Router();
 
@@ -90,7 +91,7 @@ searchRoutes.get(
 searchRoutes.get(
   "/customers",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CUSTOMERS_VIEW),
   searchController.searchCustomers
 );
 
@@ -101,7 +102,7 @@ searchRoutes.get(
 searchRoutes.get(
   "/customers/autocomplete",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CUSTOMERS_VIEW),
   searchController.autocompleteCustomers
 );
 

@@ -53,7 +53,7 @@ export const adminLogin = async (req: Request, res: Response) => {
   const validation = loginSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
-    const result = await authService.adminLogin(validation.data.email, validation.data.password);
+    const result = await authService.adminLogin(validation.data.email, validation.data.password, req.get("user-agent"));
     setRefreshCookie(res, result.refreshToken);
     const responseData: Record<string, unknown> = { user: result.user, token: result.token, message: "Admin login successful" };
     if (authService.EXPOSE_REFRESH_TOKEN()) responseData.refreshToken = result.refreshToken;
@@ -67,7 +67,7 @@ export const login = async (req: Request, res: Response) => {
   const validation = loginSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json(ResponseHelper.error("Validation failed", "VALIDATION_ERROR", validation.error.issues));
   try {
-    const result = await authService.login(validation.data.email, validation.data.password);
+    const result = await authService.login(validation.data.email, validation.data.password, req.get("user-agent"));
     setRefreshCookie(res, result.refreshToken);
     const responseData: Record<string, unknown> = { user: result.user, accessToken: result.accessToken };
     if (authService.EXPOSE_REFRESH_TOKEN()) responseData.refreshToken = result.refreshToken;
@@ -95,7 +95,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
   if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    await authService.logoutUser(req.user.userId);
+    await authService.logoutUser(req.user.userId, req.cookies?.admin_refresh_token);
     clearRefreshCookie(res);
     return res.status(200).json(ResponseHelper.success(null, { message: "Logged out successfully" }));
   } catch (err) {
@@ -139,7 +139,7 @@ export const adminVerifyToken = async (req: Request, res: Response) => {
   if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
     const user = await authService.getAdminUserById(req.user.userId);
-    return res.status(200).json(ResponseHelper.success({ user: { id: user.id, email: user.email, name: user.username, role: user.role } }));
+    return res.status(200).json(ResponseHelper.success({ user: await authService.buildAuthUser(user) }));
   } catch (err) {
     return handleError(res, err, "admin verify token");
   }
@@ -149,7 +149,7 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
   const token = req.body.refreshToken || req.cookies?.admin_refresh_token;
   if (!token) return res.status(400).json(ResponseHelper.error("Refresh token is required", "MISSING_REFRESH_TOKEN"));
   try {
-    const result = await authService.adminRefreshToken(token);
+    const result = await authService.adminRefreshToken(token, req.get("user-agent"));
     setRefreshCookie(res, result.refreshToken);
     const responseData: Record<string, unknown> = { token: result.token, user: result.user };
     if (authService.EXPOSE_REFRESH_TOKEN()) responseData.refreshToken = result.refreshToken;
@@ -162,7 +162,7 @@ export const adminRefreshToken = async (req: Request, res: Response) => {
 export const adminLogout = async (req: Request, res: Response) => {
   if (!req.user) return res.status(401).json(ResponseHelper.error("Authentication required", "UNAUTHORIZED"));
   try {
-    await authService.logoutUser(req.user.userId);
+    await authService.logoutUser(req.user.userId, req.cookies?.admin_refresh_token);
     clearRefreshCookie(res);
     return res.status(200).json(ResponseHelper.success({ message: "Admin logged out successfully" }));
   } catch (err) {
@@ -174,7 +174,7 @@ export const adminSessionCheck = async (req: Request, res: Response) => {
   const token = req.cookies?.admin_refresh_token;
   if (!token) return res.status(401).json(ResponseHelper.error("No session found", "NO_SESSION"));
   try {
-    const result = await authService.checkAdminSession(token);
+    const result = await authService.checkAdminSession(token, req.get("user-agent"));
     setRefreshCookie(res, result.newRefreshToken);
     return res.status(200).json(ResponseHelper.success({ user: result.user, token: result.token, message: "Session restored successfully" }));
   } catch (err) {

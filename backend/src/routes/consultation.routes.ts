@@ -7,7 +7,8 @@ import {
   deleteConsultation,
   getPendingConsultationsCount,
 } from "../controllers/consultation.controller";
-import { authenticateWithAutoRefresh, rateLimitPublicSubmit } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, rateLimitPublicSubmit, requirePermission } from "../middleware/auth.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -15,26 +16,26 @@ const router = Router();
 router.post("/", rateLimitPublicSubmit, createConsultation);
 
 // GET /api/consultations - Get all consultations with optional filters
-router.get("/", authenticateWithAutoRefresh, getConsultations);
+router.get("/", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CONSULTATIONS_VIEW), getConsultations);
 
 // GET /api/consultations/pending/count - Get pending consultations count
 router.get(
   "/pending/count",
-  authenticateWithAutoRefresh,
+  authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CONSULTATIONS_VIEW),
   getPendingConsultationsCount
 );
 
 // GET /api/consultations/:id - Get consultation by ID
-router.get("/:id", authenticateWithAutoRefresh, getConsultationById);
+router.get("/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CONSULTATIONS_VIEW), getConsultationById);
 
 // PUT /api/consultations/:id/status - Update consultation status
 router.put(
   "/:id/status",
-  authenticateWithAutoRefresh,
+  authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CONSULTATIONS_MANAGE),
   updateConsultationStatus
 );
 
 // DELETE /api/consultations/:id - Delete consultation
-router.delete("/:id", authenticateWithAutoRefresh, deleteConsultation);
+router.delete("/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CONSULTATIONS_MANAGE), deleteConsultation);
 
 export default router;

@@ -7,13 +7,14 @@ import {
   uploadMultiple,
   handleMulterError,
 } from "../middleware/upload.middleware";
-import { authenticateWithAutoRefresh } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requirePermission } from "../middleware/auth.middleware";
 import {
   processImage,
   processImages,
   IMAGE_PRESETS,
 } from "../services/image-processing.service";
 import { getProductImageProcessingOptions } from "../services/watermark-settings.service";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = express.Router();
 
@@ -21,6 +22,12 @@ const router = express.Router();
 router.post(
   "/single",
   authenticateWithAutoRefresh,
+  requirePermission(
+    PERMISSIONS.PRODUCTS_MANAGE,
+    PERMISSIONS.NEWS_MANAGE,
+    PERMISSIONS.HERO_IMAGES_MANAGE,
+    PERMISSIONS.BANNERS_MANAGE
+  ),
   uploadSingle("image"),
   handleMulterError,
   async (req: Request, res: Response): Promise<void> => {
@@ -98,6 +105,12 @@ router.post(
 router.post(
   "/multiple",
   authenticateWithAutoRefresh,
+  requirePermission(
+    PERMISSIONS.PRODUCTS_MANAGE,
+    PERMISSIONS.NEWS_MANAGE,
+    PERMISSIONS.HERO_IMAGES_MANAGE,
+    PERMISSIONS.BANNERS_MANAGE
+  ),
   uploadMultiple("images", 10),
   handleMulterError,
   async (req: Request, res: Response): Promise<void> => {
@@ -175,6 +188,12 @@ router.post(
 router.delete(
   "/delete",
   authenticateWithAutoRefresh,
+  requirePermission(
+    PERMISSIONS.PRODUCTS_MANAGE,
+    PERMISSIONS.NEWS_MANAGE,
+    PERMISSIONS.HERO_IMAGES_MANAGE,
+    PERMISSIONS.BANNERS_MANAGE
+  ),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const key = req.query.key as string; // Use query parameter
@@ -218,6 +237,12 @@ router.delete(
 router.get(
   "/signed-url",
   authenticateWithAutoRefresh,
+  requirePermission(
+    PERMISSIONS.PRODUCTS_MANAGE,
+    PERMISSIONS.NEWS_MANAGE,
+    PERMISSIONS.HERO_IMAGES_MANAGE,
+    PERMISSIONS.BANNERS_MANAGE
+  ),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const key = req.query.key as string; // Use query parameter (file ID)

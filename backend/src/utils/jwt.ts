@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { logger } from "@/utils/logger";
 /**
  * JWT utilities for token generation and verification
@@ -65,6 +66,8 @@ export function generateRefreshToken(payload: RefreshTokenPayload): string {
   try {
     return jwt.sign(payload, REFRESH_TOKEN_SECRET, {
       expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+      // Unique per token: two tokens minted in the same second must not hash identically.
+      jwtid: randomUUID(),
       issuer: "cups-shop",
       audience: "cups-shop-admin",
     } as jwt.SignOptions);

@@ -7,19 +7,20 @@ import {
 } from "../controllers/settings.controller";
 import {
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission,
 } from "../middleware/auth.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
 // Public route to get settings (frontend needs it)
 router.get("/effect-settings", getEffectSettings);
 
-// Admin route to update settings
+// Site configuration (settings.manage)
 router.put(
   "/effect-settings",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.SETTINGS_MANAGE),
   updateEffectSettings
 );
 
@@ -28,7 +29,7 @@ router.get("/watermark-settings", getWatermarkSettings);
 router.put(
   "/watermark-settings",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.SETTINGS_MANAGE),
   updateWatermarkSettings
 );
 

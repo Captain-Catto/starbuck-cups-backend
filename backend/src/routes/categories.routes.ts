@@ -15,9 +15,10 @@ import {
   getPublicCategoryTree,
   getPublicCategoryById,
 } from "../controllers/categories.controller";
-import { authenticateWithAutoRefresh, requireAdmin } from "../middleware/auth.middleware";
+import { authenticateWithAutoRefresh, requirePermission } from "../middleware/auth.middleware";
 import { syncCategory } from "../middleware/auto-sync.middleware";
 import { redisCacheMiddleware } from "../middleware/redis-cache.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -231,7 +232,7 @@ router.get("/public/:id", redisCacheMiddleware(900), getPublicCategoryById);
  *       200:
  *         description: Categories retrieved successfully
  */
-router.get("/", authenticateWithAutoRefresh, getCategories);
+router.get("/", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getCategories);
 
 /**
  * @swagger
@@ -251,7 +252,7 @@ router.get("/", authenticateWithAutoRefresh, getCategories);
  *       200:
  *         description: Category tree retrieved successfully
  */
-router.get("/tree", authenticateWithAutoRefresh, getCategoryTree);
+router.get("/tree", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getCategoryTree);
 
 /**
  * @swagger
@@ -282,7 +283,7 @@ router.get("/tree", authenticateWithAutoRefresh, getCategoryTree);
  *       200:
  *         description: Categories found
  */
-router.get("/search", authenticateWithAutoRefresh, searchCategories);
+router.get("/search", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), searchCategories);
 
 /**
  * @swagger
@@ -305,7 +306,7 @@ router.get("/search", authenticateWithAutoRefresh, searchCategories);
  *       404:
  *         description: Category not found
  */
-router.get("/:id", authenticateWithAutoRefresh, getCategoryById);
+router.get("/:id", authenticateWithAutoRefresh, requirePermission(PERMISSIONS.CATALOG_VIEW), getCategoryById);
 
 /**
  * @swagger
@@ -330,7 +331,7 @@ router.get("/:id", authenticateWithAutoRefresh, getCategoryById);
 router.post(
   "/",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCategory.create(),
   createCategory
 );
@@ -367,7 +368,7 @@ router.post(
 router.put(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCategory.update(),
   updateCategory
 );
@@ -398,7 +399,7 @@ router.put(
 router.patch(
   "/:id/toggle-status",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCategory.update(),
   toggleCategoryStatus
 );
@@ -429,7 +430,7 @@ router.patch(
 router.delete(
   "/:id",
   authenticateWithAutoRefresh,
-  requireAdmin,
+  requirePermission(PERMISSIONS.CATALOG_MANAGE),
   syncCategory.delete(),
   deleteCategory
 );

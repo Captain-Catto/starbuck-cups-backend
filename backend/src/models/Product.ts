@@ -20,6 +20,7 @@ export interface ProductAttributes {
   isDeleted: boolean;
   isVip: boolean;
   isFeatured: boolean;
+  pinnedAt?: Date | null;
   deletedAt?: Date;
   deletedByAdminId?: string;
   createdAt: Date;
@@ -48,6 +49,7 @@ export class Product
   declare isDeleted: boolean;
   declare isVip: boolean;
   declare isFeatured: boolean;
+  declare pinnedAt: Date | null;
   declare deletedAt?: Date;
   declare deletedByAdminId?: string;
   declare createdAt: Date;
@@ -171,6 +173,11 @@ export const ProductModel = (sequelize: Sequelize) => {
         allowNull: false,
         defaultValue: false,
         field: "is_featured",
+      },
+      pinnedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: "pinned_at",
       },
       deletedAt: {
         type: DataTypes.DATE,

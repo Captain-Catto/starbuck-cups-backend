@@ -70,6 +70,9 @@ import productsRoutes from "./routes/products.public.routes";
 import adminProductsRouter from "./routes/products.admin.routes";
 import customersRoutes from "./routes/customers.routes";
 import customerPhoneRoutes from "./routes/customerPhone.routes";
+import adminUsersRoutes from "./routes/admin-users.routes";
+import adminRolesRoutes from "./routes/admin-roles.routes";
+import { ensureSystemRoles } from "./services/admin-role.service";
 import ordersRoutes from "./routes/orders.routes";
 import consultationRoutes from "./routes/consultation.routes";
 import uploadRoutes from "./routes/upload.routes";
@@ -223,6 +226,8 @@ app.use("/api/admin/capacities", capacitiesRoutes);
 app.use("/api/admin/categories", categoriesRoutes);
 app.use("/api/admin/products", adminProductsRouter);
 app.use("/api/admin/customers", customersRoutes);
+app.use("/api/admin/users", adminUsersRoutes);
+app.use("/api/admin/roles", adminRolesRoutes);
 app.use("/api/admin", customerPhoneRoutes);
 app.use("/api/admin/orders", ordersRoutes);
 app.use("/api/admin/consultations", consultationRoutes);
@@ -282,7 +287,15 @@ const startServer = async () => {
   try {
     // Initialize database connection and sync models
     await initializeDatabase();
-    
+
+    // Built-in roles + linking existing accounts to them. Needs the admin_roles migration; a
+    // failure here is logged but must not stop the API from serving.
+    try {
+      await ensureSystemRoles();
+    } catch (error) {
+      logger.error("Failed to seed admin roles (has the admin_roles migration run?):", error);
+    }
+
     // sessionStore doesn't need explicit init like sequelize store does,
     // but we log it for consistency
     logger.info(`✅ Session store ready (${isRedisEnabled ? "Redis" : "Memory"}).`);

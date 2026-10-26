@@ -8,7 +8,8 @@ import * as productService from "../services/product.service";
 // ── Validation schemas ────────────────────────────────────────────────────────
 
 const translationEntrySchema = z.object({
-  name: z.string().min(1).max(255).optional(),
+  // Empty name is allowed: for en/zh it means "remove this translation".
+  name: z.string().max(255).optional(),
   description: z.string().optional(),
   metaTitle: z.string().max(300).optional(),
   metaDescription: z.string().optional(),
@@ -30,6 +31,7 @@ const createProductSchema = z.object({
   productUrl: z.string().url().optional().or(z.literal("")),
   isVip: z.boolean().optional().default(false),
   isFeatured: z.boolean().optional().default(false),
+  isPinned: z.boolean().optional(),
   categoryIds: z.array(z.string().uuid()).min(1, "At least one category is required"),
   colorIds: z.array(z.string().uuid()).optional().default([]),
   productImages: z.array(z.object({ url: z.string().url(), order: z.number().int().nonnegative() })).optional().default([]),
@@ -76,7 +78,7 @@ function parseMultipartBody(body: Record<string, unknown>) {
   if ("translations" in parsed) parsed.translations = parseJson<Record<string, unknown>>(parsed.translations, {});
   if (parsed.stockQuantity !== undefined) parsed.stockQuantity = Number(parsed.stockQuantity);
   if (parsed.unitPrice !== undefined) parsed.unitPrice = Number(parsed.unitPrice);
-  for (const boolField of ["isActive", "isVip", "isFeatured"]) {
+  for (const boolField of ["isActive", "isVip", "isFeatured", "isPinned"]) {
     if (parsed[boolField] !== undefined) parsed[boolField] = parsed[boolField] === "true" || parsed[boolField] === true;
   }
   return parsed;
@@ -236,5 +238,29 @@ export const reorderProductImages = async (req: Request, res: Response) => {
     return res.status(200).json(ResponseHelper.success({ message: "Product images reordered successfully", product }));
   } catch (err) {
     return handleError(res, err, "reorder product images");
+  }
+};
+
+export const pinProduct = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json(ResponseHelper.success(await productService.pinProduct(req.params.id)));
+  } catch (err) {
+    return handleError(res, err, "pin product");
+  }
+};
+
+export const unpinProduct = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json(ResponseHelper.success(await productService.unpinProduct(req.params.id)));
+  } catch (err) {
+    return handleError(res, err, "unpin product");
+  }
+};
+
+export const getPinnedProductsCount = async (_req: Request, res: Response) => {
+  try {
+    return res.status(200).json(ResponseHelper.success(await productService.getPinnedCount()));
+  } catch (err) {
+    return handleError(res, err, "get pinned products count");
   }
 };
